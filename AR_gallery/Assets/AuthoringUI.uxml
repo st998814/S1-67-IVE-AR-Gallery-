@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:VisualElement style="flex-grow: 1; align-items: center; justify-content: center; background-color: rgb(240, 240, 240);">
+        
+        <ui:VisualElement style="background-color: rgb(255, 255, 255); padding: 20px; border-radius: 10px; width: 400px; border-width: 1px; border-color: rgb(200, 200, 200);">
+            
+            <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 18px; color: rgb(30, 30, 30); margin-bottom: 15px; -unity-text-align: middle-center;" />
+
+            <ui:TextField name="ContentTypeInput" label="Type (Poster/Video)" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 5px;" />
+
+            <ui:Label text="Spatial Coordinates:" style="color: rgb(30, 30, 30); font-weight: bold; margin-top: 10px; margin-bottom: 5px;" />
+            <ui:FloatField name="PosXInput" label="X Position" value="0" style="color: rgb(30, 30, 30);" />
+            <ui:FloatField name="PosYInput" label="Y Position" value="0" style="color: rgb(30, 30, 30);" />
+            <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30);" />
+
+            <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 10px;" />
+            <ui:TextField name="MediaUrlInput" label="Media URL" value="https://" style="color: rgb(30, 30, 30); margin-top: 10px; margin-bottom: 15px;" />
+
+            <ui:Button name="SaveButton" text="Save to Database" style="height: 40px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 5px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
