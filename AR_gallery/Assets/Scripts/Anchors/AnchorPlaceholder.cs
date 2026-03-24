@@ -2,5 +2,6 @@ using UnityEngine;
 
 public class AnchorPlaceholder : MonoBehaviour
 {
-    public string anchorId;
+    [SerializeField] private string anchorId;
+    public string AnchorId => anchorId;
 }
