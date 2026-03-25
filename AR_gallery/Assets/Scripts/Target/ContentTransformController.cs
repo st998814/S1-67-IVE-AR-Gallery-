@@ -58,7 +58,7 @@ private void RefreshContentList()
         contentObjects.Add(child);
     }
 
-    Debug.Log($"Active target: {activeTarget.name}, content count: {contentObjects.Count}");
+    // Debug.Log($"Active target: {activeTarget.name}, content count: {contentObjects.Count}");
 
     if (contentObjects.Count == 0)
     {
