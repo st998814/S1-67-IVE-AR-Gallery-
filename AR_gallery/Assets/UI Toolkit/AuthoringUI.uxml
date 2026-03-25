@@ -1,7 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
-    <ui:VisualElement style="flex-grow: 1; align-items: center; justify-content: center; background-color: rgb(240, 240, 240);">
+    <ui:VisualElement picking-mode="Ignore" style="flex-grow: 1; align-items: flex-end; justify-content: flex-start; padding: 20px; background-color: rgba(0, 0, 0, 0);">
         
-        <ui:VisualElement style="background-color: rgb(255, 255, 255); padding: 20px; border-radius: 10px; width: 400px; border-width: 1px; border-color: rgb(200, 200, 200);">
+        <ui:VisualElement picking-mode="Position" style="background-color: rgb(255, 255, 255); padding: 20px; border-radius: 10px; width: 350px; border-width: 1px; border-color: rgb(200, 200, 200);">
             
             <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 18px; color: rgb(30, 30, 30); margin-bottom: 15px; -unity-text-align: middle-center;" />
 
@@ -13,8 +13,13 @@
             <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30);" />
 
             <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 10px;" />
-            <ui:TextField name="MediaUrlInput" label="Media URL" value="https://" style="color: rgb(30, 30, 30); margin-top: 10px; margin-bottom: 15px;" />
-
+            <ui:Label text="Media File:" style="color: rgb(30, 30, 30); font-weight: bold; margin-top: 10px; margin-bottom: 5px;" />
+            
+            <ui:VisualElement style="flex-direction: row; justify-content: space-between; margin-bottom: 15px;">
+                <ui:TextField name="FilePathInput" value="No file selected..." readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); margin-right: 5px;" />
+                <ui:Button name="BrowseButton" text="Browse..." style="background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 5px; padding-left: 10px; padding-right: 10px;" />
+            </ui:VisualElement>
+            
             <ui:Button name="SaveButton" text="Save to Database" style="height: 40px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 5px;" />
         </ui:VisualElement>
     </ui:VisualElement>

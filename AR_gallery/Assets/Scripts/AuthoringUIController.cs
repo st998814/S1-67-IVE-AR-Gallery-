@@ -10,7 +10,10 @@ public class AuthoringUIController : MonoBehaviour
     private FloatField posYInput;
     private FloatField posZInput;
     private FloatField scaleInput;
-    private TextField mediaUrlInput;
+    
+    // Changed these to match our new UI
+    private TextField filePathInput;
+    private Button browseButton;
     private Button saveButton;
 
     void OnEnable()
@@ -23,35 +26,54 @@ public class AuthoringUIController : MonoBehaviour
         posYInput = root.Q<FloatField>("PosYInput");
         posZInput = root.Q<FloatField>("PosZInput");
         scaleInput = root.Q<FloatField>("ScaleInput");
-        mediaUrlInput = root.Q<TextField>("MediaUrlInput");
+        
+        // Connect the new UI elements
+        filePathInput = root.Q<TextField>("FilePathInput");
+        browseButton = root.Q<Button>("BrowseButton");
         saveButton = root.Q<Button>("SaveButton");
 
         saveButton.clicked += OnSaveButtonClicked;
+        browseButton.clicked += OnBrowseButtonClicked;
     }
 
-void OnSaveButtonClicked()
+    // This method is called by the draggable square
+    public void UpdateCoordinatesFromDrag(Vector3 newPosition)
+    {
+        posXInput.value = (float)System.Math.Round(newPosition.x, 2);
+        posYInput.value = (float)System.Math.Round(newPosition.y, 2);
+        posZInput.value = 0f; 
+    }
+
+    // --- NEW: The Browse Button Click Event ---
+    void OnBrowseButtonClicked()
+    {
+        Debug.Log("Browse button clicked! Waiting for WebGL file plugin...");
+        
+        // TEMPORARY: Just to show how it will work once the plugin is installed
+        // Later, the plugin will return the actual file path here.
+        filePathInput.value = "C:/fake_path/my_poster.jpg";
+    }
+
+    void OnSaveButtonClicked()
     {
         string type = contentTypeInput.value;
         Vector3 position = new Vector3(posXInput.value, posYInput.value, posZInput.value);
         float scale = scaleInput.value;
-        string url = mediaUrlInput.value;
+        
+        // Grab the string from our new file path box
+        string url = filePathInput.value;
 
         // Send the data to the database
         dbManager.SaveContentToDatabase(type, position, scale, url);
         
-        // --- NEW VISUAL FEEDBACK ---
+        // Visual Feedback
         string originalText = saveButton.text;
-        
-        // Change text and turn the button green
         saveButton.text = "Saved Successfully! ✓";
         saveButton.style.backgroundColor = new StyleColor(new Color(0.1f, 0.6f, 0.1f)); 
 
-        // Wait 2 seconds (2000 milliseconds), then change it back to blue
         saveButton.schedule.Execute(() => {
             saveButton.text = originalText;
             saveButton.style.backgroundColor = new StyleColor(new Color32(0, 120, 200, 255)); 
         }).StartingIn(2000);
-        
-        Debug.Log("UI form submitted and feedback shown!");
     }
 }
