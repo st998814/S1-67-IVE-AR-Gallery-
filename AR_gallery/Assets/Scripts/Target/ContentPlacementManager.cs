@@ -9,7 +9,7 @@ public class ContentPlacementManager : MonoBehaviour
 
     private void Update()
 {
-    if (Keyboard.current.aKey.wasPressedThisFrame)
+    if (Keyboard.current.nKey.wasPressedThisFrame)
     {
         AddContentToActiveTarget();
     }
