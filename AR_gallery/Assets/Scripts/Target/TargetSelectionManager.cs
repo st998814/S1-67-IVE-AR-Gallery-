@@ -41,4 +41,11 @@ public class TargetSelectionManager : MonoBehaviour
             }
         }
     }
+    public GameObject GetActiveTarget()
+{
+    if (activeTargetIndex < 0 || activeTargetIndex >= targets.Length)
+        return null;
+
+    return targets[activeTargetIndex];
+}
 }
