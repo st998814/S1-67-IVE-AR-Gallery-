@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using System.IO;
 public class PlacementDataBinder : MonoBehaviour
 {
     [SerializeField] private Transform imageTargetRoot;
@@ -67,5 +67,35 @@ public class PlacementDataBinder : MonoBehaviour
                 );
             }
         }
+    }
+    public string BuildPlacementJson()
+    {
+    PlacementDataModel model = BuildPlacementDataModel();
+    string json = JsonUtility.ToJson(model, true);
+    return json;
+    }
+
+    [ContextMenu("Build And Log Placement JSON")]
+    public void BuildAndLogPlacementJson()
+    {
+    string json = BuildPlacementJson();
+    Debug.Log(json);
+    }
+
+    [ContextMenu("Export Placement JSON To File")]
+    public void ExportPlacementJsonToFile()
+    {
+    string json = BuildPlacementJson();
+
+    string folderPath = Path.Combine(Application.dataPath, "Exports");
+    if (!Directory.Exists(folderPath))
+        {
+        Directory.CreateDirectory(folderPath);
+        }
+
+    string filePath = Path.Combine(folderPath, "placement_config.json");
+    File.WriteAllText(filePath, json);
+
+    Debug.Log($"Placement JSON exported to: {filePath}");
     }
 }
