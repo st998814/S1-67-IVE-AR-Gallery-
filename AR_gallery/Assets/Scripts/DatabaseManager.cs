@@ -1,4 +1,5 @@
 using System.Collections;
+using System;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.Text;
@@ -17,8 +18,10 @@ public class ARContentData
 
 public class DatabaseManager : MonoBehaviour
 {
-    // Your local Flask server URL
-    private string apiUrl = "http://127.0.0.1:5000/api/content";
+    [Header("Backend API")]
+    [SerializeField] private string apiUrl = "http://127.0.0.1:5000/api/content";
+
+    public event Action<bool, string> SaveCompleted;
 
     // Call this method from your UI buttons to save an item
     public void SaveContentToDatabase(string type, Vector3 position, float scale, string url)
@@ -52,10 +55,17 @@ public class DatabaseManager : MonoBehaviour
             if (request.result == UnityWebRequest.Result.Success)
             {
                 Debug.Log("Successfully saved to database: " + request.downloadHandler.text);
+                SaveCompleted?.Invoke(true, request.downloadHandler.text);
             }
             else
             {
-                Debug.LogError("Error saving to database: " + request.error);
+                string errorMessage = string.Format(
+                    "HTTP {0}: {1}",
+                    request.responseCode,
+                    request.error
+                );
+                Debug.LogError("Error saving to database: " + errorMessage);
+                SaveCompleted?.Invoke(false, errorMessage);
             }
         }
     }
