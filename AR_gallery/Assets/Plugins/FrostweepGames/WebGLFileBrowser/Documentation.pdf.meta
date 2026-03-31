@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: aada06c81e3781e4eab6d576c4e20373
+timeCreated: 1515610545
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Documentation.pdf
+  uploadId: 719761

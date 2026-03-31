@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 4565fef81c28033488588f477039bbbe
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Scripts/Editor/DefineProcessing.cs
+  uploadId: 719761

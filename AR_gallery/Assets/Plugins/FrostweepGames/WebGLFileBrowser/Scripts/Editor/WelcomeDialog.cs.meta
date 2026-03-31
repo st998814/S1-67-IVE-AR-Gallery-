@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: d71fbc2b9ebd89948a04f63a812ef8f4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Scripts/Editor/WelcomeDialog.cs
+  uploadId: 719761

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 8e28c7cece35a6d438c6e304d21da140
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Scripts/Editor/HTMLIndexData.html
+  uploadId: 719761

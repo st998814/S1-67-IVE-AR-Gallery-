@@ -525,7 +525,10 @@ PlayerSettings:
       m_Height: 720
       m_Kind: 1
       m_SubKind: 
-  m_BuildTargetBatching: []
+  m_BuildTargetBatching:
+  - m_BuildTarget: WebGL
+    m_StaticBatching: 0
+    m_DynamicBatching: 0
   m_BuildTargetShaderSettings: []
   m_BuildTargetGraphicsJobs: []
   m_BuildTargetGraphicsJobMode: []
@@ -561,6 +564,9 @@ PlayerSettings:
   - serializedVersion: 3
     m_BuildTarget: Android
     m_Formats: 03000000
+  - serializedVersion: 3
+    m_BuildTarget: WebGL
+    m_Formats: 05000000
   playModeTestRunnerEnabled: 0
   runPlayModeTestAsEditModeTest: 0
   actionOnDotNetUnhandledException: 1
@@ -809,11 +815,11 @@ PlayerSettings:
   webGLTemplate: APPLICATION:Default
   webGLAnalyzeBuildSize: 0
   webGLUseEmbeddedResources: 0
-  webGLCompressionFormat: 0
+  webGLCompressionFormat: 2
   webGLWasmArithmeticExceptions: 0
   webGLLinkerTarget: 1
   webGLThreadsSupport: 0
-  webGLDecompressionFallback: 0
+  webGLDecompressionFallback: 1
   webGLInitialMemorySize: 32
   webGLMaximumMemorySize: 2048
   webGLMemoryGrowthMode: 2
@@ -826,7 +832,25 @@ PlayerSettings:
   webGLCloseOnQuit: 0
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
-  scriptingDefineSymbols: {}
+  scriptingDefineSymbols:
+    Android: FG_WEBGLFB
+    EmbeddedLinux: FG_WEBGLFB
+    GameCoreScarlett: FG_WEBGLFB
+    GameCoreXboxOne: FG_WEBGLFB
+    Kepler: FG_WEBGLFB
+    LinuxHeadlessSimulation: FG_WEBGLFB
+    Nintendo Switch: FG_WEBGLFB
+    Nintendo Switch 2: FG_WEBGLFB
+    PS4: FG_WEBGLFB
+    PS5: FG_WEBGLFB
+    QNX: FG_WEBGLFB
+    Standalone: FG_WEBGLFB
+    VisionOS: FG_WEBGLFB
+    WebGL: FG_WEBGLFB
+    Windows Store Apps: FG_WEBGLFB
+    XboxOne: FG_WEBGLFB
+    iPhone: FG_WEBGLFB
+    tvOS: FG_WEBGLFB
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

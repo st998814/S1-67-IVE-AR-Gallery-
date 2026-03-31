@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: af5eda09e97d94d449b5da3bfbc1b268
+timeCreated: 1515246674
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Examples/Example/Example.unity
+  uploadId: 719761

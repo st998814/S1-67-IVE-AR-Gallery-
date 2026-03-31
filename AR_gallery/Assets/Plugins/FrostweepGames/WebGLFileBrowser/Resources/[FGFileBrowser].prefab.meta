@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: f6fc3109a56311c469f8640832defc26
+timeCreated: 1515362539
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Resources/[FGFileBrowser].prefab
+  uploadId: 719761

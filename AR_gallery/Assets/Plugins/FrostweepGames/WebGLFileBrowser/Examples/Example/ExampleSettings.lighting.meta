@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 2511084c0cd33476aa1cec24059ff2bd
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 4890085278179872738
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/Examples/Example/ExampleSettings.lighting
+  uploadId: 719761

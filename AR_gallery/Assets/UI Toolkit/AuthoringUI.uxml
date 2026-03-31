@@ -1,60 +1,33 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
-    <ui:VisualElement picking-mode="Ignore" style="flex-grow: 1; flex-direction: row; padding: 14px; column-gap: 10px; background-color: rgba(0, 0, 0, 0);">
-        <ui:VisualElement name="ContentLibraryPanel" style="width: 230px; min-width: 200px; max-width: 240px; flex-shrink: 1; background-color: rgba(20, 24, 38, 0.88); border-radius: 12px; padding: 14px; border-width: 1px; border-color: rgba(255, 255, 255, 0.12);">
-            <ui:Label text="Content Library" style="-unity-font-style: bold; font-size: 18px; color: rgb(255, 255, 255); margin-bottom: 8px;" />
-            <ui:Label text="Approved assets (static placeholders)" style="font-size: 11px; color: rgb(178, 184, 204); margin-bottom: 12px;" />
+    <ui:VisualElement picking-mode="Ignore" style="flex-grow: 1; flex-direction: row; justify-content: flex-end; padding: 10px; background-color: rgba(0, 0, 0, 0);">
+        
+        <ui:VisualElement picking-mode="Position" style="width: 260px; background-color: rgb(255, 255, 255); padding: 10px; border-radius: 8px; border-width: 1px; border-color: rgb(200, 200, 200);">
+            
+            <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 14px; color: rgb(30, 30, 30); margin-bottom: 6px; -unity-text-align: middle-center;" />
 
-            <ui:VisualElement style="background-color: rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-                <ui:Label text="Poster_A" style="-unity-font-style: bold; font-size: 14px; color: rgb(255, 255, 255); margin-bottom: 4px;" />
-                <ui:Label text="Type: Image / Status: Ready" style="font-size: 11px; color: rgb(180, 186, 205);" />
+            <ui:TextField name="ContentTypeInput" label="Type" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+
+            <ui:Label text="Spatial Coordinates:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:FloatField name="PosXInput" label="X Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+            <ui:FloatField name="PosYInput" label="Y Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+            <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+
+            <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+            
+            <ui:Label text="Media File:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 6px;">
+                <ui:TextField name="FilePathInput" value="No file..." readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 10px;" />
+                <ui:Button name="BrowseButton" text="Browse" style="height: 24px; width: 60px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 4px; font-size: 10px;" />
             </ui:VisualElement>
 
-            <ui:VisualElement style="background-color: rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-                <ui:Label text="Poster_B" style="-unity-font-style: bold; font-size: 14px; color: rgb(255, 255, 255); margin-bottom: 4px;" />
-                <ui:Label text="Type: Image / Status: Ready" style="font-size: 11px; color: rgb(180, 186, 205);" />
+            <ui:Label text="Add Text:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 10px;">
+                <ui:TextField name="SpawningTextInput" value="Hello World" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 11px;" />
+                <ui:Button name="SpawnTextButton" text="Spawn" style="height: 24px; width: 60px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 4px; font-size: 10px;" />
             </ui:VisualElement>
 
-            <ui:VisualElement style="background-color: rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 10px;">
-                <ui:Label text="Video_Sample" style="-unity-font-style: bold; font-size: 14px; color: rgb(255, 255, 255); margin-bottom: 4px;" />
-                <ui:Label text="Type: Video / Status: Placeholder" style="font-size: 11px; color: rgb(180, 186, 205);" />
-            </ui:VisualElement>
+            <ui:Button name="SaveButton" text="Save to Database" style="height: 32px; width: 100%; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 12px;" />
         </ui:VisualElement>
 
-        <ui:VisualElement name="PreviewPanel" style="flex-grow: 1; min-width: 340px; background-color: rgba(20, 24, 38, 0.76); border-radius: 12px; border-width: 1px; border-color: rgba(255, 255, 255, 0.12); padding: 14px; justify-content: space-between;">
-            <ui:VisualElement>
-                <ui:Label text="3D Preview Panel" style="-unity-font-style: bold; font-size: 18px; color: rgb(255, 255, 255); margin-bottom: 4px;" />
-                <ui:Label text="Visual placeholder ready for future interactive preview integration." style="font-size: 11px; color: rgb(182, 189, 210);" />
-            </ui:VisualElement>
-
-            <ui:VisualElement style="height: 230px; margin-top: 12px; margin-bottom: 12px; border-radius: 12px; border-width: 2px; border-color: rgba(255, 255, 255, 0.26); background-color: rgba(12, 16, 28, 0.75); align-items: center; justify-content: center;">
-                <ui:Label text="3D Preview Viewport Placeholder" style="font-size: 14px; color: rgb(222, 228, 248);" />
-            </ui:VisualElement>
-
-            <ui:VisualElement style="flex-direction: row; justify-content: center; column-gap: 10px;">
-                <ui:Button name="UploadImageButton" text="Upload Image" style="height: 36px; min-width: 120px; border-radius: 6px; background-color: rgb(52, 111, 232); color: white; -unity-font-style: bold;" />
-                <ui:Button name="UploadVideoButton" text="Upload Video" style="height: 36px; min-width: 120px; border-radius: 6px; background-color: rgb(84, 94, 122); color: white; -unity-font-style: bold;" />
-            </ui:VisualElement>
-        </ui:VisualElement>
-
-        <ui:VisualElement picking-mode="Position" style="width: 330px; min-width: 300px; max-width: 360px; flex-shrink: 1; background-color: rgb(255, 255, 255); padding: 14px; border-radius: 12px; border-width: 1px; border-color: rgb(200, 200, 200);">
-            <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 16px; color: rgb(30, 30, 30); margin-bottom: 8px; -unity-text-align: middle-center;" />
-
-            <ui:TextField name="ContentTypeInput" label="Type (Poster/Video)" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 4px; min-height: 30px; -unity-property-field-label-width: 136px;" />
-
-            <ui:Label text="Spatial Coordinates:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 2px; margin-bottom: 4px;" />
-            <ui:FloatField name="PosXInput" label="X Position" value="0" style="color: rgb(30, 30, 30); margin-top: 0px; margin-bottom: 4px; min-height: 30px; -unity-property-field-label-width: 136px;" />
-            <ui:FloatField name="PosYInput" label="Y Position" value="0" style="color: rgb(30, 30, 30); margin-top: 0px; margin-bottom: 4px; min-height: 30px; -unity-property-field-label-width: 136px;" />
-            <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30); margin-top: 0px; margin-bottom: 4px; min-height: 30px; -unity-property-field-label-width: 136px;" />
-
-            <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 6px; min-height: 30px; -unity-property-field-label-width: 136px;" />
-            <ui:Label text="Media File:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 2px; margin-bottom: 4px;" />
-
-            <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 6px; margin-bottom: 8px;">
-                <ui:TextField name="FilePathInput" value="No file selected..." readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 30px;" />
-                <ui:Button name="BrowseButton" text="Browse..." style="height: 30px; width: 96px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 5px;" />
-            </ui:VisualElement>
-
-            <ui:Button name="SaveButton" text="Save to Database" style="height: 36px; width: 100%; margin-top: 2px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 14px;" />
-        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

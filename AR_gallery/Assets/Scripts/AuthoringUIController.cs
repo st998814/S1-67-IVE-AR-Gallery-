@@ -1,283 +1,224 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.Networking;
+using TMPro; // NEW: Required for TextMeshPro
+using System.Collections;
+using System.Collections.Generic;
+using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 
 public class AuthoringUIController : MonoBehaviour
 {
     public DatabaseManager dbManager; 
-    [SerializeField] private MonoBehaviour uploadBridgeBehaviour;
-    private static readonly Color32 SaveButtonDefaultColor = new Color32(0, 120, 200, 255);
-    private static readonly Color SaveButtonSuccessColor = new Color(0.1f, 0.6f, 0.1f);
-    private static readonly Color SaveButtonErrorColor = new Color(0.8f, 0.2f, 0.2f);
 
-    private TextField contentTypeInput;
-    private FloatField posXInput;
-    private FloatField posYInput;
-    private FloatField posZInput;
-    private FloatField scaleInput;
+    // --- NEW: Prefab Templates (Drag these in the Inspector) ---
+    public GameObject picturePrefab;
+    public GameObject textPrefab;
     
-    // Changed these to match our new UI
+    // --- UI Fields ---
+    private TextField contentTypeInput;
+    private FloatField posXInput, posYInput, posZInput, scaleInput;
     private TextField filePathInput;
-    private Button browseButton;
-    private Button saveButton;
-    private Button uploadImageButton;
-    private Button uploadVideoButton;
-    private IWebGLUploadBridge uploadBridge;
-    private bool isSaving;
+    
+    // --- NEW: Text Spawning Fields ---
+    private TextField spawningTextInput;
+    private Button spawnTextButton;
+
+    private Button browseButton, saveButton;
+
+    // Track the object that is currently "active" in the UI (being dragged)
+    private DraggableObject activeDraggedObject;
+    private Dictionary<DraggableObject, string> spawnedMediaUrls = new Dictionary<DraggableObject, string>();
+
+    private string uploadApiUrl = "http://127.0.0.1:5000/api/upload";
 
     void OnEnable()
     {
         var uiDocument = GetComponent<UIDocument>();
-        if (uiDocument == null)
-        {
-            Debug.LogWarning("AuthoringUIController: UIDocument is missing.");
-            return;
-        }
-
         var root = uiDocument.rootVisualElement;
-        ResolveUploadBridge();
 
+        // Basic Fields
         contentTypeInput = root.Q<TextField>("ContentTypeInput");
         posXInput = root.Q<FloatField>("PosXInput");
         posYInput = root.Q<FloatField>("PosYInput");
         posZInput = root.Q<FloatField>("PosZInput");
         scaleInput = root.Q<FloatField>("ScaleInput");
-        
-        // Connect the new UI elements
         filePathInput = root.Q<TextField>("FilePathInput");
+        
+        // NEW: Text Spawning UI elements
+        spawningTextInput = root.Q<TextField>("SpawningTextInput");
+        spawnTextButton = root.Q<Button>("SpawnTextButton");
+        
         browseButton = root.Q<Button>("BrowseButton");
         saveButton = root.Q<Button>("SaveButton");
 
-        uploadImageButton = root.Q<Button>("UploadImageButton");
-        uploadVideoButton = root.Q<Button>("UploadVideoButton");
+        // Event Listeners
+        browseButton.clicked += OnBrowseButtonClicked;
+        saveButton.clicked += OnSaveButtonClicked;
+        
+        // NEW: Event Listener for spawning text
+        spawnTextButton.clicked += OnSpawnTextButtonClicked;
 
-        if (saveButton != null)
-        {
-            saveButton.clicked += OnSaveButtonClicked;
-        }
-
-        if (browseButton != null)
-        {
-            browseButton.clicked += OnBrowseButtonClicked;
-        }
-
-        if (uploadImageButton != null)
-        {
-            uploadImageButton.clicked += OnUploadImageClicked;
-        }
-
-        if (uploadVideoButton != null)
-        {
-            uploadVideoButton.clicked += OnUploadVideoClicked;
-        }
-
-        if (dbManager != null)
-        {
-            dbManager.SaveCompleted += OnSaveCompleted;
-        }
+        // NEW: Listen for when the user selects a file in the browser
+        WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
     }
 
     void OnDisable()
     {
-        if (saveButton != null)
-        {
-            saveButton.clicked -= OnSaveButtonClicked;
-        }
-
-        if (browseButton != null)
-        {
-            browseButton.clicked -= OnBrowseButtonClicked;
-        }
-
-        if (uploadImageButton != null)
-        {
-            uploadImageButton.clicked -= OnUploadImageClicked;
-        }
-
-        if (uploadVideoButton != null)
-        {
-            uploadVideoButton.clicked -= OnUploadVideoClicked;
-        }
-
-        if (dbManager != null)
-        {
-            dbManager.SaveCompleted -= OnSaveCompleted;
-        }
+        // Cleanup event listeners
+        WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
     }
 
-    // This method is called by the draggable square
-    public void UpdateCoordinatesFromDrag(Vector3 newPosition)
+    // --- NEW: Text Spawning ---
+    void OnSpawnTextButtonClicked()
     {
-        if (posXInput == null || posYInput == null || posZInput == null)
-        {
-            return;
-        }
+        if (textPrefab == null) { Debug.LogError("Text Prefab is not assigned in the Inspector!"); return; }
 
-        posXInput.value = (float)System.Math.Round(newPosition.x, 2);
-        posYInput.value = (float)System.Math.Round(newPosition.y, 2);
-        posZInput.value = 0f; 
+        string textToDisplay = spawningTextInput.value;
+
+        // Instantiation! Spawn the text prefab into the scene origin.
+        GameObject spawnedTextObj = Instantiate(textPrefab, new Vector3(0, 0, 10f), Quaternion.identity);
+        
+        // Assign the text value to the TextMeshPro component
+        spawnedTextObj.GetComponent<TextMeshPro>().text = textToDisplay;
+        
+        DraggableObject dragHandler = spawnedTextObj.GetComponent<DraggableObject>();
+        if (dragHandler != null)
+        {
+            SetActiveAuthoringObject(dragHandler, textToDisplay, "Text");
+        }
     }
 
-    // --- NEW: The Browse Button Click Event ---
     void OnBrowseButtonClicked()
     {
-        SetFilePath(uploadBridge.BrowseMedia());
+        // Open browser for images (.png and .jpg)
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
     }
 
-    void OnUploadImageClicked()
+    // This runs automatically when an image is selected
+    private void OnFilesOpened(File[] files)
     {
-        SetFilePath(uploadBridge.UploadImage());
-    }
-
-    void OnUploadVideoClicked()
-    {
-        SetFilePath(uploadBridge.UploadVideo());
-    }
-
-    private void ResolveUploadBridge()
-    {
-        uploadBridge = uploadBridgeBehaviour as IWebGLUploadBridge;
-        if (uploadBridge != null)
+        if (files != null && files.Length > 0)
         {
-            return;
+            var selectedFile = files[0];
+            filePathInput.value = "Uploading: " + selectedFile.fileInfo.name;
+            
+            // Start the upload routine to your Flask server
+            StartCoroutine(UploadFileCoroutine(selectedFile));
         }
+    }
 
-        MonoBehaviour[] behaviours = GetComponents<MonoBehaviour>();
-        for (int i = 0; i < behaviours.Length; i++)
+    private IEnumerator UploadFileCoroutine(File file)
+    {
+        // Form creation
+        WWWForm form = new WWWForm();
+        form.AddBinaryData("file", file.data, file.fileInfo.name + "." + file.fileInfo.extension);
+
+        using (UnityWebRequest request = UnityWebRequest.Post(uploadApiUrl, form))
         {
-            if (behaviours[i] is IWebGLUploadBridge bridge)
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
             {
-                uploadBridge = bridge;
-                return;
+                // Parse JSON
+                string jsonResponse = request.downloadHandler.text;
+                string uploadedUrl = JsonUtility.FromJson<UploadResponse>(jsonResponse).url;
+                
+                filePathInput.value = uploadedUrl; // Put real URL in UI
+                Debug.Log("Upload complete! URL: " + uploadedUrl);
+
+                // --- NEW: Instant Authoring Feedback ---
+                // Now that we have a valid URL, we can spawn the visual object!
+                InstantiatePictureAtOrigin(uploadedUrl, file.fileInfo.name);
+            }
+            else
+            {
+                filePathInput.value = "Upload Failed!";
+                Debug.LogError("Error: " + request.error);
             }
         }
-
-        uploadBridge = new FallbackUploadBridge();
     }
 
-    private void SetFilePath(string path)
+    // --- NEW: Spawning Images ---
+    private void InstantiatePictureAtOrigin(string url, string filename)
     {
-        if (filePathInput == null)
-        {
-            return;
-        }
+        if (picturePrefab == null) { Debug.LogError("Picture Prefab is not assigned in the Inspector!"); return; }
 
-        if (string.IsNullOrWhiteSpace(path))
+        // 1. Instantiation! Spawn the picture prefab.
+        GameObject spawnedPicObj = Instantiate(picturePrefab, Vector3.zero, Quaternion.identity);
+        
+        DraggableObject dragHandler = spawnedPicObj.GetComponent<DraggableObject>();
+        if (dragHandler != null)
         {
-            return;
-        }
+            // 2. We use a Coroutine to load the new texture from the server onto the spawned object.
+            StartCoroutine(ApplyTextureToSpawningObject(spawnedPicObj, url));
 
-        filePathInput.value = path;
+            // 3. Mark this spawned object as the active one in the UI.
+            SetActiveAuthoringObject(dragHandler, url, "Image (" + filename + ")");
+        }
     }
 
-    private class FallbackUploadBridge : IWebGLUploadBridge
+    // Coroutine to download the texture and apply it to the Unlit/Texture shader
+    private IEnumerator ApplyTextureToSpawningObject(GameObject objToTex, string url)
     {
-        public string BrowseMedia()
+        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
         {
-            Debug.Log("BrowseMedia fallback bridge called.");
-            return "placeholder://browse-media";
-        }
-
-        public string UploadImage()
-        {
-            Debug.Log("UploadImage fallback bridge called.");
-            return "placeholder://upload-image";
-        }
-
-        public string UploadVideo()
-        {
-            Debug.Log("UploadVideo fallback bridge called.");
-            return "placeholder://upload-video";
+            yield return request.SendWebRequest();
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                Texture2D texture = ((DownloadHandlerTexture)request.downloadHandler).texture;
+                // Apply the texture directly to the Renderer's material.
+                objToTex.GetComponent<Renderer>().material.mainTexture = texture;
+            }
+            else { Debug.LogError("Error loading image for preview: " + request.error); }
         }
     }
 
+    // Helper: When an object is spawned or selected, update UI fields
+    private void SetActiveAuthoringObject(DraggableObject targetObj, string mediaValue, string contentType)
+    {
+        activeDraggedObject = targetObj;
+
+        // Round coordinates to clean numbers in the UI
+        Vector3 newPosition = targetObj.transform.localPosition;
+        posXInput.value = (float)System.Math.Round(newPosition.x, 2);
+        posYInput.value = (float)System.Math.Round(newPosition.y, 2);
+        posZInput.value = 0f;
+
+        // Scale should match the spawned object (1)
+        scaleInput.value = targetObj.transform.localScale.x;
+
+        // Set 'Media File:' to the Text string or the Image URL
+        filePathInput.value = mediaValue;
+        
+        // Set Content Type
+        contentTypeInput.value = contentType;
+        
+        Debug.Log("Now authoring " + targetObj.gameObject.name);
+    }
+
+    // Helper: Required helper class to parse the JSON response from your Flask server
+    [System.Serializable]
+    public class UploadResponse { public string url; }
+
+    // Coroutine and SaveButton method from earlier
     void OnSaveButtonClicked()
     {
-        if (contentTypeInput == null || posXInput == null || posYInput == null || posZInput == null || scaleInput == null || filePathInput == null || saveButton == null)
-        {
-            Debug.LogWarning("AuthoringUIController: required UI fields are not ready.");
-            return;
-        }
-
-        if (dbManager == null)
-        {
-            Debug.LogWarning("AuthoringUIController: DatabaseManager is not assigned.");
-            ShowSaveErrorFeedback("No DatabaseManager");
-            return;
-        }
-
-        if (isSaving)
-        {
-            return;
-        }
-
         string type = contentTypeInput.value;
         Vector3 position = new Vector3(posXInput.value, posYInput.value, posZInput.value);
         float scale = scaleInput.value;
-        
-        // Grab the string from our new file path box
         string url = filePathInput.value;
 
-        // Send the data to the database
         dbManager.SaveContentToDatabase(type, position, scale, url);
-        isSaving = true;
-        saveButton.text = "Saving...";
-        saveButton.SetEnabled(false);
-        saveButton.style.backgroundColor = new StyleColor(SaveButtonDefaultColor);
+        
+        saveButton.text = "Saved Successfully! ✓";
+        saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
     }
 
-    private void OnSaveCompleted(bool success, string responseText)
+    // This MUST be public so the DraggableObject can see it!
+    public void UpdateCoordinatesFromDrag(Vector3 newPosition)
     {
-        if (saveButton == null)
-        {
-            return;
-        }
-
-        isSaving = false;
-        saveButton.SetEnabled(true);
-
-        if (success)
-        {
-            saveButton.text = "Saved Successfully! ✓";
-            saveButton.style.backgroundColor = new StyleColor(SaveButtonSuccessColor);
-        }
-        else
-        {
-            Debug.LogWarning("AuthoringUIController: Save failed: " + responseText);
-            saveButton.text = "Save Failed";
-            saveButton.style.backgroundColor = new StyleColor(SaveButtonErrorColor);
-        }
-
-        saveButton.schedule.Execute(() =>
-        {
-            if (saveButton == null)
-            {
-                return;
-            }
-
-            saveButton.text = "Save to Database";
-            saveButton.style.backgroundColor = new StyleColor(SaveButtonDefaultColor);
-        }).StartingIn(2000);
-    }
-
-    private void ShowSaveErrorFeedback(string reason)
-    {
-        if (saveButton == null)
-        {
-            return;
-        }
-
-        Debug.LogWarning("AuthoringUIController: " + reason);
-        saveButton.text = "Save Failed";
-        saveButton.style.backgroundColor = new StyleColor(SaveButtonErrorColor);
-        saveButton.schedule.Execute(() =>
-        {
-            if (saveButton == null)
-            {
-                return;
-            }
-
-            saveButton.text = "Save to Database";
-            saveButton.style.backgroundColor = new StyleColor(SaveButtonDefaultColor);
-        }).StartingIn(2000);
+        posXInput.value = (float)System.Math.Round(newPosition.x, 2);
+        posYInput.value = (float)System.Math.Round(newPosition.y, 2);
+        posZInput.value = 0f; 
     }
 }

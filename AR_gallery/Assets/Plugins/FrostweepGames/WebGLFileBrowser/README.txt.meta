@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d8343008c1e98ad4b926e8201648375d
+timeCreated: 1515610853
+licenseType: Store
+TextScriptImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 41902
+  packageName: WebGL Native File Browser
+  packageVersion: 2.2.0
+  assetPath: Assets/Plugins/FrostweepGames/WebGLFileBrowser/README.txt
+  uploadId: 719761
