@@ -147,7 +147,7 @@ Transform:
   m_GameObject: {fileID: 289250084}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.034778286, z: -0, w: 0.99939513}
-  m_LocalPosition: {x: 0.72, y: -0.31, z: -0.41}
+  m_LocalPosition: {x: 2.05, y: -0.00999999, z: -0.32}
   m_LocalScale: {x: 1.5, y: 2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -421,7 +421,7 @@ Transform:
   m_GameObject: {fileID: 482236560}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.41, y: 0, z: 4.68}
+  m_LocalPosition: {x: -0.41, y: 0, z: -1.48}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -531,7 +531,7 @@ Transform:
   m_GameObject: {fileID: 507022751}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.63, y: 0.41, z: 11.75}
+  m_LocalPosition: {x: -0, y: 0, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -657,7 +657,7 @@ Transform:
   m_GameObject: {fileID: 600757513}
   serializedVersion: 2
   m_LocalRotation: {x: -0.04456966, y: 0.17795907, z: -0.008067744, w: -0.9829949}
-  m_LocalPosition: {x: 0.99, y: 4.19, z: -8.06}
+  m_LocalPosition: {x: 1.6648629, y: 4.3663034, z: -9.877495}
   m_LocalScale: {x: 35, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1029,7 +1029,7 @@ Transform:
   m_GameObject: {fileID: 1553045316}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.12, y: 2.37, z: 3.85}
+  m_LocalPosition: {x: -1.99, y: 2.96, z: 3.85}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1076,7 +1076,7 @@ Transform:
   m_GameObject: {fileID: 1788674510}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.84, y: 0, z: 5}
+  m_LocalPosition: {x: -0, y: 0, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1199,8 +1199,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthoringUIController
   dbManager: {fileID: 1900000003}
-  picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
-  textPrefab: {fileID: 8795060008269078731, guid: f48d1b2894c30d34c8f4f1b5659f2e98, type: 3}
+  picturePrefab: {fileID: 0}
+  textPrefab: {fileID: 0}
 --- !u!1 &2003858939
 GameObject:
   m_ObjectHideFlags: 0
@@ -1274,7 +1274,7 @@ Transform:
   m_GameObject: {fileID: 2085650311}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -5.37, y: 2.5, z: 5.04}
+  m_LocalPosition: {x: -5.37, y: 2.5, z: -1.25}
   m_LocalScale: {x: 10, y: 5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1387,7 +1387,7 @@ Transform:
   m_GameObject: {fileID: 2135496322}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.34, y: 2.41, z: 10.46}
+  m_LocalPosition: {x: -0.34, y: 2.41, z: 3.61}
   m_LocalScale: {x: 10, y: 5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

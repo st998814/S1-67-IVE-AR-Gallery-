@@ -26,7 +26,8 @@ __pycache__/
 *.mdb
 *.opendb
 *.VC.db
-
+*.jpg
+*.venv
 # OS generated
 .DS_Store
 Thumbs.db
