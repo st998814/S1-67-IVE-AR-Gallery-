@@ -14,17 +14,19 @@ public class ARContentData
     public float PosZ;
     public float Scale;
     public string MediaURL;
+    /// <summary>对应场景里哪一个 AR Image Target（与 Authoring 下拉 / ArImageTarget 一致）。</summary>
+    public string TargetId;
 }
 
 public class DatabaseManager : MonoBehaviour
 {
     [Header("Backend API")]
-    [SerializeField] private string apiUrl = "http://127.0.0.1:5000/api/content";
+    [SerializeField] private string apiUrl = "http://127.0.0.1:5050/api/content";
 
     public event Action<bool, string> SaveCompleted;
 
     // Call this method from your UI buttons to save an item
-    public void SaveContentToDatabase(string type, Vector3 position, float scale, string url)
+    public void SaveContentToDatabase(string type, Vector3 position, float scale, string url, string targetId)
     {
         ARContentData data = new ARContentData
         {
@@ -33,7 +35,8 @@ public class DatabaseManager : MonoBehaviour
             PosY = position.y,
             PosZ = position.z,
             Scale = scale,
-            MediaURL = url
+            MediaURL = url,
+            TargetId = targetId ?? ""
         };
 
         StartCoroutine(PostRequest(data));
@@ -59,10 +62,12 @@ public class DatabaseManager : MonoBehaviour
             }
             else
             {
+                string body = request.downloadHandler != null ? request.downloadHandler.text : "";
                 string errorMessage = string.Format(
-                    "HTTP {0}: {1}",
+                    "HTTP {0}: {1}{2}",
                     request.responseCode,
-                    request.error
+                    request.error,
+                    string.IsNullOrEmpty(body) ? "" : " | Body: " + body
                 );
                 Debug.LogError("Error saving to database: " + errorMessage);
                 SaveCompleted?.Invoke(false, errorMessage);

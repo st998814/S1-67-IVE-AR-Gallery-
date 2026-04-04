@@ -1030,7 +1030,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 311579385f6b9b14896902479d106443, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DatabaseManager
-  apiUrl: http://127.0.0.1:5000/api/content
+  apiUrl: http://127.0.0.1:5050/api/content
 --- !u!4 &1628367307
 Transform:
   m_ObjectHideFlags: 0

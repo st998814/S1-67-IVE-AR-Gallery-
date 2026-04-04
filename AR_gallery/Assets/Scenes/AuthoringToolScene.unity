@@ -1044,9 +1044,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ContentTransformController
   targetSelectionManager: {fileID: 1480848358}
+  authoringUI: {fileID: 1900000014}
+  raycastCamera: {fileID: 600757515}
   moveStep: 0.1
   rotateStep: 10
   scaleStep: 0.1
+  useRuntimeTransformGizmo: 1
+  gizmoTransformSpace: 0
+  clickSelectRayDistance: 200
+  clickSelectLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!114 &1480848362
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1186,7 +1194,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 311579385f6b9b14896902479d106443, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DatabaseManager
-  apiUrl: http://127.0.0.1:5000/api/content
+  apiUrl: http://127.0.0.1:5050/api/content
 --- !u!1 &1900000011
 GameObject:
   m_ObjectHideFlags: 0
@@ -1256,6 +1264,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthoringUIController
   dbManager: {fileID: 1900000003}
+  targetSelectionManager: {fileID: 1480848358}
   picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
   textPrefab: {fileID: 8795060008269078731, guid: f48d1b2894c30d34c8f4f1b5659f2e98, type: 3}
 --- !u!1 &2003858939

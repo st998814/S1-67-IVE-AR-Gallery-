@@ -1,41 +1,58 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class DraggableObject : MonoBehaviour
 {
     private float zCoord;
     private Vector3 offset;
     private AuthoringUIController uiController;
+    private bool isDragging;
+    private Camera cam;
 
     void Start()
     {
-        // Automatically find your UI Controller when the game starts
         uiController = FindFirstObjectByType<AuthoringUIController>();
+        cam = Camera.main;
     }
 
-    void OnMouseDown()
+    void Update()
     {
-        zCoord = Camera.main.WorldToScreenPoint(gameObject.transform.position).z;
-        offset = gameObject.transform.position - GetMouseAsWorldPoint();
-    }
+        if (cam == null)
+            cam = Camera.main;
+        Mouse mouse = Mouse.current;
+        if (mouse == null || cam == null)
+            return;
 
-    void OnMouseDrag()
-    {
-        transform.position = GetMouseAsWorldPoint() + offset;
-    }
-
-    void OnMouseUp()
-    {
-        // When you let go, send the local coordinates to the UI
-        if (uiController != null)
+        if (mouse.leftButton.wasPressedThisFrame && !isDragging)
         {
-            uiController.UpdateCoordinatesFromDrag(transform.localPosition);
+            Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
+            if (Physics.Raycast(ray, out RaycastHit hit, 1000f) &&
+                hit.collider != null &&
+                hit.collider.GetComponentInParent<DraggableObject>() == this)
+            {
+                isDragging = true;
+                zCoord = cam.WorldToScreenPoint(transform.position).z;
+                offset = transform.position - GetMouseAsWorldPoint(mouse);
+            }
+        }
+
+        if (isDragging && mouse.leftButton.isPressed)
+        {
+            transform.position = GetMouseAsWorldPoint(mouse) + offset;
+        }
+
+        if (isDragging && mouse.leftButton.wasReleasedThisFrame)
+        {
+            isDragging = false;
+            if (uiController != null)
+                uiController.UpdateCoordinatesFromDrag(transform.localPosition);
         }
     }
 
-    private Vector3 GetMouseAsWorldPoint()
+    private Vector3 GetMouseAsWorldPoint(Mouse mouse)
     {
-        Vector3 mousePoint = Input.mousePosition;
+        Vector3 mousePoint = mouse.position.ReadValue();
         mousePoint.z = zCoord;
-        return Camera.main.ScreenToWorldPoint(mousePoint);
+        return cam.ScreenToWorldPoint(mousePoint);
     }
 }
