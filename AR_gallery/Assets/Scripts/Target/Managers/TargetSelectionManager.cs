@@ -89,7 +89,8 @@ public class TargetSelectionManager : MonoBehaviour
             return false;
 
         CompactRuntimeTargets();
-        if (runtimeTargets.Contains(target))
+        if (runtimeTargets.Contains(target)) // add the target to the runtime list 
+                                             // the target would disappear every scene reload by RebuildRuntimeTargetsFromSerialized()
         {
             if (setActive)
             {
