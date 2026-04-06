@@ -7,6 +7,39 @@ This folder defines request/response DTOs
 - Keep Unity UI/runtime independent from concrete HTTP code.
 - Standardize field naming before backend endpoints are finalized.
 - Provide a clear handoff contract for backend collaboration.
+- Use coroutine-first async pattern for Unity integration.
+
+## Async pattern decision (Unity)
+
+- Pattern: `Coroutine` + callback completion.
+- Rationale:
+  - better fit with Unity main-thread lifecycle and UI updates
+  - direct compatibility with `UnityWebRequest`
+  - simpler cancellation through request handles
+- Abstractions added in `Scripts/Api/Abstractions`:
+  - `IApiClient`
+  - `IApiRequestHandle`
+  - `ApiResult<TPayload>`
+  - `CoroutineApiRequestHandle`
+
+## Result / cancellation conventions
+
+- Result wrapper fields:
+  - `success`
+  - `errorCode`
+  - `message`
+  - `payload`
+  - `statusCode`
+- Standard error codes:
+  - `CANCELLED`
+  - `TIMEOUT`
+  - `NETWORK_ERROR`
+  - `SERVER_ERROR`
+  - `VALIDATION_ERROR`
+  - `UNKNOWN`
+- Every API method supports:
+  - timeout parameter (`timeoutSeconds`)
+  - cancellation via returned `IApiRequestHandle`
 
 ## Field naming conventions
 
