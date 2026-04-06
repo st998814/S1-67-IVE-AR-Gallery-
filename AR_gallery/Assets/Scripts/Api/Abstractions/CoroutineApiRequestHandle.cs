@@ -4,20 +4,24 @@ using UnityEngine;
 /// The handler for the API request.
 /// </summary>
 public class CoroutineApiRequestHandle : IApiRequestHandle
-{   // fields
+{
     private readonly MonoBehaviour owner;
-    private readonly Coroutine coroutine;
+    private Coroutine coroutine;
     private bool done;
     private bool cancelled;
-    // constructor
-    public CoroutineApiRequestHandle(MonoBehaviour owner, Coroutine coroutine)
+
+    public CoroutineApiRequestHandle(MonoBehaviour owner)
     {
-        this.owner = owner; // the owner of the handler
-        this.coroutine = coroutine; // the actual coroutine that will be executed
+        this.owner = owner;
     }
-    // properties
+
     public bool IsDone => done;
     public bool IsCancelled => cancelled;
+
+    public void BindCoroutine(Coroutine coroutineToBind)
+    {
+        coroutine = coroutineToBind;
+    }
 
     public void MarkDone()
     {
@@ -31,7 +35,7 @@ public class CoroutineApiRequestHandle : IApiRequestHandle
 
         cancelled = true;
         if (owner != null && coroutine != null)
-            owner.StopCoroutine(coroutine); // stop the coroutine
-        done = true; // mark as done
+            owner.StopCoroutine(coroutine);
+        done = true;
     }
 }
