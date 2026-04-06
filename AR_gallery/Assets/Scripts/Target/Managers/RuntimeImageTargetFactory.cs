@@ -2,7 +2,7 @@ using UnityEngine;
 
 [DisallowMultipleComponent]
 /// <summary>
-/// Create AR Image Targets at runtime.
+/// Creates AR image-target hierarchy objects at runtime under a shared root.
 /// </summary>
 public class RuntimeImageTargetFactory : MonoBehaviour
 {
@@ -16,30 +16,23 @@ public class RuntimeImageTargetFactory : MonoBehaviour
     [SerializeField] private Vector3 targetVisualLocalScale = Vector3.one;
     [SerializeField] private Material targetVisualMaterial;
 
+    /// <summary>
+    /// Creates a new target root with required children:
+    /// ImageTargetPlaceholder, TargetVisual and ContentRoot.
+    /// </summary>
     public GameObject CreateTarget(string targetName, string targetId, string displayLabel = null)
-        /// <summary>
-        /// Create a new AR Image Target.
-        /// </summary>
-        /// <param name="targetName">The name of the target.</param>
-        /// <param name="targetId">The ID of the target.</param>
-        /// <param name="displayLabel">The label of the target.</param>
-        /// <returns>The created target.</returns>
-    {   
-        /// <summary>
-        /// Ensure the target name and ID are valid.
-        /// </summary>
+    {
         string safeName = string.IsNullOrWhiteSpace(targetName) ? "NewTarget" : targetName.Trim();
         string safeId = string.IsNullOrWhiteSpace(targetId) ? safeName : targetId.Trim();
-        Debug.Log("CreateTarget: " + safeName + " " + safeId + " " + displayLabel);
 
-        Transform root = EnsureImageTargetRoot(); /// get root from hierarchy or create a new one if not found
+        Transform root = EnsureImageTargetRoot();
 
-        GameObject targetRoot = new GameObject(safeName + "_Target"); /// create a new target root for dedicated image target
-        targetRoot.transform.SetParent(root, false); /// set parent to the "ROOT"
+        GameObject targetRoot = new GameObject(safeName + "_Target");
+        targetRoot.transform.SetParent(root, false);
 
         ArImageTarget arTarget = targetRoot.AddComponent<ArImageTarget>();
         arTarget.Configure(safeId, displayLabel);
-        /// create "ImageTargetPlaceholder" , "TargetVisual" , "ContentRoot" under the target root
+
         CreateImageTargetPlaceholder(targetRoot.transform, safeId);
         CreateTargetVisual(targetRoot.transform);
         CreateContentRoot(targetRoot.transform);
@@ -47,25 +40,25 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         return targetRoot;
     }
 
+    /// <summary>
+    /// Resolves the target root transform, creating it if needed.
+    /// </summary>
     private Transform EnsureImageTargetRoot()
     {
-        /// <summary>
-        /// Ensure the image target root is valid , if not found, create a new one.
-        /// </summary>
-        /// <returns>The image target root.</returns>
         if (imageTargetRoot != null)
             return imageTargetRoot;
 
         GameObject found = GameObject.Find(imageTargetRootName);
-
         if (found == null)
-        {
             found = new GameObject(imageTargetRootName);
-        }
 
         imageTargetRoot = found.transform;
         return imageTargetRoot;
     }
+
+    /// <summary>
+    /// Adds a placeholder child that stores the marker target id.
+    /// </summary>
     private static void CreateImageTargetPlaceholder(Transform parent, string targetId)
     {
         GameObject go = new GameObject("ImageTargetPlaceholder");
@@ -74,19 +67,13 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         placeholder.SetTargetId(targetId);
     }
 
+    /// <summary>
+    /// Adds the target visual surface used as frame/alignment reference.
+    /// </summary>
     private void CreateTargetVisual(Transform parent)
-    {   /// <summary>
-        /// Create a target visual for the target.
-        /// </summary>
-        /// <param name="parent">The parent of the target visual.</param>
-    {   /// <summary>
-        /// Create a quad for the target visual.
-        /// </summary>
-        /// <param name="parent">The parent of the target visual.</param>
-        /// <returns>The target visual.</returns>
     {
-        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad); /// a 2D surface for the target visual
-        go.name = $"TargetVisual_{parent.name}";
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "TargetVisual";
         go.transform.SetParent(parent, false);
         go.transform.localPosition = targetVisualLocalPosition;
         go.transform.localRotation = Quaternion.Euler(targetVisualLocalEuler);
@@ -94,9 +81,9 @@ public class RuntimeImageTargetFactory : MonoBehaviour
 
         Collider collider = go.GetComponent<Collider>();
         if (collider != null)
-            Destroy(collider); /// remove the collider to avoid raycast issues
+            Destroy(collider);
 
-        if (targetVisualMaterial != null) /// set the material to the target visual
+        if (targetVisualMaterial != null)
         {
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer != null)
@@ -104,6 +91,9 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Adds an empty content parent where authored objects are spawned.
+    /// </summary>
     private static void CreateContentRoot(Transform parent)
     {
         GameObject go = new GameObject("ContentRoot");

@@ -1,19 +1,14 @@
-/// <summary>
-/// Manages the selection and display of AR Image Targets.
-/// </summary>
-
 using System;
-using System.Collections.Generic; /// for the list of runtime targets
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 
 public class TargetSelectionManager : MonoBehaviour
 {
-    [SerializeField] private GameObject[] targets; /// persistent target list (off-runtime)  , 
-    ///we're missing persistent data layer (e.g., Database) for now .
+    [SerializeField] private GameObject[] targets;
     [SerializeField] private int activeTargetIndex = 0;
-    private readonly List<GameObject> runtimeTargets = new List<GameObject>(); /// runtime target list (on-runtime)
+    private readonly List<GameObject> runtimeTargets = new List<GameObject>();
 
     /// <summary>切换当前 AR 目标时触发（键盘 1/2、Authoring 下拉共用）。</summary>
     public event Action<int> ActiveTargetChanged;
@@ -24,7 +19,7 @@ public class TargetSelectionManager : MonoBehaviour
     {
         get
         {
-            CompactRuntimeTargets(); /// ensure the runtime targets list is compacted
+            CompactRuntimeTargets();
             return runtimeTargets.Count;
         }
     }
@@ -40,7 +35,6 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     private void Update()
-    /// The target selection should be achieved by another approach , TODO : add a UI element to select the target.
     {
         if (Keyboard.current == null)
             return;
@@ -57,10 +51,6 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     private static bool IsUiToolkitTextOrNumericFieldFocused()
-    /// <summary>
-    /// Check if any UI toolkit text or numeric field is focused.
-    /// </summary>
-    /// <returns>True if any UI toolkit text or numeric field is focused, false otherwise.</returns>
     {
         UIDocument[] docs = UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None);
         foreach (UIDocument doc in docs)
@@ -83,10 +73,6 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     public void SetActiveTarget(int index)
-    /// <summary>
-    /// Set the active target.
-    /// </summary>
-    /// <param name="index">The index of the target to set as active.</param>
     {
         CompactRuntimeTargets();
         if (index < 0 || index >= runtimeTargets.Count)
@@ -98,18 +84,11 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     public bool AddTarget(GameObject target, bool setActive = true)
-    /// <summary>
-    /// Add a target to the runtime targets list.
-    /// </summary>
-    /// <param name="target">The target to add.</param>
-    /// <param name="setActive">True if the target should be set as active, false otherwise.</param>
-    /// <returns>True if the target was added, false otherwise.</returns>
     {
         if (target == null)
             return false;
 
         CompactRuntimeTargets();
-        /// if the target is already in the list, set it as active if setActive is true.
         if (runtimeTargets.Contains(target))
         {
             if (setActive)
@@ -117,9 +96,9 @@ public class TargetSelectionManager : MonoBehaviour
                 int existingIndex = runtimeTargets.IndexOf(target);
                 SetActiveTarget(existingIndex);
             }
-            return false; /// the target was already in the list, so return false.
+            return false;
         }
-        /// if the target is not in the list, add it to the list.
+
         runtimeTargets.Add(target);
         if (setActive)
         {
@@ -129,16 +108,13 @@ public class TargetSelectionManager : MonoBehaviour
         }
         else
         {
-            ShowOnlyActiveTarget(); 
+            ShowOnlyActiveTarget();
         }
 
         return true;
     }
 
     private void ShowOnlyActiveTarget()
-    /// <summary>
-    /// Show only the active target , hide the other targets.
-    /// </summary>
     {
         CompactRuntimeTargets();
         if (runtimeTargets.Count == 0)
@@ -148,7 +124,7 @@ public class TargetSelectionManager : MonoBehaviour
         for (int i = 0; i < runtimeTargets.Count; i++)
         {
             if (runtimeTargets[i] != null)
-                runtimeTargets[i].SetActive(i == activeTargetIndex); /// show only the active target , hide the other targets.
+                runtimeTargets[i].SetActive(i == activeTargetIndex);
         }
     }
 
@@ -190,10 +166,6 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     private void RebuildRuntimeTargetsFromSerialized()
-    /// <summary>
-    /// Rebuild the runtime targets list from the serialized targets.
-    /// </summary>
-    /// <returns>The rebuilt runtime targets list.</returns>
     {
         runtimeTargets.Clear();
         if (targets == null)
@@ -213,10 +185,6 @@ public class TargetSelectionManager : MonoBehaviour
     }
 
     private void CompactRuntimeTargets()
-    {   /// <summary>
-        /// Compact the runtime targets list , remove null targets.
-        /// </summary>
-        /// <returns>The compacted runtime targets list.</returns>
     {
         for (int i = runtimeTargets.Count - 1; i >= 0; i--)
         {
