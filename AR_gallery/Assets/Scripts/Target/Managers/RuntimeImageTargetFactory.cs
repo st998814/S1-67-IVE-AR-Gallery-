@@ -37,7 +37,7 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         ArImageTarget arTarget = targetRoot.AddComponent<ArImageTarget>();
         arTarget.Configure(safeId, displayLabel);
 
-        CreateImageTargetPlaceholder(targetRoot.transform, safeId);
+        CreateImageTargetPlaceholder(targetRoot.transform, arTarget.TargetId);
         CreateTargetVisual(targetRoot.transform, safeName);
         CreateContentRoot(targetRoot.transform);
 

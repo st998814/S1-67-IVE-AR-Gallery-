@@ -31,12 +31,10 @@ public class ArImageTarget : MonoBehaviour
         }
     }
     
-    public void Configure(string newTargetId, string newDisplayLabel = null)
     /// <summary>
     /// Configure the target ID and display label.
     /// </summary>
-    /// <param name="newTargetId">The new target ID.</param>
-    /// <param name="newDisplayLabel">The new display label.</param>
+    public void Configure(string newTargetId, string newDisplayLabel = null)
     {
         targetId = string.IsNullOrWhiteSpace(newTargetId) ? "" : newTargetId.Trim();
         displayLabel = string.IsNullOrWhiteSpace(newDisplayLabel) ? "" : newDisplayLabel.Trim();

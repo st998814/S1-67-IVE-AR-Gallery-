@@ -166,6 +166,32 @@ public class TargetSelectionManager : MonoBehaviour
         return runtimeTargets[index];
     }
 
+    public bool ContainsTargetId(string targetId)
+    {
+        return FindTargetIndexById(targetId) >= 0;
+    }
+
+    public int FindTargetIndexById(string targetId)
+    {
+        string needle = string.IsNullOrWhiteSpace(targetId) ? "" : targetId.Trim();
+        if (needle.Length == 0)
+            return -1;
+
+        CompactRuntimeTargets();
+        for (int i = 0; i < runtimeTargets.Count; i++)
+        {
+            GameObject go = runtimeTargets[i];
+            if (go == null)
+                continue;
+
+            var desc = go.GetComponent<ArImageTarget>();
+            string existingId = desc != null ? desc.TargetId : go.name;
+            if (string.Equals(existingId, needle, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
     private void RebuildRuntimeTargetsFromSerialized()
     {
         runtimeTargets.Clear();

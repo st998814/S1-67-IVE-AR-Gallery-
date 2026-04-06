@@ -198,13 +198,29 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         string targetName = createTargetNameInput != null ? createTargetNameInput.value : "";
-        string targetId = createTargetIdInput != null ? createTargetIdInput.value : "";
-        string displayLabel = string.IsNullOrWhiteSpace(targetName) ? null : targetName.Trim();
+        string normalizedName = string.IsNullOrWhiteSpace(targetName) ? "NewTarget" : targetName.Trim();
+        string targetIdInput = createTargetIdInput != null ? createTargetIdInput.value : "";
+        string normalizedTargetId = NormalizeTargetId(targetIdInput, normalizedName);
+        string displayLabel = normalizedName;
 
-        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(targetName, targetId, displayLabel);
+        if (createTargetIdInput != null)
+            createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
+
+        int existingIndex = targetSelectionManager.FindTargetIndexById(normalizedTargetId);
+        if (existingIndex >= 0)
+        {
+            ShowCreateTargetFeedback($"Target ID already exists: {normalizedTargetId}", isError: true);
+            Debug.LogWarning($"AuthoringUIController: rejected duplicate targetId '{normalizedTargetId}'.");
+            targetSelectionManager.SetActiveTarget(existingIndex);
+            RefreshImageTargetDropdownChoices();
+            return;
+        }
+
+        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(normalizedName, normalizedTargetId, displayLabel);
         if (newTarget == null)
         {
             Debug.LogError("AuthoringUIController: Failed to create target.");
+            ShowCreateTargetFeedback("Create target failed", isError: true);
             return;
         }
 
@@ -214,6 +230,8 @@ public class AuthoringUIController : MonoBehaviour
         int activeIndex = targetSelectionManager.ActiveTargetIndex;
         if (activeIndex >= 0)
             targetSelectionManager.SetActiveTarget(activeIndex);
+
+        ShowCreateTargetFeedback($"Created: {normalizedTargetId}", isError: false);
     }
     // 
     private TargetSelectionManager ResolveTargetSelectionManager()
@@ -262,6 +280,59 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         return runtimeImageTargetFactory;
+    }
+
+    /// <summary>
+    /// Normalize the target id.
+    /// </summary>
+    /// <param name="targetIdInput">The target id input.</param>
+    /// <param name="fallbackName">The fallback name.</param>
+    /// <returns>The normalized target id.</returns>
+    private string NormalizeTargetId(string targetIdInput, string fallbackName)
+
+    {
+        string source = string.IsNullOrWhiteSpace(targetIdInput) ? fallbackName : targetIdInput.Trim();
+        source = source.ToLowerInvariant();
+
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(source.Length);
+        bool lastWasDash = false;
+        for (int i = 0; i < source.Length; i++)
+        {
+            char c = source[i];
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+            {
+                sb.Append(c);
+                lastWasDash = false;
+                continue;
+            }
+
+            if (c == '_' || c == '-' || c == ' ')
+            {
+                if (!lastWasDash)
+                {
+                    sb.Append('-');
+                    lastWasDash = true;
+                }
+            }
+        }
+
+        string normalized = sb.ToString().Trim('-');
+        return normalized.Length == 0 ? "new-target" : normalized;
+    }
+
+    /// <summary>
+    /// Show the create target feedback.
+    /// </summary>
+    /// <param name="message">The message to show.</param>
+    /// <param name="isError">True if the message is an error, false otherwise.</param>
+    private void ShowCreateTargetFeedback(string message, bool isError)
+    {
+        if (createTargetButton == null)
+            return;
+
+        string original = "Create Target";
+        createTargetButton.text = message;
+        createTargetButton.schedule.Execute(() => { createTargetButton.text = original; }).StartingIn(isError ? 2600 : 1600);
     }
 
     private void RegisterSpatialFieldCallbacks()
