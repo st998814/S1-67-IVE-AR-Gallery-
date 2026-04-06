@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -7,13 +8,26 @@ public class TargetSelectionManager : MonoBehaviour
 {
     [SerializeField] private GameObject[] targets;
     [SerializeField] private int activeTargetIndex = 0;
+    private readonly List<GameObject> runtimeTargets = new List<GameObject>();
 
     /// <summary>切换当前 AR 目标时触发（键盘 1/2、Authoring 下拉共用）。</summary>
     public event Action<int> ActiveTargetChanged;
 
     public int ActiveTargetIndex => activeTargetIndex;
 
-    public int TargetCount => targets != null ? targets.Length : 0;
+    public int TargetCount
+    {
+        get
+        {
+            CompactRuntimeTargets();
+            return runtimeTargets.Count;
+        }
+    }
+
+    private void Awake()
+    {
+        RebuildRuntimeTargetsFromSerialized();
+    }
 
     private void Start()
     {
@@ -60,7 +74,8 @@ public class TargetSelectionManager : MonoBehaviour
 
     public void SetActiveTarget(int index)
     {
-        if (targets == null || index < 0 || index >= targets.Length)
+        CompactRuntimeTargets();
+        if (index < 0 || index >= runtimeTargets.Count)
             return;
 
         activeTargetIndex = index;
@@ -68,24 +83,59 @@ public class TargetSelectionManager : MonoBehaviour
         ActiveTargetChanged?.Invoke(activeTargetIndex);
     }
 
+    public bool AddTarget(GameObject target, bool setActive = true)
+    {
+        if (target == null)
+            return false;
+
+        CompactRuntimeTargets();
+        if (runtimeTargets.Contains(target)) // add the target to the runtime list 
+                                             // the target would disappear every scene reload by RebuildRuntimeTargetsFromSerialized()
+        {
+            if (setActive)
+            {
+                int existingIndex = runtimeTargets.IndexOf(target);
+                SetActiveTarget(existingIndex);
+            }
+            return false;
+        }
+
+        runtimeTargets.Add(target);
+        if (setActive)
+        {
+            activeTargetIndex = runtimeTargets.Count - 1;
+            ShowOnlyActiveTarget();
+            ActiveTargetChanged?.Invoke(activeTargetIndex);
+        }
+        else
+        {
+            ShowOnlyActiveTarget();
+        }
+
+        return true;
+    }
+
     private void ShowOnlyActiveTarget()
     {
-        if (targets == null)
+        CompactRuntimeTargets();
+        if (runtimeTargets.Count == 0)
             return;
 
-        for (int i = 0; i < targets.Length; i++)
+        activeTargetIndex = Mathf.Clamp(activeTargetIndex, 0, runtimeTargets.Count - 1);
+        for (int i = 0; i < runtimeTargets.Count; i++)
         {
-            if (targets[i] != null)
-                targets[i].SetActive(i == activeTargetIndex);
+            if (runtimeTargets[i] != null)
+                runtimeTargets[i].SetActive(i == activeTargetIndex);
         }
     }
 
     public GameObject GetActiveTarget()
     {
-        if (targets == null || activeTargetIndex < 0 || activeTargetIndex >= targets.Length)
+        CompactRuntimeTargets();
+        if (activeTargetIndex < 0 || activeTargetIndex >= runtimeTargets.Count)
             return null;
 
-        return targets[activeTargetIndex];
+        return runtimeTargets[activeTargetIndex];
     }
 
     /// <summary>下拉列表用：无 ArImageTarget 时用物体名。</summary>
@@ -110,8 +160,68 @@ public class TargetSelectionManager : MonoBehaviour
 
     public GameObject GetTargetAt(int index)
     {
-        if (targets == null || index < 0 || index >= targets.Length)
+        CompactRuntimeTargets();
+        if (index < 0 || index >= runtimeTargets.Count)
             return null;
-        return targets[index];
+        return runtimeTargets[index];
+    }
+
+    public bool ContainsTargetId(string targetId)
+    {
+        return FindTargetIndexById(targetId) >= 0;
+    }
+
+    public int FindTargetIndexById(string targetId)
+    {
+        string needle = string.IsNullOrWhiteSpace(targetId) ? "" : targetId.Trim();
+        if (needle.Length == 0)
+            return -1;
+
+        CompactRuntimeTargets();
+        for (int i = 0; i < runtimeTargets.Count; i++)
+        {
+            GameObject go = runtimeTargets[i];
+            if (go == null)
+                continue;
+
+            var desc = go.GetComponent<ArImageTarget>();
+            string existingId = desc != null ? desc.TargetId : go.name;
+            if (string.Equals(existingId, needle, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    private void RebuildRuntimeTargetsFromSerialized()
+    {
+        runtimeTargets.Clear();
+        if (targets == null)
+            return;
+
+        for (int i = 0; i < targets.Length; i++)
+        {
+            GameObject target = targets[i];
+            if (target != null && !runtimeTargets.Contains(target))
+                runtimeTargets.Add(target);
+        }
+
+        if (runtimeTargets.Count == 0)
+            activeTargetIndex = -1;
+        else
+            activeTargetIndex = Mathf.Clamp(activeTargetIndex, 0, runtimeTargets.Count - 1);
+    }
+
+    private void CompactRuntimeTargets()
+    {
+        for (int i = runtimeTargets.Count - 1; i >= 0; i--)
+        {
+            if (runtimeTargets[i] == null)
+                runtimeTargets.RemoveAt(i);
+        }
+
+        if (runtimeTargets.Count == 0)
+            activeTargetIndex = -1;
+        else
+            activeTargetIndex = Mathf.Clamp(activeTargetIndex, 0, runtimeTargets.Count - 1);
     }
 }

@@ -9,6 +9,9 @@
                 <ui:Label text="AR Image Target" style="color: rgb(30, 30, 30); font-size: 11px; -unity-font-style: bold; margin-bottom: 4px;" />
                 <ui:DropdownField name="ImageTargetDropdown" style="color: rgb(30, 30, 30); min-height: 26px; font-size: 11px;" />
             </ui:VisualElement>
+            <ui:TextField name="CreateTargetNameInput" label="Target Name" value="Poster_C" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+            <ui:TextField name="CreateTargetIdInput" label="Target ID" value="poster_c" style="color: rgb(30, 30, 30); margin-bottom: 6px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
+            <ui:Button name="CreateTargetButton" text="Create Target" style="height: 28px; width: 100%; background-color: rgb(30, 150, 90); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 11px; margin-bottom: 8px;" />
 
             <ui:TextField name="ContentTypeInput" label="Type" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
 

@@ -1,5 +1,4 @@
 using UnityEngine;
-
 /// <summary>
 /// 挂在每个 AR Image Target 根物体上：为侧栏下拉提供显示名，为数据库/手机端提供稳定 TargetId。
 /// 未挂此组件时，<see cref="TargetSelectionManager"/> 会退回使用 GameObject.name。
@@ -30,5 +29,14 @@ public class ArImageTarget : MonoBehaviour
                 return displayLabel.Trim();
             return TargetId;
         }
+    }
+    
+    /// <summary>
+    /// Configure the target ID and display label.
+    /// </summary>
+    public void Configure(string newTargetId, string newDisplayLabel = null)
+    {
+        targetId = string.IsNullOrWhiteSpace(newTargetId) ? "" : newTargetId.Trim();
+        displayLabel = string.IsNullOrWhiteSpace(newDisplayLabel) ? "" : newDisplayLabel.Trim();
     }
 }

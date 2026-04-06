@@ -22,6 +22,9 @@ public class AuthoringUIController : MonoBehaviour
     private TextField filePathInput;
     private TextField youtubeUrlInput;
     private DropdownField imageTargetDropdown;
+    private TextField createTargetNameInput;
+    private TextField createTargetIdInput;
+    private Button createTargetButton;
 
     /// <summary>为 true 时忽略下拉回调，避免与 <see cref="TargetSelectionManager.ActiveTargetChanged"/> 互相触发。</summary>
     private bool suppressTargetDropdownCallbacks;
@@ -43,6 +46,7 @@ public class AuthoringUIController : MonoBehaviour
     private bool suppressSpatialUiCallbacks;
 
     [SerializeField] private string uploadApiUrl = "http://127.0.0.1:5050/api/upload";
+    [SerializeField] private RuntimeImageTargetFactory runtimeImageTargetFactory;
 
     void OnEnable()
     {
@@ -58,6 +62,9 @@ public class AuthoringUIController : MonoBehaviour
         filePathInput = root.Q<TextField>("FilePathInput");
         youtubeUrlInput = root.Q<TextField>("YoutubeUrlInput");
         imageTargetDropdown = root.Q<DropdownField>("ImageTargetDropdown");
+        createTargetNameInput = root.Q<TextField>("CreateTargetNameInput");
+        createTargetIdInput = root.Q<TextField>("CreateTargetIdInput");
+        createTargetButton = root.Q<Button>("CreateTargetButton");
         
         // NEW: Text Spawning UI elements
         spawningTextInput = root.Q<TextField>("SpawningTextInput");
@@ -69,6 +76,7 @@ public class AuthoringUIController : MonoBehaviour
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
         saveButton.clicked += OnSaveButtonClicked;
+        if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
         
         // NEW: Event Listener for spawning text
         spawnTextButton.clicked += OnSpawnTextButtonClicked;
@@ -78,8 +86,8 @@ public class AuthoringUIController : MonoBehaviour
 
         RegisterSpatialFieldCallbacks();
 
-        if (targetSelectionManager == null)
-            targetSelectionManager = FindFirstObjectByType<TargetSelectionManager>();
+        targetSelectionManager = ResolveTargetSelectionManager();
+        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
 
         RefreshImageTargetDropdownChoices();
         if (imageTargetDropdown != null)
@@ -96,6 +104,7 @@ public class AuthoringUIController : MonoBehaviour
         if (browseButton != null) browseButton.clicked -= OnBrowseButtonClicked;
         if (saveButton != null) saveButton.clicked -= OnSaveButtonClicked;
         if (spawnTextButton != null) spawnTextButton.clicked -= OnSpawnTextButtonClicked;
+        if (createTargetButton != null) createTargetButton.clicked -= OnCreateTargetButtonClicked;
 
         if (imageTargetDropdown != null)
             imageTargetDropdown.UnregisterValueChangedCallback(OnImageTargetDropdownChanged);
@@ -108,8 +117,7 @@ public class AuthoringUIController : MonoBehaviour
         if (imageTargetDropdown == null)
             return;
 
-        if (targetSelectionManager == null)
-            targetSelectionManager = FindFirstObjectByType<TargetSelectionManager>();
+        targetSelectionManager = ResolveTargetSelectionManager();
 
         var choices = new List<string>();
         if (targetSelectionManager == null || targetSelectionManager.TargetCount == 0)
@@ -175,6 +183,156 @@ public class AuthoringUIController : MonoBehaviour
         if (targetSelectionManager == null || targetSelectionManager.TargetCount == 0)
             return "";
         return targetSelectionManager.GetTargetId(targetSelectionManager.ActiveTargetIndex);
+    }
+
+    /// <summary>Create and register a new runtime target from UI inputs.</summary>
+    private void OnCreateTargetButtonClicked()
+    {
+        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
+        targetSelectionManager = ResolveTargetSelectionManager();
+
+        if (runtimeImageTargetFactory == null || targetSelectionManager == null)
+        {
+            Debug.LogError("AuthoringUIController: RuntimeImageTargetFactory or TargetSelectionManager is missing.");
+            return;
+        }
+
+        string targetName = createTargetNameInput != null ? createTargetNameInput.value : "";
+        string normalizedName = string.IsNullOrWhiteSpace(targetName) ? "NewTarget" : targetName.Trim();
+        string targetIdInput = createTargetIdInput != null ? createTargetIdInput.value : "";
+        string normalizedTargetId = NormalizeTargetId(targetIdInput, normalizedName);
+        string displayLabel = normalizedName;
+
+        if (createTargetIdInput != null)
+            createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
+
+        int existingIndex = targetSelectionManager.FindTargetIndexById(normalizedTargetId);
+        if (existingIndex >= 0)
+        {
+            ShowCreateTargetFeedback($"Target ID already exists: {normalizedTargetId}", isError: true);
+            Debug.LogWarning($"AuthoringUIController: rejected duplicate targetId '{normalizedTargetId}'.");
+            targetSelectionManager.SetActiveTarget(existingIndex);
+            RefreshImageTargetDropdownChoices();
+            return;
+        }
+
+        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(normalizedName, normalizedTargetId, displayLabel);
+        if (newTarget == null)
+        {
+            Debug.LogError("AuthoringUIController: Failed to create target.");
+            ShowCreateTargetFeedback("Create target failed", isError: true);
+            return;
+        }
+
+        targetSelectionManager.AddTarget(newTarget, setActive: true);
+        RefreshImageTargetDropdownChoices();
+
+        int activeIndex = targetSelectionManager.ActiveTargetIndex;
+        if (activeIndex >= 0)
+            targetSelectionManager.SetActiveTarget(activeIndex);
+
+        ShowCreateTargetFeedback($"Created: {normalizedTargetId}", isError: false);
+    }
+    // 
+    private TargetSelectionManager ResolveTargetSelectionManager()
+    {
+        if (targetSelectionManager != null)
+            return targetSelectionManager;
+
+        targetSelectionManager = FindFirstObjectByType<TargetSelectionManager>();
+        if (targetSelectionManager != null)
+            return targetSelectionManager;
+
+        TargetSelectionManager[] candidates = Resources.FindObjectsOfTypeAll<TargetSelectionManager>();
+        foreach (TargetSelectionManager candidate in candidates)
+        {
+            if (candidate == null || !candidate.gameObject.scene.IsValid())
+                continue;
+            targetSelectionManager = candidate;
+            break;
+        }
+
+        return targetSelectionManager;
+    }
+
+    private RuntimeImageTargetFactory ResolveRuntimeImageTargetFactory()
+    {
+        if (runtimeImageTargetFactory != null)
+            return runtimeImageTargetFactory;
+
+        runtimeImageTargetFactory = FindFirstObjectByType<RuntimeImageTargetFactory>();
+        if (runtimeImageTargetFactory != null)
+            return runtimeImageTargetFactory;
+
+        RuntimeImageTargetFactory[] candidates = Resources.FindObjectsOfTypeAll<RuntimeImageTargetFactory>();
+        foreach (RuntimeImageTargetFactory candidate in candidates)
+        {
+            if (candidate == null || !candidate.gameObject.scene.IsValid())
+                continue;
+            runtimeImageTargetFactory = candidate;
+            break;
+        }
+
+        if (runtimeImageTargetFactory == null)
+        {
+            runtimeImageTargetFactory = gameObject.AddComponent<RuntimeImageTargetFactory>();
+            Debug.LogWarning("AuthoringUIController: RuntimeImageTargetFactory not found in scene. Added one to this GameObject.");
+        }
+
+        return runtimeImageTargetFactory;
+    }
+
+    /// <summary>
+    /// Normalize the target id.
+    /// </summary>
+    /// <param name="targetIdInput">The target id input.</param>
+    /// <param name="fallbackName">The fallback name.</param>
+    /// <returns>The normalized target id.</returns>
+    private string NormalizeTargetId(string targetIdInput, string fallbackName)
+
+    {
+        string source = string.IsNullOrWhiteSpace(targetIdInput) ? fallbackName : targetIdInput.Trim();
+        source = source.ToLowerInvariant();
+
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(source.Length);
+        bool lastWasDash = false;
+        for (int i = 0; i < source.Length; i++)
+        {
+            char c = source[i];
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+            {
+                sb.Append(c);
+                lastWasDash = false;
+                continue;
+            }
+
+            if (c == '_' || c == '-' || c == ' ')
+            {
+                if (!lastWasDash)
+                {
+                    sb.Append('-');
+                    lastWasDash = true;
+                }
+            }
+        }
+
+        string normalized = sb.ToString().Trim('-');
+        return normalized.Length == 0 ? "new-target" : normalized;
+    }
+
+    /// <summary>
+    /// Show the create target feedback.
+    /// </summary>
+    /// <param name="message">The message to show.</param>
+    /// <param name="isError">True if the message is an error, false otherwise.</param>
+    private void ShowCreateTargetFeedback(string message, bool isError)
+    {
+        if (createTargetButton == null)
+            return;
+
+        string original = "Create Target";
+        createTargetButton.text = message;
+        createTargetButton.schedule.Execute(() => { createTargetButton.text = original; }).StartingIn(isError ? 2600 : 1600);
     }
 
     private void RegisterSpatialFieldCallbacks()
@@ -276,8 +434,7 @@ public class AuthoringUIController : MonoBehaviour
 
     public Transform TryGetActiveContentRoot()
     {
-        if (targetSelectionManager == null)
-            targetSelectionManager = FindFirstObjectByType<TargetSelectionManager>();
+        targetSelectionManager = ResolveTargetSelectionManager();
         if (targetSelectionManager == null)
             return null;
 
