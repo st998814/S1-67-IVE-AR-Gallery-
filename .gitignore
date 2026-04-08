@@ -28,6 +28,7 @@ __pycache__/
 *.opendb
 *.VC.db
 *.jpg
+*.png
 *.venv
 # OS generated
 .DS_Store
