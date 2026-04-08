@@ -1160,6 +1160,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1900000002}
   - component: {fileID: 1900000003}
+  - component: {fileID: 1900000004}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -1195,6 +1196,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DatabaseManager
   apiUrl: http://127.0.0.1:5050/api/content
+--- !u!114 &1900000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f1830859de2b49bd8144f526cd7be4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HttpApiClient
+  baseUrl: http://127.0.0.1:5050
+  uploadEndpoint: /api/upload
 --- !u!1 &1900000011
 GameObject:
   m_ObjectHideFlags: 0

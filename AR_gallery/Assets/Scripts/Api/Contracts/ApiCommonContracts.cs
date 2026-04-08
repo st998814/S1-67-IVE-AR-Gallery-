@@ -54,18 +54,3 @@ public class ApiSyncMetaDto
     /// <summary>Possible values: ISO-8601 UTC timestamp, e.g. "2026-04-06T12:00:00Z".</summary>
     public string createdAtUtc;
 }
-
-// example 
-
-{
-  "meta": {
-    "schemaVersion": "v1",
-    "clientRequestId": "req-123",
-    "createdAtUtc": "2026-04-06T12:00:00Z"
-  },
-  "position": {
-    "x": 1,
-    "y": 2,
-    "z": 3
-  }
-}

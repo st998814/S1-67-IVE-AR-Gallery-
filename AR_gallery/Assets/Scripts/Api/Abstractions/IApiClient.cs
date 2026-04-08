@@ -8,7 +8,7 @@ public interface IApiClient
 {
     IApiRequestHandle UploadFile(
         UploadFileRequestDto request,
-        Action<ApiResult<UploadFileResponseDto>> onCompleted,
+        Action<ApiResult<UploadFileResponseDto>> onCompleted, // callback function
         float timeoutSeconds = 20f);
 
     IApiRequestHandle CreateTarget(

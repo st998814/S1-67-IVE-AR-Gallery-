@@ -15,6 +15,8 @@ public class CreateTargetRequestDto
     public string targetName;
     /// <summary>Possible values: user-facing label; empty/null -> backend may fallback to targetId.</summary>
     public string displayLabel;
+    /// <summary>Possible values: upload URL, YouTube URL, text payload marker, or empty string.</summary>
+    public string targetImageUrl;
 
     // TargetVisual transform snapshot for server-side persistence.
     /// <summary>Possible values: local target position (x/y/z floats).</summary>
