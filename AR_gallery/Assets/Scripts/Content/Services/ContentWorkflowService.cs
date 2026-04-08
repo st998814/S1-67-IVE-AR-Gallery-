@@ -8,6 +8,8 @@ using UnityEngine.Networking;
 /// </summary>
 public class ContentWorkflowService
 {
+    private readonly RuntimeContentFactory contentFactory = new RuntimeContentFactory();
+
     public class LocalImageSpawnResult
     {
         public bool success;
@@ -72,17 +74,18 @@ public class ContentWorkflowService
         string imageUrl,
         string fileNameWithoutExt)
     {
-        if (picturePrefab == null)
+        RuntimeContentFactory.ContentCreateResult created = contentFactory.CreateImageContent(picturePrefab);
+        if (!created.success || created.instance == null)
         {
             return new LocalImageSpawnResult
             {
                 success = false,
-                message = "Picture prefab is not assigned."
+                message = created.message
             };
         }
 
-        GameObject spawnedPicObj = UnityEngine.Object.Instantiate(picturePrefab, Vector3.zero, Quaternion.identity);
-        DraggableObject dragHandler = spawnedPicObj.GetComponent<DraggableObject>();
+        GameObject spawnedPicObj = created.instance;
+        DraggableObject dragHandler = created.draggable;
 
         if (runner != null && !string.IsNullOrWhiteSpace(imageUrl))
             runner.StartCoroutine(ApplyTextureToObjectRoutine(spawnedPicObj, imageUrl));
@@ -102,31 +105,23 @@ public class ContentWorkflowService
         GameObject textPrefab,
         string textToDisplay)
     {
-        if (textPrefab == null)
+        RuntimeContentFactory.ContentCreateResult created = contentFactory.CreateTextContent(textPrefab, textToDisplay);
+        if (!created.success || created.instance == null)
         {
             return new LocalTextSpawnResult
             {
                 success = false,
-                message = "Text prefab is not assigned."
+                message = created.message
             };
         }
-
-        GameObject spawnedTextObj = UnityEngine.Object.Instantiate(textPrefab, Vector3.zero, Quaternion.identity);
-        TextMesh textMesh = spawnedTextObj.GetComponent<TextMesh>();
-        if (textMesh != null)
-            textMesh.text = textToDisplay ?? "";
-
-        TMPro.TextMeshPro tmp = spawnedTextObj.GetComponent<TMPro.TextMeshPro>();
-        if (tmp != null)
-            tmp.text = textToDisplay ?? "";
 
         return new LocalTextSpawnResult
         {
             success = true,
             message = "Local text content spawned.",
             contentType = "Text",
-            spawnedObject = spawnedTextObj,
-            draggableObject = spawnedTextObj.GetComponent<DraggableObject>()
+            spawnedObject = created.instance,
+            draggableObject = created.draggable
         };
     }
 
