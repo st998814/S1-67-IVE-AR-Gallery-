@@ -37,4 +37,3 @@ Thumbs.db
 # Runtime / editor
 backend/server.log
 .vscode/
-.claude/
