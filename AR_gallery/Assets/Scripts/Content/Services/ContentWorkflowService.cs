@@ -81,7 +81,7 @@ public class ContentWorkflowService
     public LocalImageSpawnResult SpawnImageLocal(
         MonoBehaviour runner,
         GameObject picturePrefab,
-        string imageUrl,
+        string imageUrl, // the url of the image is required for spawning the content
         string fileNameWithoutExt)
     {
         RuntimeContentFactory.ContentCreateResult created = contentFactory.CreateImageContent(picturePrefab);

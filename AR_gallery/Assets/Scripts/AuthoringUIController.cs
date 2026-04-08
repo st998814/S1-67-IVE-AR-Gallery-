@@ -259,6 +259,8 @@ public class AuthoringUIController : MonoBehaviour
         string targetImageUrl = GetTargetImageUrlForCreateTarget();
 
         targetWorkflowService.ApplyTargetImageFromUrl(this, localResult.targetObject, targetImageUrl);
+        
+        // create target  , save to database
         targetWorkflowService.SyncCreateTarget(
             apiClient,
             localResult.targetObject,
