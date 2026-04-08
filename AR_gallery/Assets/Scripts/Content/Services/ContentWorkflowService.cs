@@ -48,6 +48,16 @@ public class ContentWorkflowService
         }
 
         string normalizedType = NormalizeContentType(contentType);
+        // ensure the media url is required for image and video
+        bool requiresMediaUrl = normalizedType == "image" || normalizedType == "video";
+        if (requiresMediaUrl && string.IsNullOrWhiteSpace(mediaUrl))
+        {
+            onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
+                ApiErrorCodes.ValidationError,
+                $"CreateContent validation failed: mediaUrl is required for contentType '{normalizedType}'."));
+            return null;
+        }
+
         var request = new CreateContentRequestDto
         {
             contentId = Guid.NewGuid().ToString("N"),

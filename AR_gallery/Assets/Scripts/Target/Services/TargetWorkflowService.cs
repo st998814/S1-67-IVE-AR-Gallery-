@@ -10,6 +10,9 @@ using UnityEngine.Networking;
 /// </summary>
 public class TargetWorkflowService
 {
+    private RuntimeImageTargetFactory runtimeImageTargetFactory;
+    private TargetSelectionManager targetSelectionManager;
+
     public class LocalCreateResult
     {
         public bool success;
@@ -21,13 +24,15 @@ public class TargetWorkflowService
     }
 
     public LocalCreateResult CreateAndRegisterLocal(
-        RuntimeImageTargetFactory factory,
-        TargetSelectionManager targetSelectionManager,
+        MonoBehaviour context,
         string targetName,
         string targetId,
         string displayLabel)
     {
-        if (factory == null || targetSelectionManager == null)
+        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory(context);
+        targetSelectionManager = ResolveTargetSelectionManager();
+
+        if (runtimeImageTargetFactory == null || targetSelectionManager == null)
         {
             return new LocalCreateResult
             {
@@ -49,7 +54,7 @@ public class TargetWorkflowService
             };
         }
 
-        GameObject newTarget = factory.CreateTarget(targetName, targetId, displayLabel);
+        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(targetName, targetId, displayLabel);
         if (newTarget == null)
         {
             return new LocalCreateResult
@@ -69,6 +74,54 @@ public class TargetWorkflowService
             targetObject = newTarget,
             message = $"Created: {targetId}"
         };
+    }
+
+    private TargetSelectionManager ResolveTargetSelectionManager()
+    {
+        if (targetSelectionManager != null)
+            return targetSelectionManager;
+
+        targetSelectionManager = UnityEngine.Object.FindFirstObjectByType<TargetSelectionManager>();
+        if (targetSelectionManager != null)
+            return targetSelectionManager;
+
+        TargetSelectionManager[] candidates = Resources.FindObjectsOfTypeAll<TargetSelectionManager>();
+        foreach (TargetSelectionManager candidate in candidates)
+        {
+            if (candidate == null || !candidate.gameObject.scene.IsValid())
+                continue;
+            targetSelectionManager = candidate;
+            break;
+        }
+
+        return targetSelectionManager;
+    }
+
+    private RuntimeImageTargetFactory ResolveRuntimeImageTargetFactory(MonoBehaviour context)
+    {
+        if (runtimeImageTargetFactory != null)
+            return runtimeImageTargetFactory;
+
+        runtimeImageTargetFactory = UnityEngine.Object.FindFirstObjectByType<RuntimeImageTargetFactory>();
+        if (runtimeImageTargetFactory != null)
+            return runtimeImageTargetFactory;
+
+        RuntimeImageTargetFactory[] candidates = Resources.FindObjectsOfTypeAll<RuntimeImageTargetFactory>();
+        foreach (RuntimeImageTargetFactory candidate in candidates)
+        {
+            if (candidate == null || !candidate.gameObject.scene.IsValid())
+                continue;
+            runtimeImageTargetFactory = candidate;
+            break;
+        }
+
+        if (runtimeImageTargetFactory == null && context != null)
+        {
+            runtimeImageTargetFactory = context.gameObject.AddComponent<RuntimeImageTargetFactory>();
+            Debug.LogWarning("TargetWorkflowService: RuntimeImageTargetFactory not found in scene. Added one to context object.");
+        }
+
+        return runtimeImageTargetFactory;
     }
 
     public IApiRequestHandle SyncCreateTarget(

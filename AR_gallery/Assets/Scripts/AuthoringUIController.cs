@@ -44,7 +44,6 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>为 true 时忽略 FloatField 回调，避免从脚本写 UI 时反向改 Transform。</summary>
     private bool suppressSpatialUiCallbacks;
 
-    [SerializeField] private RuntimeImageTargetFactory runtimeImageTargetFactory;
     [SerializeField] private MonoBehaviour apiClientBehaviour;
     [SerializeField] private float createTargetTimeoutSeconds = 20f;
     [SerializeField] private float uploadTimeoutSeconds = 20f;
@@ -107,7 +106,6 @@ public class AuthoringUIController : MonoBehaviour
         RegisterSpatialFieldCallbacks();
 
         targetSelectionManager = ResolveTargetSelectionManager();
-        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
         apiClient = ResolveApiClient();
 
         RefreshImageTargetDropdownChoices();
@@ -210,13 +208,12 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>Create and register a new runtime target from UI inputs.</summary>
     private void OnCreateTargetButtonClicked()
     {
-        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
         targetSelectionManager = ResolveTargetSelectionManager();
         apiClient = ResolveApiClient();
 
-        if (runtimeImageTargetFactory == null || targetSelectionManager == null)
+        if (targetSelectionManager == null)
         {
-            Debug.LogError("AuthoringUIController: RuntimeImageTargetFactory or TargetSelectionManager is missing.");
+            Debug.LogError("AuthoringUIController: TargetSelectionManager is missing.");
             return;
         }
 
@@ -230,8 +227,7 @@ public class AuthoringUIController : MonoBehaviour
             createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
 
         var localResult = targetWorkflowService.CreateAndRegisterLocal(
-            runtimeImageTargetFactory,
-            targetSelectionManager,
+            this,
             normalizedName,
             normalizedTargetId,
             displayLabel);
@@ -304,34 +300,6 @@ public class AuthoringUIController : MonoBehaviour
         return targetSelectionManager;
     }
     
-    // resolve the RuntimeImageTargetFactory
-    private RuntimeImageTargetFactory ResolveRuntimeImageTargetFactory()
-    {
-        if (runtimeImageTargetFactory != null)
-            return runtimeImageTargetFactory;
-
-        runtimeImageTargetFactory = FindFirstObjectByType<RuntimeImageTargetFactory>();
-        if (runtimeImageTargetFactory != null)
-            return runtimeImageTargetFactory;
-
-        RuntimeImageTargetFactory[] candidates = Resources.FindObjectsOfTypeAll<RuntimeImageTargetFactory>();
-        foreach (RuntimeImageTargetFactory candidate in candidates)
-        {
-            if (candidate == null || !candidate.gameObject.scene.IsValid())
-                continue;
-            runtimeImageTargetFactory = candidate;
-            break;
-        }
-
-        if (runtimeImageTargetFactory == null)
-        {
-            runtimeImageTargetFactory = gameObject.AddComponent<RuntimeImageTargetFactory>();
-            Debug.LogWarning("AuthoringUIController: RuntimeImageTargetFactory not found in scene. Added one to this GameObject.");
-        }
-
-        return runtimeImageTargetFactory;
-    }
-
     private IApiClient ResolveApiClient()
     {
         if (apiClient != null)
