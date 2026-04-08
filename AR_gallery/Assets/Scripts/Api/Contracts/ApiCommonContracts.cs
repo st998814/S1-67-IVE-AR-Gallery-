@@ -1,6 +1,7 @@
 using System;
 
-[Serializable]
+[Serializable] // used by serializer to convert to JSON
+// general response envelope for all API responses
 public class ApiResponseEnvelope<T>
 {
     /// <summary>Possible values: true | false.</summary>
@@ -15,7 +16,9 @@ public class ApiResponseEnvelope<T>
     public T data;
 }
 
-[Serializable]
+
+// general request body template for all API requests
+[Serializable] 
 public class ApiVector3Dto
 {
     /// <summary>Possible values: any float; typically authoring-space coordinate.</summary>
@@ -25,7 +28,11 @@ public class ApiVector3Dto
     /// <summary>Possible values: any float; typically authoring-space coordinate.</summary>
     public float z;
 
-    public ApiVector3Dto()
+    public ApiVector3Dto() // empty constructor for JSON parser
+    // obj = new ApiVector3Dto()
+    // obj.x = 0;
+    // obj.y = 0;
+    // obj.z = 0;
     {
     }
 
@@ -46,4 +53,19 @@ public class ApiSyncMetaDto
     public string clientRequestId;
     /// <summary>Possible values: ISO-8601 UTC timestamp, e.g. "2026-04-06T12:00:00Z".</summary>
     public string createdAtUtc;
+}
+
+// example 
+
+{
+  "meta": {
+    "schemaVersion": "v1",
+    "clientRequestId": "req-123",
+    "createdAtUtc": "2026-04-06T12:00:00Z"
+  },
+  "position": {
+    "x": 1,
+    "y": 2,
+    "z": 3
+  }
 }

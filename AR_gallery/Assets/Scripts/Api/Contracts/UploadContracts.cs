@@ -11,7 +11,7 @@ public class UploadFileRequestDto
     /// <summary>Possible values: "poster_a.jpg", "clip.mp4", "note.txt".</summary>
     public string fileName;
     /// <summary>Possible values: "image/jpeg", "image/png", "video/mp4", "text/plain".</summary>
-    public string mimeType;
+    public string mimeType; // mime = Multipurpose Internet Mail Extensions 
     /// <summary>Possible values: non-empty byte array from selected local file.</summary>
     public byte[] fileBytes;
     /// <summary>Possible values: schemaVersion "v1", clientRequestId "req-123", createdAtUtc ISO-8601.</summary>

@@ -16,7 +16,7 @@ public class CreateContentRequestDto
     /// <summary>Possible values: "image" | "video" | "text" | "empty".</summary>
     public string contentType;
     /// <summary>Possible values: upload URL, YouTube URL, text payload marker, or empty string.</summary>
-    public string mediaUrl;
+    public string mediaUrl;  // mediaUrl = UploadFileResponseDto.url
 
     /// <summary>Possible values: local content position (x/y/z floats).</summary>
     public ApiVector3Dto localPosition;
