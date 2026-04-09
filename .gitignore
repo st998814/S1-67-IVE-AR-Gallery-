@@ -33,3 +33,8 @@ __pycache__/
 # OS generated
 .DS_Store
 Thumbs.db
+
+# Runtime / editor
+backend/server.log
+.vscode/
+.claude/
