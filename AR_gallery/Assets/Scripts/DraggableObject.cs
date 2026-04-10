@@ -5,6 +5,7 @@ public class DraggableObject : MonoBehaviour
 {
     [Header("Drag Constraints")]
     [SerializeField] private bool lockLocalZ;
+    [SerializeField] private bool moveParentOnDrag;
 
     [Header("Scale While Dragging")]
     [SerializeField] private bool allowScrollScale;
@@ -18,6 +19,7 @@ public class DraggableObject : MonoBehaviour
     private AuthoringUIController uiController;
     private bool isDragging;
     private Camera cam;
+    private Transform dragTransform;
 
     void Start()
     {
@@ -41,20 +43,24 @@ public class DraggableObject : MonoBehaviour
                 hit.collider.GetComponentInParent<DraggableObject>() == this)
             {
                 isDragging = true;
-                lockedLocalZ = transform.localPosition.z;
-                zCoord = cam.WorldToScreenPoint(transform.position).z;
-                offset = transform.position - GetMouseAsWorldPoint(mouse);
+                dragTransform = ResolveDragTransform();
+                lockedLocalZ = dragTransform.localPosition.z;
+                zCoord = cam.WorldToScreenPoint(dragTransform.position).z;
+                offset = dragTransform.position - GetMouseAsWorldPoint(mouse);
             }
         }
 
         if (isDragging && mouse.leftButton.isPressed)
         {
-            transform.position = GetMouseAsWorldPoint(mouse) + offset;
+            if (dragTransform == null)
+                dragTransform = ResolveDragTransform();
+
+            dragTransform.position = GetMouseAsWorldPoint(mouse) + offset;
             if (lockLocalZ)
             {
-                Vector3 localPos = transform.localPosition;
+                Vector3 localPos = dragTransform.localPosition;
                 localPos.z = lockedLocalZ;
-                transform.localPosition = localPos;
+                dragTransform.localPosition = localPos;
             }
 
             if (allowScrollScale)
@@ -65,7 +71,7 @@ public class DraggableObject : MonoBehaviour
         {
             isDragging = false;
             if (uiController != null)
-                uiController.UpdateCoordinatesFromDrag(transform.localPosition);
+                uiController.UpdateCoordinatesFromDrag((dragTransform != null ? dragTransform : transform).localPosition);
         }
     }
 
@@ -82,14 +88,27 @@ public class DraggableObject : MonoBehaviour
         if (Mathf.Abs(scroll) < 0.01f)
             return;
 
-        float current = transform.localScale.x;
+        Transform t = dragTransform != null ? dragTransform : ResolveDragTransform();
+        float current = t.localScale.x;
         float next = Mathf.Clamp(current + scroll * scrollScaleStep, minUniformScale, maxUniformScale);
-        transform.localScale = Vector3.one * next;
+        t.localScale = Vector3.one * next;
     }
 
     public void ConfigureConstraints(bool shouldLockLocalZ, bool shouldAllowScrollScale)
     {
         lockLocalZ = shouldLockLocalZ;
         allowScrollScale = shouldAllowScrollScale;
+    }
+
+    public void ConfigureDragBinding(bool shouldMoveParentOnDrag)
+    {
+        moveParentOnDrag = shouldMoveParentOnDrag;
+    }
+
+    private Transform ResolveDragTransform()
+    {
+        if (moveParentOnDrag && transform.parent != null)
+            return transform.parent;
+        return transform;
     }
 }

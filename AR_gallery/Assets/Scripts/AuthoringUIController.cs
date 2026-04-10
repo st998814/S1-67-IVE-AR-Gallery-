@@ -1,8 +1,5 @@
 using UnityEngine;
 using UnityEngine.UIElements;
-using UnityEngine.Networking;
-using TMPro; // NEW: Required for TextMeshPro
-using System.Collections;
 using System.Collections.Generic;
 using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 
@@ -24,6 +21,8 @@ public class AuthoringUIController : MonoBehaviour
     private DropdownField imageTargetDropdown;
     private TextField createTargetNameInput;
     private TextField createTargetIdInput;
+    private TextField createTargetImageUrlInput;
+    private Button browseTargetImageButton;
     private Button createTargetButton;
 
     /// <summary>为 true 时忽略下拉回调，避免与 <see cref="TargetSelectionManager.ActiveTargetChanged"/> 互相触发。</summary>
@@ -45,8 +44,22 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>为 true 时忽略 FloatField 回调，避免从脚本写 UI 时反向改 Transform。</summary>
     private bool suppressSpatialUiCallbacks;
 
-    [SerializeField] private string uploadApiUrl = "http://127.0.0.1:5050/api/upload";
-    [SerializeField] private RuntimeImageTargetFactory runtimeImageTargetFactory;
+    [SerializeField] private MonoBehaviour apiClientBehaviour;
+    [SerializeField] private float createTargetTimeoutSeconds = 20f;
+    [SerializeField] private float uploadTimeoutSeconds = 20f;
+    [SerializeField] private float createContentTimeoutSeconds = 20f;
+    private IApiClient apiClient;
+    private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
+    private readonly UploadWorkflowService uploadWorkflowService = new UploadWorkflowService();
+    private readonly ContentWorkflowService contentWorkflowService = new ContentWorkflowService();
+    private string pendingTargetImageUrl = "";
+    private UploadPurpose pendingUploadPurpose = UploadPurpose.Content;
+
+    private enum UploadPurpose
+    {
+        Content,
+        TargetImage
+    }
 
     void OnEnable()
     {
@@ -64,6 +77,8 @@ public class AuthoringUIController : MonoBehaviour
         imageTargetDropdown = root.Q<DropdownField>("ImageTargetDropdown");
         createTargetNameInput = root.Q<TextField>("CreateTargetNameInput");
         createTargetIdInput = root.Q<TextField>("CreateTargetIdInput");
+        createTargetImageUrlInput = root.Q<TextField>("CreateTargetImageUrlInput");
+        browseTargetImageButton = root.Q<Button>("BrowseTargetImageButton");
         createTargetButton = root.Q<Button>("CreateTargetButton");
         
         // NEW: Text Spawning UI elements
@@ -75,8 +90,12 @@ public class AuthoringUIController : MonoBehaviour
 
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
+        if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
         saveButton.clicked += OnSaveButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
+
+        if (createTargetImageUrlInput != null && string.IsNullOrWhiteSpace(createTargetImageUrlInput.value))
+            createTargetImageUrlInput.value = "No target image selected";
         
         // NEW: Event Listener for spawning text
         spawnTextButton.clicked += OnSpawnTextButtonClicked;
@@ -87,7 +106,7 @@ public class AuthoringUIController : MonoBehaviour
         RegisterSpatialFieldCallbacks();
 
         targetSelectionManager = ResolveTargetSelectionManager();
-        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
+        apiClient = ResolveApiClient();
 
         RefreshImageTargetDropdownChoices();
         if (imageTargetDropdown != null)
@@ -102,6 +121,7 @@ public class AuthoringUIController : MonoBehaviour
         WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
 
         if (browseButton != null) browseButton.clicked -= OnBrowseButtonClicked;
+        if (browseTargetImageButton != null) browseTargetImageButton.clicked -= OnBrowseTargetImageButtonClicked;
         if (saveButton != null) saveButton.clicked -= OnSaveButtonClicked;
         if (spawnTextButton != null) spawnTextButton.clicked -= OnSpawnTextButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked -= OnCreateTargetButtonClicked;
@@ -111,7 +131,7 @@ public class AuthoringUIController : MonoBehaviour
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
     }
-
+    // dropdown manu maneger
     private void RefreshImageTargetDropdownChoices()
     {
         if (imageTargetDropdown == null)
@@ -188,12 +208,12 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>Create and register a new runtime target from UI inputs.</summary>
     private void OnCreateTargetButtonClicked()
     {
-        runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory();
         targetSelectionManager = ResolveTargetSelectionManager();
+        apiClient = ResolveApiClient();
 
-        if (runtimeImageTargetFactory == null || targetSelectionManager == null)
+        if (targetSelectionManager == null)
         {
-            Debug.LogError("AuthoringUIController: RuntimeImageTargetFactory or TargetSelectionManager is missing.");
+            Debug.LogError("AuthoringUIController: TargetSelectionManager is missing.");
             return;
         }
 
@@ -206,25 +226,27 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetIdInput != null)
             createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
 
-        int existingIndex = targetSelectionManager.FindTargetIndexById(normalizedTargetId);
-        if (existingIndex >= 0)
+        var localResult = targetWorkflowService.CreateAndRegisterLocal(
+            this,
+            normalizedName,
+            normalizedTargetId,
+            displayLabel);
+
+        if (!localResult.success)
         {
-            ShowCreateTargetFeedback($"Target ID already exists: {normalizedTargetId}", isError: true);
-            Debug.LogWarning($"AuthoringUIController: rejected duplicate targetId '{normalizedTargetId}'.");
-            targetSelectionManager.SetActiveTarget(existingIndex);
-            RefreshImageTargetDropdownChoices();
+            ShowCreateTargetFeedback(localResult.message, isError: true);
+            if (localResult.isDuplicate && localResult.duplicateIndex >= 0)
+            {
+                Debug.LogWarning($"AuthoringUIController: rejected duplicate targetId '{normalizedTargetId}'.");
+                targetSelectionManager.SetActiveTarget(localResult.duplicateIndex);
+                RefreshImageTargetDropdownChoices();
+
+                // Duplicate target creation: still allow updating the existing target visual with the uploaded target texture.
+                GameObject existingTarget = targetSelectionManager.GetTargetAt(localResult.duplicateIndex);
+                ApplyPendingTargetImageToTarget(existingTarget);
+            }
             return;
         }
-
-        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(normalizedName, normalizedTargetId, displayLabel);
-        if (newTarget == null)
-        {
-            Debug.LogError("AuthoringUIController: Failed to create target.");
-            ShowCreateTargetFeedback("Create target failed", isError: true);
-            return;
-        }
-
-        targetSelectionManager.AddTarget(newTarget, setActive: true);
         RefreshImageTargetDropdownChoices();
 
         int activeIndex = targetSelectionManager.ActiveTargetIndex;
@@ -232,6 +254,31 @@ public class AuthoringUIController : MonoBehaviour
             targetSelectionManager.SetActiveTarget(activeIndex);
 
         ShowCreateTargetFeedback($"Created: {normalizedTargetId}", isError: false);
+        
+        // get the target image url
+        string targetImageUrl = GetTargetImageUrlForCreateTarget();
+
+        targetWorkflowService.ApplyTargetImageFromUrl(this, localResult.targetObject, targetImageUrl);
+        
+        // create target  , save to database
+        targetWorkflowService.SyncCreateTarget(
+            apiClient,
+            localResult.targetObject,
+            normalizedTargetId,
+            normalizedName,
+            displayLabel,
+            targetImageUrl,
+            OnCreateTargetSyncCompleted,
+            createTargetTimeoutSeconds);
+    }
+
+    private void ApplyPendingTargetImageToTarget(GameObject targetObject)
+    {
+        string targetImageUrl = GetTargetImageUrlForCreateTarget();
+        if (string.IsNullOrWhiteSpace(targetImageUrl) || targetObject == null)
+            return;
+
+        targetWorkflowService.ApplyTargetImageFromUrl(this, targetObject, targetImageUrl);
     }
     // 
     private TargetSelectionManager ResolveTargetSelectionManager()
@@ -254,32 +301,57 @@ public class AuthoringUIController : MonoBehaviour
 
         return targetSelectionManager;
     }
-
-    private RuntimeImageTargetFactory ResolveRuntimeImageTargetFactory()
+    
+    private IApiClient ResolveApiClient()
     {
-        if (runtimeImageTargetFactory != null)
-            return runtimeImageTargetFactory;
+        if (apiClient != null)
+            return apiClient;
 
-        runtimeImageTargetFactory = FindFirstObjectByType<RuntimeImageTargetFactory>();
-        if (runtimeImageTargetFactory != null)
-            return runtimeImageTargetFactory;
-
-        RuntimeImageTargetFactory[] candidates = Resources.FindObjectsOfTypeAll<RuntimeImageTargetFactory>();
-        foreach (RuntimeImageTargetFactory candidate in candidates)
+        if (apiClientBehaviour != null)
         {
-            if (candidate == null || !candidate.gameObject.scene.IsValid())
-                continue;
-            runtimeImageTargetFactory = candidate;
-            break;
+            apiClient = apiClientBehaviour as IApiClient;
+            if (apiClient == null)
+                Debug.LogWarning("AuthoringUIController: apiClientBehaviour does not implement IApiClient.");
         }
 
-        if (runtimeImageTargetFactory == null)
+        if (apiClient == null)
         {
-            runtimeImageTargetFactory = gameObject.AddComponent<RuntimeImageTargetFactory>();
-            Debug.LogWarning("AuthoringUIController: RuntimeImageTargetFactory not found in scene. Added one to this GameObject.");
+            HttpApiClient http = FindFirstObjectByType<HttpApiClient>();
+            if (http != null)
+            {
+                apiClient = http;
+                apiClientBehaviour = http;
+                return apiClient;
+            }
         }
 
-        return runtimeImageTargetFactory;
+        if (apiClient == null)
+        {
+            HttpApiClient created = gameObject.AddComponent<HttpApiClient>();
+            apiClient = created;
+            apiClientBehaviour = created;
+            Debug.LogWarning("AuthoringUIController: No API client found in scene. Added HttpApiClient to this GameObject.");
+        }
+
+        return apiClient;
+    }
+
+    private string GetTargetImageUrlForCreateTarget()
+    {
+        return string.IsNullOrWhiteSpace(pendingTargetImageUrl) ? "" : pendingTargetImageUrl.Trim();
+    }
+
+    private void OnCreateTargetSyncCompleted(ApiResult<CreateTargetResponseDto> result)
+    {
+        if (result != null && result.success)
+        {
+            Debug.Log($"CreateTarget sync success: {result.payload?.targetId}");
+            return;
+        }
+
+        string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+        string message = result != null ? result.message : "No result";
+        Debug.LogWarning($"CreateTarget sync failed (local target kept): [{code}] {message}");
     }
 
     /// <summary>
@@ -480,29 +552,36 @@ public class AuthoringUIController : MonoBehaviour
     // --- NEW: Text Spawning ---
     void OnSpawnTextButtonClicked()
     {
-        if (textPrefab == null) { Debug.LogError("Text Prefab is not assigned in the Inspector!"); return; }
-
         string textToDisplay = spawningTextInput.value;
 
-        // Instantiation! Spawn the text prefab into the scene origin.
-        GameObject spawnedTextObj = Instantiate(textPrefab, Vector3.zero, Quaternion.identity);
-        ParentNewContentToActiveTarget(spawnedTextObj, alignToTargetFrame: false);
-
-        // Assign the text value to the TextMeshPro component
-        spawnedTextObj.GetComponent<TextMeshPro>().text = textToDisplay;
-        
-        DraggableObject dragHandler = spawnedTextObj.GetComponent<DraggableObject>();
-        if (dragHandler != null)
+        var localResult = contentWorkflowService.SpawnTextLocal(textPrefab, textToDisplay);
+        if (!localResult.success || localResult.spawnedObject == null)
         {
-            spawnedMediaUrls[dragHandler] = textToDisplay;
-            SetActiveAuthoringObject(dragHandler, textToDisplay, "Text");
+            Debug.LogError("Text content spawn failed: " + localResult.message);
+            return;
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(spawnedTextObj.transform, syncAuthoringUi: false);
+        ParentNewContentToActiveTarget(localResult.spawnedObject, alignToTargetFrame: false);
+        if (localResult.draggableObject != null)
+        {
+            spawnedMediaUrls[localResult.draggableObject] = textToDisplay;
+            SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, localResult.contentType);
+        }
+
+        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     void OnBrowseButtonClicked()
     {
+        pendingUploadPurpose = UploadPurpose.Content;
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
+    }
+
+    void OnBrowseTargetImageButtonClicked()
+    {
+        pendingUploadPurpose = UploadPurpose.TargetImage;
+        if (createTargetImageUrlInput != null)
+            createTargetImageUrlInput.value = "Uploading target image...";
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
     }
 
@@ -513,100 +592,98 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         var selectedFile = files[0];
-        if (filePathInput != null)
+        bool isTargetImageUpload = pendingUploadPurpose == UploadPurpose.TargetImage;
+        if (isTargetImageUpload)
+        {
+            if (createTargetImageUrlInput != null)
+                createTargetImageUrlInput.value = "Uploading target image...";
+        }
+        else if (filePathInput != null)
             filePathInput.value = "Uploading: " + selectedFile.fileInfo.name;
 
-        StartCoroutine(UploadFileCoroutine(selectedFile));
-    }
-
-    /// <summary>
-    /// Frostweep 在 Editor 里用 Path.GetExtension，扩展名已带点（.png）。不能再写 name + "." + extension，否则会 Poster_A..png。
-    /// 优先用 fullName（与系统里真实文件名一致）。
-    /// </summary>
-    private static string GetSanitizedUploadFileName(File file)
-    {
-        if (file?.fileInfo == null)
-            return "upload.bin";
-
-        if (!string.IsNullOrEmpty(file.fileInfo.fullName))
-            return System.IO.Path.GetFileName(file.fileInfo.fullName.Trim());
-
-        string baseName = string.IsNullOrEmpty(file.fileInfo.name) ? "image" : file.fileInfo.name.TrimEnd('.');
-        string ext = file.fileInfo.extension ?? "";
-        if (string.IsNullOrEmpty(ext))
-            return baseName;
-        return ext.StartsWith(".") ? baseName + ext : baseName + "." + ext;
-    }
-
-    private IEnumerator UploadFileCoroutine(File file)
-    {
-        string uploadName = GetSanitizedUploadFileName(file);
-        WWWForm form = new WWWForm();
-        form.AddBinaryData("file", file.data, uploadName);
-
-        using (UnityWebRequest request = UnityWebRequest.Post(uploadApiUrl, form))
-        {
-            yield return request.SendWebRequest();
-
-            if (request.result == UnityWebRequest.Result.Success)
+        apiClient = ResolveApiClient();
+        uploadWorkflowService.UploadSelectedFile(
+            selectedFile,
+            apiClient,
+            result =>
             {
-                string jsonResponse = request.downloadHandler.text;
-                string uploadedUrl = JsonUtility.FromJson<UploadResponse>(jsonResponse).url;
-
-                if (filePathInput != null)
-                    filePathInput.value = uploadedUrl;
-                if (youtubeUrlInput != null)
-                    youtubeUrlInput.value = "";
-                Debug.Log("Upload complete! URL: " + uploadedUrl);
-                InstantiatePictureAtOrigin(uploadedUrl, System.IO.Path.GetFileNameWithoutExtension(uploadName));
-            }
-            else
-            {
-                if (filePathInput != null)
-                    filePathInput.value = "Upload Failed!";
-
-                string body = request.downloadHandler != null ? request.downloadHandler.text : "";
-                Debug.LogError(
-                    $"Upload failed: {request.error} HTTP {(long)request.responseCode} " +
-                    (string.IsNullOrEmpty(body) ? "" : $"Body: {body}"));
-            }
-        }
+                if (isTargetImageUpload)
+                    OnTargetImageUploadCompleted(result, selectedFile);
+                else
+                    OnUploadCompleted(result, selectedFile);
+            },
+            uploadTimeoutSeconds);
     }
 
-    // --- NEW: Spawning Images ---
-    private void InstantiatePictureAtOrigin(string url, string filename)
+    private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
     {
-        if (picturePrefab == null) { Debug.LogError("Picture Prefab is not assigned in the Inspector!"); return; }
-
-        // 1. Instantiation! Spawn the picture prefab.
-        GameObject spawnedPicObj = Instantiate(picturePrefab, Vector3.zero, Quaternion.identity);
-        ParentNewContentToActiveTarget(spawnedPicObj, alignToTargetFrame: true);
-
-        DraggableObject dragHandler = spawnedPicObj.GetComponent<DraggableObject>();
-        if (dragHandler != null)
+        if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.url))
         {
-            spawnedMediaUrls[dragHandler] = url;
-            StartCoroutine(ApplyTextureToSpawningObject(spawnedPicObj, url));
-            SetActiveAuthoringObject(dragHandler, url, "Image (" + filename + ")");
+            pendingTargetImageUrl = "";
+            if (createTargetImageUrlInput != null)
+                createTargetImageUrlInput.value = "Target image upload failed";
+
+            string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+            string message = result != null ? result.message : "No result";
+            Debug.LogError($"Target image upload failed via IApiClient: [{code}] {message}");
+            return;
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(spawnedPicObj.transform, syncAuthoringUi: false);
+        pendingTargetImageUrl = result.payload.url.Trim();
+        string displayName = selectedFile?.fileInfo != null && !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
+            ? selectedFile.fileInfo.name
+            : "target-image";
+        if (createTargetImageUrlInput != null)
+            createTargetImageUrlInput.value = "Ready: " + displayName;
+
+        // If a target is already active, apply the freshly uploaded target texture immediately.
+        targetSelectionManager = ResolveTargetSelectionManager();
+        GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        ApplyPendingTargetImageToTarget(activeTarget);
+
+        Debug.Log("Target image upload complete via IApiClient! URL: " + pendingTargetImageUrl);
     }
 
-    // Coroutine to download the texture and apply it to the Unlit/Texture shader
-    private IEnumerator ApplyTextureToSpawningObject(GameObject objToTex, string url)
+    private void OnUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
     {
-        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+        if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.url))
         {
-            yield return request.SendWebRequest();
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                Texture2D texture = ((DownloadHandlerTexture)request.downloadHandler).texture;
-                // Apply the texture directly to the Renderer's material.
-                objToTex.GetComponent<Renderer>().material.mainTexture = texture;
-            }
-            else { Debug.LogError("Error loading image for preview: " + request.error); }
+            if (filePathInput != null)
+                filePathInput.value = "Upload Failed!";
+
+            string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+            string message = result != null ? result.message : "No result";
+            Debug.LogError($"Upload failed via IApiClient: [{code}] {message}");
+            return;
         }
+
+        string uploadedUrl = result.payload.url.Trim();
+        if (filePathInput != null)
+            filePathInput.value = uploadedUrl;
+        if (youtubeUrlInput != null)
+            youtubeUrlInput.value = "";
+
+        string baseName = selectedFile?.fileInfo != null && !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
+            ? selectedFile.fileInfo.name
+            : "image";
+        string fileNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(baseName);
+
+        Debug.Log("Upload complete via IApiClient! URL: " + uploadedUrl);
+        var localResult = contentWorkflowService.SpawnImageLocal(this, picturePrefab, uploadedUrl, fileNameWithoutExt);
+        if (!localResult.success || localResult.spawnedObject == null)
+        {
+            Debug.LogError("Content spawn failed: " + localResult.message);
+            return;
+        }
+
+        ParentNewContentToActiveTarget(localResult.spawnedObject, alignToTargetFrame: true);
+        if (localResult.draggableObject != null)
+        {
+            spawnedMediaUrls[localResult.draggableObject] = uploadedUrl;
+            SetActiveAuthoringObject(localResult.draggableObject, uploadedUrl, localResult.contentType);
+        }
+
+        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     // Helper: When an object is spawned or selected, update UI fields
@@ -640,16 +717,6 @@ public class AuthoringUIController : MonoBehaviour
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
-    // Helper: Required helper class to parse the JSON response from your Flask server
-    [System.Serializable]
-    public class UploadResponse { public string url; }
-
-    private static bool IsPlaceholderImagePath(string v)
-    {
-        if (string.IsNullOrWhiteSpace(v))
-            return true;
-        return v == "No file..." || v == "Upload Failed!" || v.StartsWith("Uploading:");
-    }
 
     private static bool LooksLikeYouTubeUrl(string u)
     {
@@ -657,6 +724,17 @@ public class AuthoringUIController : MonoBehaviour
             return false;
         string lower = u.ToLowerInvariant();
         return lower.Contains("youtube.com/") || lower.Contains("youtu.be/");
+    }
+
+    private static bool IsPlaceholderImagePath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        string normalized = value.Trim().ToLowerInvariant();
+        return normalized == "no file..."
+            || normalized == "upload failed!"
+            || normalized.StartsWith("uploading:");
     }
 
     /// <summary>YouTube 填在独立框；保存时仍写入现有 MediaURL 字段，后端无需改表。</summary>
@@ -705,11 +783,46 @@ public class AuthoringUIController : MonoBehaviour
         Vector3 position = new Vector3(posXInput.value, posYInput.value, posZInput.value);
         float scale = scaleInput.value;
         string url = GetMediaUrlForSave();
+        string targetId = GetActiveTargetIdForSave();
 
-        dbManager.SaveContentToDatabase(type, position, scale, url, GetActiveTargetIdForSave());
-        
-        saveButton.text = "Saved Successfully! ✓";
-        saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+        apiClient = ResolveApiClient();
+        if (apiClient == null)
+        {
+            // Temporary fallback while moving from DatabaseManager to API abstraction.
+            dbManager.SaveContentToDatabase(type, position, scale, url, targetId);
+            saveButton.text = "Saved Successfully! ✓";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            return;
+        }
+
+        contentWorkflowService.SyncCreateContent(
+            apiClient,
+            type,
+            position,
+            Vector3.zero,
+            new Vector3(scale, scale, scale),
+            url,
+            targetId,
+            OnCreateContentSyncCompleted,
+            createContentTimeoutSeconds);
+    }
+
+    private void OnCreateContentSyncCompleted(ApiResult<CreateContentResponseDto> result)
+    {
+        bool success = result != null && result.success;
+        if (success)
+        {
+            saveButton.text = "Saved Successfully! ✓";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            Debug.Log($"CreateContent sync success: {result.payload?.contentId}");
+            return;
+        }
+
+        string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+        string message = result != null ? result.message : "No result";
+        saveButton.text = "Save Failed!";
+        saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2200);
+        Debug.LogWarning($"CreateContent sync failed (local content kept): [{code}] {message}");
     }
 
     // This MUST be public so the DraggableObject can see it!
