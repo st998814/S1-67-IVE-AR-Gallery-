@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using System.Collections.Generic;
+using ARGallery.Content;
 using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 
 public class AuthoringUIController : MonoBehaviour
@@ -51,7 +52,7 @@ public class AuthoringUIController : MonoBehaviour
     private IApiClient apiClient;
     private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
     private readonly UploadWorkflowService uploadWorkflowService = new UploadWorkflowService();
-    private readonly ContentWorkflowService contentWorkflowService = new ContentWorkflowService();
+    private readonly ContentCreationCoordinator contentCreationCoordinator = new ContentCreationCoordinator();
     private string pendingTargetImageUrl = "";
     private UploadPurpose pendingUploadPurpose = UploadPurpose.Content;
 
@@ -554,7 +555,7 @@ public class AuthoringUIController : MonoBehaviour
     {
         string textToDisplay = spawningTextInput.value;
 
-        var localResult = contentWorkflowService.SpawnTextLocal(textPrefab, textToDisplay);
+        var localResult = contentCreationCoordinator.SpawnText(textPrefab, textToDisplay);
         if (!localResult.success || localResult.spawnedObject == null)
         {
             Debug.LogError("Text content spawn failed: " + localResult.message);
@@ -666,24 +667,24 @@ public class AuthoringUIController : MonoBehaviour
         string baseName = selectedFile?.fileInfo != null && !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
             ? selectedFile.fileInfo.name
             : "image";
-        string fileNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(baseName);
 
         Debug.Log("Upload complete via IApiClient! URL: " + uploadedUrl);
-        var localResult = contentWorkflowService.SpawnImageLocal(this, picturePrefab, uploadedUrl, fileNameWithoutExt);
-        if (!localResult.success || localResult.spawnedObject == null)
+        ContentCreationCoordinator.LocalContentSpawnOutcome outcome =
+            contentCreationCoordinator.SpawnFromContentUpload(this, picturePrefab, uploadedUrl, baseName);
+        if (!outcome.success || outcome.spawnedObject == null)
         {
-            Debug.LogError("Content spawn failed: " + localResult.message);
+            Debug.LogError("Content spawn failed: " + outcome.message);
             return;
         }
 
-        ParentNewContentToActiveTarget(localResult.spawnedObject, alignToTargetFrame: true);
-        if (localResult.draggableObject != null)
+        ParentNewContentToActiveTarget(outcome.spawnedObject, alignToTargetFrame: true);
+        if (outcome.draggableObject != null)
         {
-            spawnedMediaUrls[localResult.draggableObject] = uploadedUrl;
-            SetActiveAuthoringObject(localResult.draggableObject, uploadedUrl, localResult.contentType);
+            spawnedMediaUrls[outcome.draggableObject] = uploadedUrl;
+            SetActiveAuthoringObject(outcome.draggableObject, uploadedUrl, outcome.contentTypeLabel);
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     // Helper: When an object is spawned or selected, update UI fields
@@ -795,7 +796,7 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
-        contentWorkflowService.SyncCreateContent(
+        contentCreationCoordinator.SyncCreateContent(
             apiClient,
             type,
             position,

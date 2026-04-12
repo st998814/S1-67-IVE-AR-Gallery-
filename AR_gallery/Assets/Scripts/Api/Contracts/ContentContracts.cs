@@ -13,7 +13,7 @@ public class CreateContentRequestDto
     public string contentId;
     /// <summary>Possible values: existing canonical target id, e.g. "poster-a".</summary>
     public string targetId;
-    /// <summary>Possible values: "image" | "video" | "text" | "empty".</summary>
+    /// <summary>Possible values: "image" | "video" | "text" | "empty" |"model(3D)".</summary>
     public string contentType;
     /// <summary>Possible values: upload URL, YouTube URL, text payload marker, or empty string.</summary>
     public string mediaUrl;  // mediaUrl = UploadFileResponseDto.url
