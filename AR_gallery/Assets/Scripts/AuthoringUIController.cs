@@ -13,6 +13,8 @@ public class AuthoringUIController : MonoBehaviour
     // --- NEW: Prefab Templates (Drag these in the Inspector) ---
     public GameObject picturePrefab;
     public GameObject textPrefab;
+    [Tooltip("Volumetric content: ContentContainer (DraggableObject) → ContentBody (model attach point). Used when spawning 3D model content.")]
+    public GameObject modelContentContainerPrefab;
     
     // --- UI Fields ---
     private TextField contentTypeInput;
