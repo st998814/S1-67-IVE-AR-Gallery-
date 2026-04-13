@@ -25,6 +25,11 @@ public class CreateContentRequestDto
     /// <summary>Possible values: local scale, usually uniform.</summary>
     public ApiVector3Dto localScale;
 
+    /// <summary>Render strategy: "surface" | "volumetric". Optional for backward compatibility.</summary>
+    public string renderKind;
+    /// <summary>Asset format hint (e.g. "glb"). Optional and used mainly for model content.</summary>
+    public string assetFormat;
+
     /// <summary>Possible values: schemaVersion "v1", clientRequestId, createdAtUtc ISO-8601.</summary>
     public ApiSyncMetaDto meta = new ApiSyncMetaDto();
 }
