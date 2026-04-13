@@ -13,8 +13,10 @@ public class AuthoringUIController : MonoBehaviour
     // --- NEW: Prefab Templates (Drag these in the Inspector) ---
     public GameObject picturePrefab;
     public GameObject textPrefab;
-    [Tooltip("Volumetric content: ContentContainer (DraggableObject) → ContentBody (model attach point). Used when spawning 3D model content.")]
+    [Tooltip("Optional override. If empty, loads from Resources: Prefabs/ModelContentContainer.")]
     public GameObject modelContentContainerPrefab;
+
+    private const string ModelContentContainerResourcesPath = "Prefabs/ModelContentContainer";
     
     // --- UI Fields ---
     private TextField contentTypeInput;
@@ -552,6 +554,19 @@ public class AuthoringUIController : MonoBehaviour
         }
     }
 
+    /// <summary>Inspector slot, or <see cref="Resources"/> at <see cref="ModelContentContainerResourcesPath"/>.</summary>
+    private GameObject GetModelContentContainerPrefab()
+    {
+        if (modelContentContainerPrefab != null)
+            return modelContentContainerPrefab;
+
+        GameObject loaded = Resources.Load<GameObject>(ModelContentContainerResourcesPath);
+        if (loaded == null)
+            Debug.LogWarning(
+                "Assign Model Content Container Prefab, or place the prefab at Resources/" + ModelContentContainerResourcesPath + ".prefab");
+        return loaded;
+    }
+
     // --- NEW: Text Spawning ---
     void OnSpawnTextButtonClicked()
     {
@@ -577,7 +592,7 @@ public class AuthoringUIController : MonoBehaviour
     void OnBrowseButtonClicked()
     {
         pendingUploadPurpose = UploadPurpose.Content;
-        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.glb", false);
     }
 
     void OnBrowseTargetImageButtonClicked()
@@ -671,8 +686,9 @@ public class AuthoringUIController : MonoBehaviour
             : "image";
 
         Debug.Log("Upload complete via IApiClient! URL: " + uploadedUrl);
+        GameObject modelPrefab = GetModelContentContainerPrefab();
         ContentCreationCoordinator.LocalContentSpawnOutcome outcome =
-            contentCreationCoordinator.SpawnFromContentUpload(this, picturePrefab, uploadedUrl, baseName);
+            contentCreationCoordinator.SpawnFromContentUpload(this, picturePrefab, modelPrefab, uploadedUrl, baseName);
         if (!outcome.success || outcome.spawnedObject == null)
         {
             Debug.LogError("Content spawn failed: " + outcome.message);
