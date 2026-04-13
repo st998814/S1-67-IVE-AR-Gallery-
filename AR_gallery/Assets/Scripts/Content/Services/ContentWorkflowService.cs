@@ -48,8 +48,8 @@ public class ContentWorkflowService
         }
 
         string normalizedType = NormalizeContentType(contentType);
-        // ensure the media url is required for image and video
-        bool requiresMediaUrl = normalizedType == "image" || normalizedType == "video";
+        
+        bool requiresMediaUrl = normalizedType == "image" || normalizedType == "video" || normalizedType == "model";
         if (requiresMediaUrl && string.IsNullOrWhiteSpace(mediaUrl))
         {
             onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
@@ -57,6 +57,9 @@ public class ContentWorkflowService
                 $"CreateContent validation failed: mediaUrl is required for contentType '{normalizedType}'."));
             return null;
         }
+
+        string renderKind = MapRenderKind(normalizedType);
+        string assetFormat = MapAssetFormat(normalizedType, mediaUrl);
 
         var request = new CreateContentRequestDto
         {
@@ -67,6 +70,8 @@ public class ContentWorkflowService
             localPosition = new ApiVector3Dto(localPosition.x, localPosition.y, localPosition.z),
             localEuler = new ApiVector3Dto(localEuler.x, localEuler.y, localEuler.z),
             localScale = new ApiVector3Dto(localScale.x, localScale.y, localScale.z),
+            renderKind = renderKind,
+            assetFormat = assetFormat,
             meta = new ApiSyncMetaDto
             {
                 schemaVersion = "v1",
@@ -76,6 +81,12 @@ public class ContentWorkflowService
         };
 
         return apiClient.CreateContent(request, onCompleted, timeoutSeconds);
+    }
+
+
+    public bool ReleaseSpawnedContent(GameObject instance)
+    {
+        return contentFactory.ReleaseToPool(instance);
     }
 
     public LocalImageSpawnResult SpawnImageLocal(
@@ -154,6 +165,40 @@ public class ContentWorkflowService
             if (renderer != null)
                 renderer.material.mainTexture = texture;
         }
+    }
+
+    private static string MapRenderKind(string normalizedType)
+    {
+        return normalizedType == "model" ? "volumetric" : "surface";
+    }
+
+    private static string MapAssetFormat(string normalizedType, string mediaUrl)
+    {
+        if (normalizedType != "model")
+            return "";
+
+        if (string.IsNullOrWhiteSpace(mediaUrl))
+            return "";
+
+        string trimmed = mediaUrl.Trim();
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out Uri uri))
+            return GetFormatFromPath(uri.AbsolutePath);
+
+        return GetFormatFromPath(trimmed);
+    }
+
+    private static string GetFormatFromPath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        string ext = System.IO.Path.GetExtension(value).ToLowerInvariant();
+        if (ext == ".glb")
+            return "glb";
+        if (ext == ".gltf")
+            return "gltf";
+
+        return ext.StartsWith(".") ? ext.Substring(1) : ext;
     }
 
     private static string NormalizeContentType(string value)

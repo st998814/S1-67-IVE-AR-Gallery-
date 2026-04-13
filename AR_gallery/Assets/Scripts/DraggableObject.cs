@@ -49,7 +49,7 @@ public class DraggableObject : MonoBehaviour
                 offset = dragTransform.position - GetMouseAsWorldPoint(mouse);
             }
         }
-
+        // TODO : scale shoule be applied to taregt (parent) and content (child) seperately
         if (isDragging && mouse.leftButton.isPressed)
         {
             if (dragTransform == null)

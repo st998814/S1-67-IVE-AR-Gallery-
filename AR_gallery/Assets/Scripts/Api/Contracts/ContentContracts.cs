@@ -13,7 +13,7 @@ public class CreateContentRequestDto
     public string contentId;
     /// <summary>Possible values: existing canonical target id, e.g. "poster-a".</summary>
     public string targetId;
-    /// <summary>Possible values: "image" | "video" | "text" | "empty".</summary>
+    /// <summary>Possible values: "image" | "video" | "text" | "empty" |"model(3D)".</summary>
     public string contentType;
     /// <summary>Possible values: upload URL, YouTube URL, text payload marker, or empty string.</summary>
     public string mediaUrl;  // mediaUrl = UploadFileResponseDto.url
@@ -24,6 +24,11 @@ public class CreateContentRequestDto
     public ApiVector3Dto localEuler;
     /// <summary>Possible values: local scale, usually uniform.</summary>
     public ApiVector3Dto localScale;
+
+    /// <summary>Render strategy: "surface" | "volumetric". Optional for backward compatibility.</summary>
+    public string renderKind;
+    /// <summary>Asset format hint (e.g. "glb"). Optional and used mainly for model content.</summary>
+    public string assetFormat;
 
     /// <summary>Possible values: schemaVersion "v1", clientRequestId, createdAtUtc ISO-8601.</summary>
     public ApiSyncMetaDto meta = new ApiSyncMetaDto();

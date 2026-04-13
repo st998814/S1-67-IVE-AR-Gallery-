@@ -82,3 +82,7 @@ Summary of new or touched pieces for the local-first + API workflow. Paths are u
 | **AuthoringUIController.cs** | UI Toolkit authoring panel: wires browse/save/create-target, resolves **IApiClient**, and delegates to **UploadWorkflowService**, **TargetWorkflowService**, and **ContentWorkflowService** for the full local-first workflow. |
 
 ---
+
+## Related
+
+- Follow-up ticket doc: `MultimediaObjectPoolAnd3DPrefabLoading.md` for render branching, GLB loading, pooling, and 3D sync metadata refinements.
