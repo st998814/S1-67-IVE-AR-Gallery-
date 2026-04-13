@@ -78,6 +78,12 @@ public class ContentWorkflowService
         return apiClient.CreateContent(request, onCompleted, timeoutSeconds);
     }
 
+
+    public bool ReleaseSpawnedContent(GameObject instance)
+    {
+        return contentFactory.ReleaseToPool(instance);
+    }
+
     public LocalImageSpawnResult SpawnImageLocal(
         MonoBehaviour runner,
         GameObject picturePrefab,

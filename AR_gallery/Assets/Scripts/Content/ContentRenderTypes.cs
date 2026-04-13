@@ -23,4 +23,14 @@ namespace ARGallery.Content
         Text,
         Model
     }
+
+    /// <summary>
+    /// Pool key semantics are based on runtime shell structure, not semantic media type.
+    /// </summary>
+    public enum RuntimeContentShellType
+    {
+        SurfaceShell,
+        TextShell,
+        ModelShell
+    }
 }

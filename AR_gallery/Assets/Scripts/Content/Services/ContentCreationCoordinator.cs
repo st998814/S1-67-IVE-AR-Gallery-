@@ -232,8 +232,11 @@ namespace ARGallery.Content
                     mediaKind = mediaKind
                 };
             }
+            
+            // Creation of the model  = Acquire and defesively reset the object
+            GameObject instance = global::RuntimeContentPool.Shared.Acquire(RuntimeContentShellType.ModelShell, modelContainerPrefab);
+            global::RuntimeContentPoolResetter.ResetForAcquire(instance, RuntimeContentShellType.ModelShell);
 
-            GameObject instance = UnityEngine.Object.Instantiate(modelContainerPrefab);
             ModelContentContainerRoot root = instance.GetComponent<ModelContentContainerRoot>();
             if (root == null)
                 root = instance.AddComponent<ModelContentContainerRoot>();
@@ -264,6 +267,15 @@ namespace ARGallery.Content
                 draggableObject = drag
             };
         }
+
+        /// <summary>
+        /// Returns a spawned content object to the runtime pool using its attached pooled tag.
+        /// </summary>
+        public bool ReleaseSpawnedContent(GameObject instance)
+        {
+            return workflow.ReleaseSpawnedContent(instance);
+        }
+
 
         public IApiRequestHandle SyncCreateContent(
             IApiClient apiClient,
