@@ -108,14 +108,6 @@ namespace ARGallery.Spawning
                 return null;
             }
 
-            if (spawnedTransform == null)
-            {
-                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
-                    ApiErrorCodes.ValidationError,
-                    "SyncCreateContent skipped: spawnedTransform is null."));
-                return null;
-            }
-
             string resolvedTargetId = targetContextResolver != null
                 ? targetContextResolver.ResolveTargetIdOrActive(request.targetId)
                 : (request.targetId ?? "");
@@ -123,13 +115,23 @@ namespace ARGallery.Spawning
             string mediaUrl = request.contentType == SpawnContentType.Text
                 ? (request.textPayload ?? "")
                 : (request.mediaUrl ?? "");
+            Vector3 syncPosition = spawnedTransform != null ? spawnedTransform.localPosition : Vector3.zero;
+            Vector3 syncEuler = spawnedTransform != null ? spawnedTransform.localEulerAngles : Vector3.zero;
+            Vector3 syncScale = spawnedTransform != null ? spawnedTransform.localScale : Vector3.one;
+
+            if (spawnedTransform == null && request.hasTransformOverride)
+            {
+                syncPosition = request.transformOverride.localPosition;
+                syncEuler = request.transformOverride.localEuler;
+                syncScale = request.transformOverride.localScale;
+            }
 
             return contentCoordinator.SyncCreateContent(
                 apiClient,
                 contentType,
-                spawnedTransform.localPosition,
-                spawnedTransform.localEulerAngles,
-                spawnedTransform.localScale,
+                syncPosition,
+                syncEuler,
+                syncScale,
                 mediaUrl,
                 resolvedTargetId,
                 onCompleted,
