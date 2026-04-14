@@ -86,3 +86,4 @@ Summary of new or touched pieces for the local-first + API workflow. Paths are u
 ## Related
 
 - Follow-up ticket doc: `MultimediaObjectPoolAnd3DPrefabLoading.md` for render branching, GLB loading, pooling, and 3D sync metadata refinements.
+- Follow-up ticket doc: `DynamicResourceInstantiationController.md` for DEV-96 unified spawner manager architecture and UI decoupling details.
