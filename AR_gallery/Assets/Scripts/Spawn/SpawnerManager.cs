@@ -1,3 +1,4 @@
+using System;
 using ARGallery.Content;
 using UnityEngine;
 
@@ -8,6 +9,9 @@ namespace ARGallery.Spawning
     /// </summary>
     public class SpawnerManager : ISpawnerManager
     {
+        // the default forward offset from the wall , so the content is not too close to the wall
+        private const float DefaultForwardOffsetFromWall = 0.008f;
+
         private readonly MonoBehaviour runner;
         private readonly GameObject picturePrefab;
         private readonly GameObject textPrefab;
@@ -15,6 +19,7 @@ namespace ARGallery.Spawning
         private readonly ITargetContextResolver targetContextResolver;
         private readonly ContentCreationCoordinator contentCoordinator;
         private readonly TargetWorkflowService targetWorkflowService;
+        private readonly float forwardOffsetFromWall;
 
         public SpawnerManager(
             MonoBehaviour runner,
@@ -23,7 +28,8 @@ namespace ARGallery.Spawning
             GameObject modelContainerPrefab,
             ITargetContextResolver targetContextResolver,
             ContentCreationCoordinator contentCoordinator = null,
-            TargetWorkflowService targetWorkflowService = null)
+            TargetWorkflowService targetWorkflowService = null,
+            float forwardOffsetFromWall = DefaultForwardOffsetFromWall)
         {
             this.runner = runner;
             this.picturePrefab = picturePrefab;
@@ -32,6 +38,7 @@ namespace ARGallery.Spawning
             this.targetContextResolver = targetContextResolver;
             this.contentCoordinator = contentCoordinator ?? new ContentCreationCoordinator();
             this.targetWorkflowService = targetWorkflowService ?? new TargetWorkflowService();
+            this.forwardOffsetFromWall = Mathf.Max(0f, forwardOffsetFromWall);
         }
 
         public SpawnContentResult CreateContent(SpawnRequest request)
@@ -99,6 +106,12 @@ namespace ARGallery.Spawning
                     SpawnRenderKind.Surface);
             }
 
+            if (!TryIntegrateSpawnedContent(textResult.spawnedObject, request, alignToTargetFrame: false, out string integrationMessage))
+            {
+                contentCoordinator.ReleaseSpawnedContent(textResult.spawnedObject);
+                return FailContent(integrationMessage, SpawnContentType.Text, SpawnRenderKind.Surface);
+            }
+
             return new SpawnContentResult
             {
                 success = true,
@@ -148,6 +161,12 @@ namespace ARGallery.Spawning
                     MapRenderKind(outcome.renderKind));
             }
 
+            if (!TryIntegrateSpawnedContent(outcome.spawnedObject, request, alignToTargetFrame: true, out string integrationMessage))
+            {
+                contentCoordinator.ReleaseSpawnedContent(outcome.spawnedObject);
+                return FailContent(integrationMessage, request.contentType, MapRenderKind(outcome.renderKind));
+            }
+
             return new SpawnContentResult
             {
                 success = true,
@@ -157,6 +176,73 @@ namespace ARGallery.Spawning
                 contentType = MapContentType(outcome.mediaKind, request.contentType),
                 renderKind = MapRenderKind(outcome.renderKind)
             };
+        }
+
+        private bool TryIntegrateSpawnedContent(
+            GameObject spawnedObject,
+            SpawnRequest request,
+            bool alignToTargetFrame,
+            out string message)
+        {
+            message = null;
+            if (spawnedObject == null)
+            {
+                message = "Spawned object is null.";
+                return false;
+            }
+
+            if (targetContextResolver == null)
+            {
+                message = "Target context resolver is missing.";
+                return false;
+            }
+           
+            if (!targetContextResolver.TryGetContentRoot(request != null ? request.targetId : "", out Transform contentRoot) || contentRoot == null)
+            {
+                message = "Unable to resolve target ContentRoot for spawned content.";
+                return false;
+            }
+            // parent the content to the content root
+            spawnedObject.transform.SetParent(contentRoot, false);
+            ApplyDefaultPlacement(spawnedObject, contentRoot, alignToTargetFrame);
+
+            if (request != null && request.hasTransformOverride)
+                ApplyTransformOverride(spawnedObject.transform, request.transformOverride);
+
+            return true;
+        }
+
+        private void ApplyDefaultPlacement(GameObject instance, Transform contentRoot, bool alignToTargetFrame)
+        {
+            if (instance == null || contentRoot == null)
+                return;
+            // find the target visual that sibling of the content root
+            Transform targetVisual = contentRoot.parent != null ? contentRoot.parent.Find("TargetVisual") : null;
+
+            if (alignToTargetFrame && targetVisual != null)
+            {
+                instance.transform.localPosition = targetVisual.localPosition;
+                instance.transform.localRotation = targetVisual.localRotation;
+                instance.transform.localScale = targetVisual.localScale;
+                // pushes content slightly forward from the wall
+                if (forwardOffsetFromWall > 0f)
+                    instance.transform.position += instance.transform.forward * forwardOffsetFromWall;
+                return;
+            }
+
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+        }
+
+        private static void ApplyTransformOverride(Transform target, SpawnTransformData overrideTransform)
+        {
+            if (target == null)
+                return;
+
+            target.localPosition = overrideTransform.localPosition;
+            target.localRotation = Quaternion.Euler(overrideTransform.localEuler);
+            target.localScale = overrideTransform.localScale;
         }
 
         private static SpawnContentResult FailContent(string message, SpawnContentType type, SpawnRenderKind renderKind)
