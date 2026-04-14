@@ -93,6 +93,75 @@ namespace ARGallery.Spawning
             };
         }
 
+        public IApiRequestHandle BeginSyncCreateContent(
+            IApiClient apiClient,
+            SpawnRequest request,
+            Transform spawnedTransform,
+            Action<ApiResult<CreateContentResponseDto>> onCompleted = null,
+            float timeoutSeconds = 20f)
+        {
+            if (request == null)
+            {
+                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
+                    ApiErrorCodes.ValidationError,
+                    "SyncCreateContent skipped: SpawnRequest is null."));
+                return null;
+            }
+
+            if (spawnedTransform == null)
+            {
+                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
+                    ApiErrorCodes.ValidationError,
+                    "SyncCreateContent skipped: spawnedTransform is null."));
+                return null;
+            }
+
+            string resolvedTargetId = targetContextResolver != null
+                ? targetContextResolver.ResolveTargetIdOrActive(request.targetId)
+                : (request.targetId ?? "");
+            string contentType = ToApiContentType(request.contentType);
+            string mediaUrl = request.contentType == SpawnContentType.Text
+                ? (request.textPayload ?? "")
+                : (request.mediaUrl ?? "");
+
+            return contentCoordinator.SyncCreateContent(
+                apiClient,
+                contentType,
+                spawnedTransform.localPosition,
+                spawnedTransform.localEulerAngles,
+                spawnedTransform.localScale,
+                mediaUrl,
+                resolvedTargetId,
+                onCompleted,
+                timeoutSeconds);
+        }
+
+        public IApiRequestHandle BeginSyncCreateTarget(
+            IApiClient apiClient,
+            SpawnTargetRequest request,
+            GameObject targetObject,
+            Action<ApiResult<CreateTargetResponseDto>> onCompleted = null,
+            float timeoutSeconds = 20f)
+        {
+            if (request == null)
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
+                    ApiErrorCodes.ValidationError,
+                    "SyncCreateTarget skipped: SpawnTargetRequest is null."));
+                return null;
+            }
+
+            return targetWorkflowService.SyncCreateTarget(
+                apiClient,
+                targetObject,
+                request.targetId ?? "",
+                request.targetName ?? "",
+                string.IsNullOrWhiteSpace(request.displayLabel) ? request.targetName ?? "" : request.displayLabel,
+                request.targetImageUrl ?? "",
+                onCompleted,
+                timeoutSeconds);
+        }
+
         private SpawnContentResult CreateTextContent(SpawnRequest request)
         {
             ContentWorkflowService.LocalTextSpawnResult textResult =
@@ -277,6 +346,20 @@ namespace ARGallery.Spawning
                 case ContentMediaKind.Image:
                 default:
                     return fallback;
+            }
+        }
+
+        private static string ToApiContentType(SpawnContentType type)
+        {
+            switch (type)
+            {
+                case SpawnContentType.Text:
+                    return "text";
+                case SpawnContentType.Model:
+                    return "model";
+                case SpawnContentType.Image:
+                default:
+                    return "image";
             }
         }
     }

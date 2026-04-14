@@ -1,3 +1,6 @@
+using System;
+using UnityEngine;
+
 namespace ARGallery.Spawning
 {
     /// <summary>
@@ -8,5 +11,17 @@ namespace ARGallery.Spawning
     {
         SpawnContentResult CreateContent(SpawnRequest request);
         SpawnTargetResult CreateTarget(SpawnTargetRequest request);
+        IApiRequestHandle BeginSyncCreateContent(
+            IApiClient apiClient,
+            SpawnRequest request,
+            Transform spawnedTransform,
+            Action<ApiResult<CreateContentResponseDto>> onCompleted = null,
+            float timeoutSeconds = 20f);
+        IApiRequestHandle BeginSyncCreateTarget(
+            IApiClient apiClient,
+            SpawnTargetRequest request,
+            GameObject targetObject,
+            Action<ApiResult<CreateTargetResponseDto>> onCompleted = null,
+            float timeoutSeconds = 20f);
     }
 }
