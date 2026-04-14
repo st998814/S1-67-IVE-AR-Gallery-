@@ -1,6 +1,6 @@
-# Multimedia Object Pool and 3D Prefab Loading
+≈
 
-## Assignment : Multimedia Object Pool and 3D Prefab Loading
+## Assignment : DEV-95 - Multimedia Object Pool and 3D Prefab Loading
 
 ---
 
@@ -83,3 +83,45 @@ Summary of new or touched pieces for multimedia content creation, pooling, and 3
 - Runtime model content is loaded through a dedicated `.glb` pipeline and container structure.
 - Runtime content lifecycle uses reusable pooled shells for better efficiency.
 - Content sync remains local-first and now carries minimal, backward-compatible 3D metadata.
+
+---
+
+# Dynamic Resource Instantiation Controller
+## Assignment :  DEV-96 - Dynamic Resource Instantiation Controller
+
+## Outlines
+
+### 1. Multimedia routing under unified spawner
+
+- Keep multimedia entry unified through `SpawnerManager` as the UI-facing creation entry point.
+- Delegate media-specific branching to existing coordinator logic (`ContentCreationCoordinator`) to avoid duplicated rules.
+- Continue supporting current types (`image`, `text`, `model`) with extensible request-based routing.
+
+### 2. Runtime lifecycle consistency (surface and volumetric)
+
+- Ensure spawned objects are parented under target `ContentRoot` through spawner integration rules.
+- Preserve existing pooling behavior from `RuntimeContentFactory` and `RuntimeContentPool` for reusable shell lifecycle.
+- Keep volumetric model path unchanged (`ModelLoadService` + `ModelContentContainerRoot`) while integrating through unified spawn request flow.
+
+### 3. Sync remains local-first and asynchronous
+
+- Keep creation immediate in runtime scene (local-first).
+- Trigger persistence via `BeginSyncCreateContent` / `BeginSyncCreateTarget` as non-blocking operations.
+- Preserve resilience: API sync failure does not remove local runtime objects.
+
+## Modification
+
+### 1. Unified spawn layer — `Spawn/`
+
+| File | Description |
+|------|-------------|
+| **SpawnContracts.cs** | Ticket-based spawn request/result models for unified multimedia creation API. |
+| **SpawnerManager.cs** | Central spawner route for text/image/model with placement integration and delegated sync helpers. |
+| **ISpawnerManager.cs** | Public contract for creation and non-blocking sync triggers. |
+| **ITargetContextResolver.cs** / **TargetSelectionContextResolver.cs** | Active-target and `ContentRoot` resolution abstraction used during spawn integration. |
+
+### 2. Integration updates — `Scripts/`
+
+| File | Description |
+|------|-------------|
+| **AuthoringUIController.cs** | Updated to route create-target/spawn/sync actions through `ISpawnerManager`, reducing UI content-type branching. |

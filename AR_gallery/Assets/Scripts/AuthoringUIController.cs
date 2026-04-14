@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using System.Collections.Generic;
 using ARGallery.Content;
+using ARGallery.Spawning;
 using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 
 public class AuthoringUIController : MonoBehaviour
@@ -56,7 +57,7 @@ public class AuthoringUIController : MonoBehaviour
     private IApiClient apiClient;
     private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
     private readonly UploadWorkflowService uploadWorkflowService = new UploadWorkflowService();
-    private readonly ContentCreationCoordinator contentCreationCoordinator = new ContentCreationCoordinator();
+    private ISpawnerManager spawnerManager;
     private string pendingTargetImageUrl = "";
     private UploadPurpose pendingUploadPurpose = UploadPurpose.Content;
 
@@ -112,6 +113,7 @@ public class AuthoringUIController : MonoBehaviour
 
         targetSelectionManager = ResolveTargetSelectionManager();
         apiClient = ResolveApiClient();
+        spawnerManager = BuildSpawnerManager();
 
         RefreshImageTargetDropdownChoices();
         if (imageTargetDropdown != null)
@@ -215,6 +217,7 @@ public class AuthoringUIController : MonoBehaviour
     {
         targetSelectionManager = ResolveTargetSelectionManager();
         apiClient = ResolveApiClient();
+        spawnerManager ??= BuildSpawnerManager();
 
         if (targetSelectionManager == null)
         {
@@ -231,11 +234,13 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetIdInput != null)
             createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
 
-        var localResult = targetWorkflowService.CreateAndRegisterLocal(
-            this,
-            normalizedName,
-            normalizedTargetId,
-            displayLabel);
+        var localResult = spawnerManager.CreateTarget(new SpawnTargetRequest
+        {
+            targetName = normalizedName,
+            targetId = normalizedTargetId,
+            displayLabel = displayLabel,
+            targetImageUrl = GetTargetImageUrlForCreateTarget()
+        });
 
         if (!localResult.success)
         {
@@ -266,13 +271,16 @@ public class AuthoringUIController : MonoBehaviour
         targetWorkflowService.ApplyTargetImageFromUrl(this, localResult.targetObject, targetImageUrl);
         
         // create target  , save to database
-        targetWorkflowService.SyncCreateTarget(
+        spawnerManager.BeginSyncCreateTarget(
             apiClient,
+            new SpawnTargetRequest
+            {
+                targetName = normalizedName,
+                targetId = normalizedTargetId,
+                displayLabel = displayLabel,
+                targetImageUrl = targetImageUrl
+            },
             localResult.targetObject,
-            normalizedTargetId,
-            normalizedName,
-            displayLabel,
-            targetImageUrl,
             OnCreateTargetSyncCompleted,
             createTargetTimeoutSeconds);
     }
@@ -567,23 +575,41 @@ public class AuthoringUIController : MonoBehaviour
         return loaded;
     }
 
+    private ISpawnerManager BuildSpawnerManager()
+    {
+        targetSelectionManager = ResolveTargetSelectionManager();
+        ITargetContextResolver resolver = new TargetSelectionContextResolver(targetSelectionManager);
+        return new SpawnerManager(
+            this,
+            picturePrefab,
+            textPrefab,
+            GetModelContentContainerPrefab(),
+            resolver,
+            targetWorkflowService: targetWorkflowService,
+            forwardOffsetFromWall: spawnForwardOffsetFromWall);
+    }
+
     // --- NEW: Text Spawning ---
     void OnSpawnTextButtonClicked()
     {
+        spawnerManager ??= BuildSpawnerManager();
         string textToDisplay = spawningTextInput.value;
 
-        var localResult = contentCreationCoordinator.SpawnText(textPrefab, textToDisplay);
+        SpawnContentResult localResult = spawnerManager.CreateContent(new SpawnRequest
+        {
+            contentType = SpawnContentType.Text,
+            textPayload = textToDisplay
+        });
         if (!localResult.success || localResult.spawnedObject == null)
         {
             Debug.LogError("Text content spawn failed: " + localResult.message);
             return;
         }
 
-        ParentNewContentToActiveTarget(localResult.spawnedObject, alignToTargetFrame: false);
         if (localResult.draggableObject != null)
         {
             spawnedMediaUrls[localResult.draggableObject] = textToDisplay;
-            SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, localResult.contentType);
+            SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, "Text");
         }
 
         FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
@@ -664,6 +690,7 @@ public class AuthoringUIController : MonoBehaviour
 
     private void OnUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
     {
+        spawnerManager ??= BuildSpawnerManager();
         if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.url))
         {
             if (filePathInput != null)
@@ -686,20 +713,23 @@ public class AuthoringUIController : MonoBehaviour
             : "image";
 
         Debug.Log("Upload complete via IApiClient! URL: " + uploadedUrl);
-        GameObject modelPrefab = GetModelContentContainerPrefab();
-        ContentCreationCoordinator.LocalContentSpawnOutcome outcome =
-            contentCreationCoordinator.SpawnFromContentUpload(this, picturePrefab, modelPrefab, uploadedUrl, baseName);
+        SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
+        {
+            contentType = SpawnContentType.Image,
+            mediaUrl = uploadedUrl,
+            originalFileName = baseName
+        });
         if (!outcome.success || outcome.spawnedObject == null)
         {
             Debug.LogError("Content spawn failed: " + outcome.message);
             return;
         }
 
-        ParentNewContentToActiveTarget(outcome.spawnedObject, alignToTargetFrame: true);
         if (outcome.draggableObject != null)
         {
             spawnedMediaUrls[outcome.draggableObject] = uploadedUrl;
-            SetActiveAuthoringObject(outcome.draggableObject, uploadedUrl, outcome.contentTypeLabel);
+            string label = outcome.contentType == SpawnContentType.Model ? "Model" : "Image";
+            SetActiveAuthoringObject(outcome.draggableObject, uploadedUrl, label);
         }
 
         FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
@@ -798,6 +828,7 @@ public class AuthoringUIController : MonoBehaviour
     // Coroutine and SaveButton method from earlier
     void OnSaveButtonClicked()
     {
+        spawnerManager ??= BuildSpawnerManager();
         string type = contentTypeInput.value;
         Vector3 position = new Vector3(posXInput.value, posYInput.value, posZInput.value);
         float scale = scaleInput.value;
@@ -814,16 +845,49 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
-        contentCreationCoordinator.SyncCreateContent(
+        SpawnRequest syncRequest = BuildSyncRequest(type, url, targetId, position, scale);
+        spawnerManager.BeginSyncCreateContent(
             apiClient,
-            type,
-            position,
-            Vector3.zero,
-            new Vector3(scale, scale, scale),
-            url,
-            targetId,
+            syncRequest,
+            authoringSpatialTarget,
             OnCreateContentSyncCompleted,
             createContentTimeoutSeconds);
+    }
+
+    private SpawnRequest BuildSyncRequest(string contentTypeValue, string mediaValue, string targetId, Vector3 position, float scale)
+    {
+        SpawnContentType inferredType = InferSpawnContentType(contentTypeValue, mediaValue);
+        SpawnRequest request = new SpawnRequest
+        {
+            contentType = inferredType,
+            targetId = targetId,
+            mediaUrl = inferredType == SpawnContentType.Text ? "" : mediaValue,
+            textPayload = inferredType == SpawnContentType.Text ? mediaValue : "",
+            hasTransformOverride = true,
+            transformOverride = new SpawnTransformData
+            {
+                localPosition = position,
+                localEuler = Vector3.zero,
+                localScale = new Vector3(scale, scale, scale)
+            }
+        };
+        return request;
+    }
+
+    private static SpawnContentType InferSpawnContentType(string contentTypeValue, string mediaValue)
+    {
+        string type = string.IsNullOrWhiteSpace(contentTypeValue)
+            ? ""
+            : contentTypeValue.Trim().ToLowerInvariant();
+        if (type.Contains("text"))
+            return SpawnContentType.Text;
+        if (type.Contains("model"))
+            return SpawnContentType.Model;
+
+        string media = string.IsNullOrWhiteSpace(mediaValue) ? "" : mediaValue.Trim().ToLowerInvariant();
+        if (media.EndsWith(".glb") || media.EndsWith(".gltf") || media.EndsWith(".fbx") || media.EndsWith(".obj"))
+            return SpawnContentType.Model;
+        return SpawnContentType.Image;
     }
 
     private void OnCreateContentSyncCompleted(ApiResult<CreateContentResponseDto> result)

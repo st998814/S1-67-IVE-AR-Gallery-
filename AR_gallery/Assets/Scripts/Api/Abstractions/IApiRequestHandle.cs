@@ -1,5 +1,5 @@
 /// <summary>
-/// The interface for the API request handle.(interface : kind of abstract class in python)
+/// The interface for the API request handle.
 /// </summary>
 public interface IApiRequestHandle
 {
