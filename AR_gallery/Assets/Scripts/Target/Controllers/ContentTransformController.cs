@@ -150,6 +150,9 @@ public class ContentTransformController : MonoBehaviour
     {
         RefreshContentList();
 
+        if (DraggableObject.IsDraggingObjectInteractionActive)
+            return;
+
         TryClickSelectContent();
 
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
