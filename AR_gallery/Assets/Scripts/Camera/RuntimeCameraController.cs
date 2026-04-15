@@ -50,6 +50,7 @@ namespace ARGallery.CameraControl
         {
             if (_isLooking)
                 EndLook();
+            DraggableObject.ReleaseCameraInteraction();
         }
 
         private void Update()
@@ -68,12 +69,17 @@ namespace ARGallery.CameraControl
             {
                 if (_isLooking)
                     EndLook();
+                DraggableObject.ReleaseCameraInteraction();
                 return;
             }
 
             bool wantsLook = mouse.rightButton.isPressed;
             if (wantsLook && !_isLooking)
+            {
+                if (!DraggableObject.TryAcquireCameraInteraction())
+                    return;
                 BeginLook();
+            }
             else if (!wantsLook && _isLooking)
                 EndLook();
 
@@ -168,6 +174,9 @@ namespace ARGallery.CameraControl
 
         private bool IsBlockedBySceneInteraction(Vector2 mouseScreenPos)
         {
+            if (DraggableObject.IsDraggingObjectInteractionActive)
+                return true;
+
             if (RTGizmosEngine.Get != null)
             {
                 if (RTGizmosEngine.Get.DraggedGizmo != null)
@@ -207,6 +216,7 @@ namespace ARGallery.CameraControl
             _isLooking = false;
             UnityEngine.Cursor.lockState = CursorLockMode.None;
             UnityEngine.Cursor.visible = true;
+            DraggableObject.ReleaseCameraInteraction();
         }
 
         private void ClampHeight()
