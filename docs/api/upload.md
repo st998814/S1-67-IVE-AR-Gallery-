@@ -1,0 +1,79 @@
+# Upload API contract (v1)
+
+Base path: **`POST /api/upload`**. See `common.md` for success/error conventions.
+
+Upload supplies raw file bytes; the backend stores the file and returns a **stable URL** the client uses elsewhere (e.g. `mediaUrl` on `POST /api/content`, or `targetImageUrl` on targets).
+
+---
+
+## Request
+
+**Content-Type:** `multipart/form-data`
+
+### Parts
+
+| Part name | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file (binary) | yes | File bytes. Filename and content-type should be set on this part (browser / Unity `WWWForm.AddBinaryData` behavior). |
+
+Optional parts (only if backend and client agree to support them in a later revision):
+
+| Part name | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `meta` | string (JSON) | no | Stringified `ApiSyncMetaDto` for tracing; not required for v1 minimum interop. |
+
+**Unity reference:** `HttpApiClient` sends a single binary part named **`file`** with filename and MIME type derived from `UploadFileRequestDto.fileName` and `UploadFileRequestDto.mimeType`.
+
+Conceptual mapping from `UploadFileRequestDto` (C#) to wire:
+
+| DTO field | Wire |
+|-----------|------|
+| `fileBytes` | Binary content of part `file`. |
+| `fileName` | Original filename on part `file`. |
+| `mimeType` | Content-Type of part `file`. |
+| `meta` | Optional `meta` part if both sides implement it. |
+
+---
+
+## Response `200` / `201`
+
+**Content-Type:** `application/json`
+
+Body is a **raw JSON** object matching `UploadFileResponseDto` (no envelope):
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `url` | string | Public HTTPS URL for the stored object (required for client success handling). |
+| `fileName` | string | Echoed or normalized filename. |
+| `mimeType` | string | Echoed or detected MIME type. |
+| `sizeBytes` | number | Stored size in bytes. |
+| `uploadedAtUtc` | string | ISO-8601 UTC. |
+
+### Example — success response
+
+```json
+{
+  "url": "https://cdn.example.com/uploads/poster_a.jpg",
+  "fileName": "poster_a.jpg",
+  "mimeType": "image/jpeg",
+  "sizeBytes": 532112,
+  "uploadedAtUtc": "2026-04-18T12:00:03Z"
+}
+```
+
+---
+
+## Media URL usage
+
+1. Client calls **`POST /api/upload`** with `multipart/form-data` and part **`file`**.  
+2. On success, client reads **`url`** from the JSON body.  
+3. Client passes that value as **`mediaUrl`** when creating or patching content (`content.md`), or as **`targetImageUrl`** / other URL fields on targets (`target.md`) when applicable.  
+4. Backends may return CDN URLs, signed URLs, or long-lived public URLs; **contract minimum** is a string usable in subsequent JSON requests and at runtime.
+
+External media (e.g. hosted video links) may skip upload and set `mediaUrl` directly per content contract.
+
+---
+
+## Errors
+
+Failures return the standardized error JSON from `common.md` with a non-2xx HTTP status (e.g. `413` payload too large, `415` unsupported type, `400` validation).
