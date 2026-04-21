@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement name="WorkspaceSwitcherRoot" style="flex-grow: 1; background-color: rgb(15, 15, 20); justify-content: center; align-items: center;">
+        <ui:Label text="Workspace Switcher" style="color: rgb(255, 255, 255); font-size: 26px; -unity-font-style: bold; margin-bottom: 20px;" />
+        <ui:VisualElement style="flex-direction: row; align-items: center; justify-content: center; width: 100%; max-width: 980px; height: 190px; margin-bottom: 16px;">
+            <ui:Button name="LeftArrowButton" text="&lt;" style="width: 52px; height: 52px; margin-right: 12px;" />
+            <ui:VisualElement name="WorkspaceCardsRow" style="flex-grow: 1; flex-direction: row; align-items: center; justify-content: center;" />
+            <ui:Button name="RightArrowButton" text="&gt;" style="width: 52px; height: 52px; margin-left: 12px;" />
+        </ui:VisualElement>
+        <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" style="color: rgb(255, 255, 255); font-size: 16px; margin-bottom: 18px;" />
+        <ui:VisualElement style="flex-direction: row; column-gap: 14px; align-items: center; justify-content: center;">
+            <ui:Button name="NewButton" text="NEW" style="width: 160px; height: 46px; -unity-font-style: bold;" />
+            <ui:Button name="EditButton" text="EDIT" style="width: 160px; height: 46px; -unity-font-style: bold;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
