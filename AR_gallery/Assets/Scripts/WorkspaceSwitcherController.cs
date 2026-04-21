@@ -19,7 +19,21 @@ namespace ARGallery.AppFlow
 
         private readonly List<WorkspaceSessionContext> mockWorkspaces = new List<WorkspaceSessionContext>();
         private readonly List<VisualElement> cardElements = new List<VisualElement>();
+        private readonly List<float> cardScaleCurrent = new List<float>();
+        private readonly List<float> cardScaleTarget = new List<float>();
+        private readonly List<float> cardOpacityCurrent = new List<float>();
+        private readonly List<float> cardOpacityTarget = new List<float>();
         private int selectedIndex;
+        private float stripOffsetCurrent;
+        private float stripOffsetTarget;
+        private bool hasAnimationState;
+
+        private const float ActiveCardScale = 1f;
+        private const float InactiveCardScale = 0.92f;
+        private const float ActiveCardOpacity = 1f;
+        private const float InactiveCardOpacity = 0.55f;
+        private const float CardStepPixels = 256f;
+        private const float FocusAnimationSpeed = 12f;
 
         private Button leftArrowButton;
         private Button rightArrowButton;
@@ -48,7 +62,7 @@ namespace ARGallery.AppFlow
             BindUi(root);
             SeedMockWorkspaces();
             RebuildCards();
-            RefreshSelectionUi();
+            RefreshSelectionUi(forceImmediate: true);
         }
 
         private void OnDisable()
@@ -57,6 +71,36 @@ namespace ARGallery.AppFlow
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
             if (newButton != null) newButton.clicked -= OnNewButtonClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
+        }
+
+        private void Update()
+        {
+            if (!hasAnimationState || cardElements.Count == 0 || workspaceCardsRow == null)
+                return;
+
+            float t = 1f - Mathf.Exp(-FocusAnimationSpeed * Time.unscaledDeltaTime);
+
+            stripOffsetCurrent = Mathf.Lerp(stripOffsetCurrent, stripOffsetTarget, t);
+            workspaceCardsRow.style.translate = new Translate(
+                new Length(stripOffsetCurrent, LengthUnit.Pixel),
+                new Length(0f, LengthUnit.Pixel),
+                0f);
+
+            for (int i = 0; i < cardElements.Count; i++)
+            {
+                cardScaleCurrent[i] = Mathf.Lerp(cardScaleCurrent[i], cardScaleTarget[i], t);
+                cardOpacityCurrent[i] = Mathf.Lerp(cardOpacityCurrent[i], cardOpacityTarget[i], t);
+
+                bool isSelected = i == selectedIndex;
+                VisualElement card = cardElements[i];
+                float s = cardScaleCurrent[i];
+                card.style.scale = new Scale(new Vector3(s, s, 1f));
+                card.style.opacity = cardOpacityCurrent[i];
+                card.style.borderLeftColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+                card.style.borderRightColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+                card.style.borderTopColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+                card.style.borderBottomColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+            }
         }
 
         private void BindUi(VisualElement root)
@@ -73,6 +117,8 @@ namespace ARGallery.AppFlow
                 Debug.LogError("WorkspaceSwitcherController: required UI elements were not found.");
                 return;
             }
+
+            workspaceCardsRow.style.justifyContent = Justify.FlexStart;
 
             leftArrowButton.clicked += OnLeftArrowClicked;
             rightArrowButton.clicked += OnRightArrowClicked;
@@ -112,6 +158,10 @@ namespace ARGallery.AppFlow
 
             workspaceCardsRow.Clear();
             cardElements.Clear();
+            cardScaleCurrent.Clear();
+            cardScaleTarget.Clear();
+            cardOpacityCurrent.Clear();
+            cardOpacityTarget.Clear();
 
             for (int i = 0; i < mockWorkspaces.Count; i++)
             {
@@ -152,10 +202,14 @@ namespace ARGallery.AppFlow
 
                 workspaceCardsRow.Add(card);
                 cardElements.Add(card);
+                cardScaleCurrent.Add(InactiveCardScale);
+                cardScaleTarget.Add(InactiveCardScale);
+                cardOpacityCurrent.Add(InactiveCardOpacity);
+                cardOpacityTarget.Add(InactiveCardOpacity);
             }
         }
 
-        private void RefreshSelectionUi()
+        private void RefreshSelectionUi(bool forceImmediate = false)
         {
             if (mockWorkspaces.Count == 0)
                 return;
@@ -165,17 +219,32 @@ namespace ARGallery.AppFlow
             if (activeWorkspaceNameLabel != null)
                 activeWorkspaceNameLabel.text = "Selected: " + selected.workspaceName;
 
+            float centerIndex = (mockWorkspaces.Count - 1) * 0.5f;
+            stripOffsetTarget = (centerIndex - selectedIndex) * CardStepPixels;
+
             for (int i = 0; i < cardElements.Count; i++)
             {
                 bool isSelected = i == selectedIndex;
-                VisualElement card = cardElements[i];
-                card.style.scale = isSelected ? new Scale(new Vector3(1f, 1f, 1f)) : new Scale(new Vector3(0.92f, 0.92f, 1f));
-                card.style.opacity = isSelected ? 1f : 0.55f;
-                card.style.borderLeftColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderRightColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderTopColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderBottomColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+                cardScaleTarget[i] = isSelected ? ActiveCardScale : InactiveCardScale;
+                cardOpacityTarget[i] = isSelected ? ActiveCardOpacity : InactiveCardOpacity;
             }
+
+            if (!hasAnimationState || forceImmediate)
+            {
+                stripOffsetCurrent = stripOffsetTarget;
+                workspaceCardsRow.style.translate = new Translate(
+                    new Length(stripOffsetCurrent, LengthUnit.Pixel),
+                    new Length(0f, LengthUnit.Pixel),
+                    0f);
+
+                for (int i = 0; i < cardElements.Count; i++)
+                {
+                    cardScaleCurrent[i] = cardScaleTarget[i];
+                    cardOpacityCurrent[i] = cardOpacityTarget[i];
+                }
+            }
+
+            hasAnimationState = true;
         }
 
         private void OnLeftArrowClicked()
