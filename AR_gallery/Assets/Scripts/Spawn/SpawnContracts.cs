@@ -50,6 +50,9 @@ namespace ARGallery.Spawning
         public string textPayload = "";
         public string targetId = "";
         public string originalFileName = "";
+        public byte[] localFileBytes;
+        public string localMimeType = "";
+        public bool isLocalDraft;
         public bool hasTransformOverride;
         public SpawnTransformData transformOverride;
 

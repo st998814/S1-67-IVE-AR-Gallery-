@@ -167,6 +167,35 @@ namespace ARGallery.Content
             }
         }
 
+        public LocalContentSpawnOutcome SpawnFromLocalFile(
+            MonoBehaviour runner,
+            GameObject picturePrefab,
+            GameObject modelContainerPrefab,
+            byte[] localFileBytes,
+            string originalFileName,
+            string localMimeType = "")
+        {
+            ContentMediaKind kind = InferMediaKindFromFileName(originalFileName);
+            if (kind == ContentMediaKind.Image && IsLikelyModelMime(localMimeType))
+                kind = ContentMediaKind.Model;
+
+            switch (kind)
+            {
+                case ContentMediaKind.Image:
+                    return SpawnSurfaceImageFromLocalBytes(picturePrefab, localFileBytes, originalFileName, kind);
+                case ContentMediaKind.Model:
+                    return SpawnModelFromLocalBytes(runner, modelContainerPrefab, localFileBytes, originalFileName, kind);
+                default:
+                    return new LocalContentSpawnOutcome
+                    {
+                        success = false,
+                        message = $"Local file spawn currently supports image/model only (got {kind}).",
+                        renderKind = GetRenderKind(kind),
+                        mediaKind = kind
+                    };
+            }
+        }
+
         private LocalContentSpawnOutcome SpawnSurfaceImageInternal(
             MonoBehaviour runner,
             GameObject picturePrefab,
@@ -266,6 +295,109 @@ namespace ARGallery.Content
                 spawnedObject = instance,
                 draggableObject = drag
             };
+        }
+
+        private LocalContentSpawnOutcome SpawnSurfaceImageFromLocalBytes(
+            GameObject picturePrefab,
+            byte[] localFileBytes,
+            string originalFileName,
+            ContentMediaKind mediaKind)
+        {
+            string baseName = string.IsNullOrWhiteSpace(originalFileName) ? "image" : Path.GetFileName(originalFileName);
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
+
+            ContentWorkflowService.LocalImageSpawnResult imageResult =
+                workflow.SpawnImageLocalFromBytes(picturePrefab, localFileBytes, fileNameWithoutExt);
+
+            if (!imageResult.success || imageResult.spawnedObject == null)
+            {
+                return new LocalContentSpawnOutcome
+                {
+                    success = false,
+                    message = imageResult.message,
+                    renderKind = ContentRenderKind.Surface,
+                    mediaKind = mediaKind
+                };
+            }
+
+            return new LocalContentSpawnOutcome
+            {
+                success = true,
+                message = imageResult.message,
+                renderKind = ContentRenderKind.Surface,
+                mediaKind = mediaKind,
+                contentTypeLabel = imageResult.contentType,
+                spawnedObject = imageResult.spawnedObject,
+                draggableObject = imageResult.draggableObject
+            };
+        }
+
+        private LocalContentSpawnOutcome SpawnModelFromLocalBytes(
+            MonoBehaviour runner,
+            GameObject modelContainerPrefab,
+            byte[] localFileBytes,
+            string originalFileName,
+            ContentMediaKind mediaKind)
+        {
+            string ext = Path.GetExtension(originalFileName ?? "").ToLowerInvariant();
+            if (ext != ".glb")
+            {
+                return new LocalContentSpawnOutcome
+                {
+                    success = false,
+                    message = "Runtime volumetric local load supports .glb only (glTFast).",
+                    renderKind = ContentRenderKind.Volumetric,
+                    mediaKind = mediaKind
+                };
+            }
+
+            if (modelContainerPrefab == null)
+            {
+                return new LocalContentSpawnOutcome
+                {
+                    success = false,
+                    message = "Assign the model content container prefab for 3D local files.",
+                    renderKind = ContentRenderKind.Volumetric,
+                    mediaKind = mediaKind
+                };
+            }
+
+            GameObject instance = global::RuntimeContentPool.Shared.Acquire(RuntimeContentShellType.ModelShell, modelContainerPrefab);
+            global::RuntimeContentPoolResetter.ResetForAcquire(instance, RuntimeContentShellType.ModelShell);
+
+            ModelContentContainerRoot root = instance.GetComponent<ModelContentContainerRoot>();
+            if (root == null)
+                root = instance.AddComponent<ModelContentContainerRoot>();
+
+            DraggableObject drag = instance.GetComponent<DraggableObject>();
+            string baseName = string.IsNullOrWhiteSpace(originalFileName) ? "model.glb" : Path.GetFileName(originalFileName);
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
+
+            ModelLoadService.BeginLoadGlbBytes(runner, localFileBytes, baseName, root, outcome =>
+            {
+                if (!outcome.success)
+                    Debug.LogError("[ModelLoadService] " + outcome.message);
+            });
+
+            return new LocalContentSpawnOutcome
+            {
+                success = true,
+                message = "Model container spawned; local GLB load started.",
+                renderKind = ContentRenderKind.Volumetric,
+                mediaKind = mediaKind,
+                contentTypeLabel = $"Model ({fileNameWithoutExt})",
+                spawnedObject = instance,
+                draggableObject = drag
+            };
+        }
+
+        private static bool IsLikelyModelMime(string mimeType)
+        {
+            if (string.IsNullOrWhiteSpace(mimeType))
+                return false;
+
+            string normalized = mimeType.Trim().ToLowerInvariant();
+            return normalized.Contains("gltf") || normalized.Contains("glb") || normalized.Contains("model/");
         }
 
         /// <summary>

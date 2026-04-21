@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using System.Collections;
 using System.Collections.Generic;
 using ARGallery.Content;
 using ARGallery.Spawning;
 using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
+using System;
 
 public class AuthoringUIController : MonoBehaviour
 {
@@ -44,7 +46,9 @@ public class AuthoringUIController : MonoBehaviour
     private DraggableObject activeDraggedObject;
     /// <summary>当前与面板坐标/缩放绑定的 Transform（含无 DraggableObject 的 Cube 等）。</summary>
     private Transform authoringSpatialTarget;
-    private Dictionary<DraggableObject, string> spawnedMediaUrls = new Dictionary<DraggableObject, string>();
+    private readonly Dictionary<DraggableObject, ContentDraftState> contentDraftsByDraggable = new Dictionary<DraggableObject, ContentDraftState>();
+    private readonly Dictionary<Transform, ContentDraftState> contentDraftsByTransform = new Dictionary<Transform, ContentDraftState>();
+    private ContentDraftState activeContentDraft;
     private UIDocument uiDocument;
 
     /// <summary>为 true 时忽略 FloatField 回调，避免从脚本写 UI 时反向改 Transform。</summary>
@@ -54,6 +58,7 @@ public class AuthoringUIController : MonoBehaviour
     [SerializeField] private float createTargetTimeoutSeconds = 20f;
     [SerializeField] private float uploadTimeoutSeconds = 20f;
     [SerializeField] private float createContentTimeoutSeconds = 20f;
+    private bool isSaveInProgress;
     private IApiClient apiClient;
     private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
     private readonly UploadWorkflowService uploadWorkflowService = new UploadWorkflowService();
@@ -65,6 +70,28 @@ public class AuthoringUIController : MonoBehaviour
     {
         Content,
         TargetImage
+    }
+
+    private sealed class ContentDraftState
+    {
+        public string draftId;
+        public SpawnContentType contentType;
+        public DraggableObject draggableObject;
+        public Transform contentTransform;
+        public string targetId;
+
+        // Local source fields are prepared for deferred upload/save pipeline.
+        public string localFileName;
+        public byte[] localFileBytes;
+        public string localMimeType;
+        public string localObjectUrl;
+        public string textPayload;
+
+        public string mediaUrl;
+        public bool isUnsaved;
+        public bool uploadPending;
+        public bool persistPending;
+        public string lastError;
     }
 
     void OnEnable()
@@ -446,6 +473,7 @@ public class AuthoringUIController : MonoBehaviour
         lp.y = posYInput.value;
         lp.z = posZInput.value;
         authoringSpatialTarget.localPosition = lp;
+        MarkActiveDraftDirty();
     }
 
     private void OnScaleFloatFieldChanged(ChangeEvent<float> _)
@@ -455,6 +483,7 @@ public class AuthoringUIController : MonoBehaviour
 
         float s = Mathf.Max(0.01f, scaleInput.value);
         authoringSpatialTarget.localScale = Vector3.one * s;
+        MarkActiveDraftDirty();
     }
 
     /// <summary>用于场景点击选中 / Gizmo 拖拽后，把 Transform 写回面板（位置 + 均匀缩放）。</summary>
@@ -488,9 +517,14 @@ public class AuthoringUIController : MonoBehaviour
         activeDraggedObject = contentTransform.GetComponent<DraggableObject>();
 
         SyncTransformToInspector(contentTransform);
-
-        if (activeDraggedObject != null && spawnedMediaUrls.TryGetValue(activeDraggedObject, out string url))
-            ApplyUrlToMediaFields(url);
+        activeContentDraft = ResolveDraftForSelection(contentTransform, activeDraggedObject);
+        if (activeContentDraft != null)
+        {
+            string draftMediaValue = activeContentDraft.contentType == SpawnContentType.Text
+                ? activeContentDraft.textPayload
+                : activeContentDraft.mediaUrl;
+            ApplyUrlToMediaFields(draftMediaValue);
+        }
     }
 
     /// <summary>切换 Target 后若无选中内容，清空坐标绑定，避免仍在改「已隐藏目标」上的 Transform。</summary>
@@ -498,6 +532,7 @@ public class AuthoringUIController : MonoBehaviour
     {
         authoringSpatialTarget = null;
         activeDraggedObject = null;
+        activeContentDraft = null;
         suppressSpatialUiCallbacks = true;
         try
         {
@@ -608,7 +643,7 @@ public class AuthoringUIController : MonoBehaviour
 
         if (localResult.draggableObject != null)
         {
-            spawnedMediaUrls[localResult.draggableObject] = textToDisplay;
+            RegisterTextDraft(localResult.draggableObject, textToDisplay);
             SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, "Text");
         }
 
@@ -641,22 +676,66 @@ public class AuthoringUIController : MonoBehaviour
         {
             if (createTargetImageUrlInput != null)
                 createTargetImageUrlInput.value = "Uploading target image...";
+            apiClient = ResolveApiClient();
+            uploadWorkflowService.UploadSelectedFile(
+                selectedFile,
+                apiClient,
+                result => OnTargetImageUploadCompleted(result, selectedFile),
+                uploadTimeoutSeconds);
         }
-        else if (filePathInput != null)
-            filePathInput.value = "Uploading: " + selectedFile.fileInfo.name;
+        else
+            SpawnLocalContentFromFileSelection(selectedFile);
+    }
 
-        apiClient = ResolveApiClient();
-        uploadWorkflowService.UploadSelectedFile(
-            selectedFile,
-            apiClient,
-            result =>
-            {
-                if (isTargetImageUpload)
-                    OnTargetImageUploadCompleted(result, selectedFile);
-                else
-                    OnUploadCompleted(result, selectedFile);
-            },
-            uploadTimeoutSeconds);
+    private void SpawnLocalContentFromFileSelection(File selectedFile)
+    {
+        spawnerManager ??= BuildSpawnerManager();
+        if (selectedFile == null || selectedFile.fileInfo == null || selectedFile.data == null || selectedFile.data.Length == 0)
+        {
+            if (filePathInput != null)
+                filePathInput.value = "Invalid local file";
+            return;
+        }
+
+        string baseName = !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
+            ? selectedFile.fileInfo.name
+            : "local-file";
+        string extension = selectedFile.fileInfo.extension ?? "";
+        string displayName = extension.StartsWith(".") || string.IsNullOrWhiteSpace(extension)
+            ? baseName
+            : baseName + "." + extension;
+        string lowerName = displayName.ToLowerInvariant();
+        SpawnContentType type = lowerName.EndsWith(".glb") ? SpawnContentType.Model : SpawnContentType.Image;
+
+        SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
+        {
+            contentType = type,
+            originalFileName = displayName,
+            localFileBytes = selectedFile.data,
+            localMimeType = GuessMimeTypeFromExtension(extension),
+            isLocalDraft = true
+        });
+        if (!outcome.success || outcome.spawnedObject == null)
+        {
+            if (filePathInput != null)
+                filePathInput.value = "Local spawn failed";
+            Debug.LogError("Local content spawn failed: " + outcome.message);
+            return;
+        }
+
+        if (filePathInput != null)
+            filePathInput.value = "Local draft: " + displayName;
+        if (youtubeUrlInput != null)
+            youtubeUrlInput.value = "";
+
+        if (outcome.draggableObject != null)
+        {
+            RegisterLocalDraft(outcome.draggableObject, outcome.contentType, selectedFile, displayName);
+            string label = outcome.contentType == SpawnContentType.Model ? "Model" : "Image";
+            SetActiveAuthoringObject(outcome.draggableObject, "", label);
+        }
+
+        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
@@ -688,58 +767,12 @@ public class AuthoringUIController : MonoBehaviour
         Debug.Log("Target image upload complete via IApiClient! URL: " + pendingTargetImageUrl);
     }
 
-    private void OnUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
-    {
-        spawnerManager ??= BuildSpawnerManager();
-        if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.url))
-        {
-            if (filePathInput != null)
-                filePathInput.value = "Upload Failed!";
-
-            string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
-            string message = result != null ? result.message : "No result";
-            Debug.LogError($"Upload failed via IApiClient: [{code}] {message}");
-            return;
-        }
-
-        string uploadedUrl = result.payload.url.Trim();
-        if (filePathInput != null)
-            filePathInput.value = uploadedUrl;
-        if (youtubeUrlInput != null)
-            youtubeUrlInput.value = "";
-
-        string baseName = selectedFile?.fileInfo != null && !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
-            ? selectedFile.fileInfo.name
-            : "image";
-
-        Debug.Log("Upload complete via IApiClient! URL: " + uploadedUrl);
-        SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
-        {
-            contentType = SpawnContentType.Image,
-            mediaUrl = uploadedUrl,
-            originalFileName = baseName
-        });
-        if (!outcome.success || outcome.spawnedObject == null)
-        {
-            Debug.LogError("Content spawn failed: " + outcome.message);
-            return;
-        }
-
-        if (outcome.draggableObject != null)
-        {
-            spawnedMediaUrls[outcome.draggableObject] = uploadedUrl;
-            string label = outcome.contentType == SpawnContentType.Model ? "Model" : "Image";
-            SetActiveAuthoringObject(outcome.draggableObject, uploadedUrl, label);
-        }
-
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
-    }
-
     // Helper: When an object is spawned or selected, update UI fields
     private void SetActiveAuthoringObject(DraggableObject targetObj, string mediaValue, string contentType)
     {
         activeDraggedObject = targetObj;
         authoringSpatialTarget = targetObj.transform;
+        activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
 
         suppressSpatialUiCallbacks = true;
         try
@@ -766,6 +799,122 @@ public class AuthoringUIController : MonoBehaviour
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
+    private ContentDraftState ResolveDraftForSelection(Transform selectedTransform, DraggableObject selectedDraggable)
+    {
+        if (selectedDraggable != null && contentDraftsByDraggable.TryGetValue(selectedDraggable, out ContentDraftState draggableDraft))
+            return draggableDraft;
+
+        if (selectedTransform != null && contentDraftsByTransform.TryGetValue(selectedTransform, out ContentDraftState transformDraft))
+            return transformDraft;
+
+        return null;
+    }
+
+    private void RegisterTextDraft(DraggableObject draggableObject, string textPayload)
+    {
+        if (draggableObject == null)
+            return;
+
+        ContentDraftState existing = ResolveDraftForSelection(draggableObject.transform, draggableObject);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            contentType = SpawnContentType.Text,
+            draggableObject = draggableObject,
+            contentTransform = draggableObject.transform
+        };
+
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.textPayload = textPayload ?? "";
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByDraggable[draggableObject] = draft;
+        contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterRemoteBackedDraft(DraggableObject draggableObject, SpawnContentType contentType, string mediaUrl, string localFileName)
+    {
+        if (draggableObject == null)
+            return;
+
+        ContentDraftState existing = ResolveDraftForSelection(draggableObject.transform, draggableObject);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = draggableObject,
+            contentTransform = draggableObject.transform
+        };
+
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.mediaUrl = mediaUrl ?? "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByDraggable[draggableObject] = draft;
+        contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, File selectedFile, string localFileName)
+    {
+        if (draggableObject == null)
+            return;
+
+        ContentDraftState existing = ResolveDraftForSelection(draggableObject.transform, draggableObject);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = draggableObject,
+            contentTransform = draggableObject.transform
+        };
+
+        string ext = selectedFile?.fileInfo != null ? (selectedFile.fileInfo.extension ?? "") : "";
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.localFileBytes = selectedFile?.data;
+        draft.localMimeType = GuessMimeTypeFromExtension(ext);
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = true;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByDraggable[draggableObject] = draft;
+        contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private static string GuessMimeTypeFromExtension(string extension)
+    {
+        string lower = string.IsNullOrWhiteSpace(extension) ? "" : extension.Trim().ToLowerInvariant();
+        if (lower == ".png" || lower == "png")
+            return "image/png";
+        if (lower == ".jpg" || lower == "jpg" || lower == ".jpeg" || lower == "jpeg")
+            return "image/jpeg";
+        if (lower == ".glb" || lower == "glb")
+            return "model/gltf-binary";
+        return "application/octet-stream";
+    }
+
+    private void MarkActiveDraftDirty()
+    {
+        if (activeContentDraft == null)
+            activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
+        if (activeContentDraft == null)
+            return;
+
+        activeContentDraft.isUnsaved = true;
+        activeContentDraft.persistPending = true;
+        activeContentDraft.targetId = GetActiveTargetIdForSave();
+    }
+
 
     private static bool LooksLikeYouTubeUrl(string u)
     {
@@ -773,17 +922,6 @@ public class AuthoringUIController : MonoBehaviour
             return false;
         string lower = u.ToLowerInvariant();
         return lower.Contains("youtube.com/") || lower.Contains("youtu.be/");
-    }
-
-    private static bool IsPlaceholderImagePath(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        string normalized = value.Trim().ToLowerInvariant();
-        return normalized == "no file..."
-            || normalized == "upload failed!"
-            || normalized.StartsWith("uploading:");
     }
 
     /// <summary>YouTube 填在独立框；保存时仍写入现有 MediaURL 字段，后端无需改表。</summary>
@@ -806,106 +944,248 @@ public class AuthoringUIController : MonoBehaviour
             filePathInput.value = t;
     }
 
-    private string GetMediaUrlForSave()
-    {
-        if (youtubeUrlInput != null)
-        {
-            string yt = youtubeUrlInput.value.Trim();
-            if (yt.Length > 0)
-                return yt;
-        }
-
-        if (filePathInput != null)
-        {
-            string f = filePathInput.value.Trim();
-            if (f.Length > 0 && !IsPlaceholderImagePath(f))
-                return f;
-        }
-
-        return "";
-    }
-
     // Coroutine and SaveButton method from earlier
     void OnSaveButtonClicked()
     {
-        spawnerManager ??= BuildSpawnerManager();
-        string type = contentTypeInput.value;
-        Vector3 position = new Vector3(posXInput.value, posYInput.value, posZInput.value);
-        float scale = scaleInput.value;
-        string url = GetMediaUrlForSave();
-        string targetId = GetActiveTargetIdForSave();
+        if (isSaveInProgress)
+            return;
 
+        spawnerManager ??= BuildSpawnerManager();
         apiClient = ResolveApiClient();
-        if (apiClient == null)
+        if (apiClient == null || spawnerManager == null)
         {
-            // Temporary fallback while moving from DatabaseManager to API abstraction.
-            dbManager.SaveContentToDatabase(type, position, scale, url, targetId);
-            saveButton.text = "Saved Successfully! ✓";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            saveButton.text = "Save Failed!";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2200);
+            Debug.LogWarning("Save skipped: API client or spawner manager is not available.");
             return;
         }
 
-        SpawnRequest syncRequest = BuildSyncRequest(type, url, targetId, position, scale);
+        StartCoroutine(SaveAllDraftsRoutine());
+    }
+
+    private IEnumerator SaveAllDraftsRoutine()
+    {
+        isSaveInProgress = true;
+        saveButton.text = "Saving...";
+
+        List<ContentDraftState> drafts = CollectPendingDrafts();
+        if (drafts.Count == 0)
+        {
+            saveButton.text = "Nothing to save";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(1600);
+            isSaveInProgress = false;
+            yield break;
+        }
+
+        int successCount = 0;
+        int failedCount = 0;
+
+        for (int i = 0; i < drafts.Count; i++)
+        {
+            ContentDraftState draft = drafts[i];
+            if (draft == null || draft.contentTransform == null)
+            {
+                failedCount++;
+                continue;
+            }
+
+            draft.targetId = ResolveDraftTargetId(draft);
+            bool uploaded = false;
+            if (RequiresMediaUpload(draft))
+            {
+                yield return UploadDraftMediaRoutine(draft, uploadOk => uploaded = uploadOk);
+                if (!uploaded)
+                {
+                    failedCount++;
+                    continue;
+                }
+            }
+
+            bool synced = false;
+            yield return SyncDraftRoutine(draft, syncOk => synced = syncOk);
+            if (synced)
+            {
+                successCount++;
+                draft.isUnsaved = false;
+                draft.uploadPending = false;
+                draft.persistPending = false;
+                draft.lastError = "";
+            }
+            else
+            {
+                failedCount++;
+                draft.isUnsaved = true;
+                draft.persistPending = true;
+            }
+        }
+
+        if (failedCount == 0)
+        {
+            saveButton.text = "Saved Successfully! ✓";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            Debug.Log($"Save complete: persisted {successCount} draft(s).");
+        }
+        else
+        {
+            saveButton.text = $"Save Partial ({successCount}/{drafts.Count})";
+            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2600);
+            Debug.LogWarning($"Save finished with failures: success={successCount}, failed={failedCount}.");
+        }
+
+        isSaveInProgress = false;
+    }
+
+    private List<ContentDraftState> CollectPendingDrafts()
+    {
+        var drafts = new List<ContentDraftState>();
+        var seenIds = new HashSet<string>();
+
+        foreach (ContentDraftState draft in contentDraftsByDraggable.Values)
+        {
+            if (draft == null || string.IsNullOrWhiteSpace(draft.draftId))
+                continue;
+            if (!draft.isUnsaved && !draft.persistPending)
+                continue;
+            if (!seenIds.Add(draft.draftId))
+                continue;
+            drafts.Add(draft);
+        }
+
+        return drafts;
+    }
+
+    private static bool RequiresMediaUpload(ContentDraftState draft)
+    {
+        if (draft == null)
+            return false;
+        if (draft.contentType == SpawnContentType.Text)
+            return false;
+        if (!string.IsNullOrWhiteSpace(draft.mediaUrl))
+            return false;
+        return draft.localFileBytes != null && draft.localFileBytes.Length > 0;
+    }
+
+    private IEnumerator UploadDraftMediaRoutine(ContentDraftState draft, Action<bool> onCompleted)
+    {
+        if (draft == null)
+        {
+            onCompleted?.Invoke(false);
+            yield break;
+        }
+
+        draft.uploadPending = true;
+        draft.lastError = "";
+
+        var file = new File
+        {
+            data = draft.localFileBytes,
+            fileInfo = new FileInfo
+            {
+                name = draft.localFileName,
+                extension = System.IO.Path.GetExtension(draft.localFileName ?? "")
+            }
+        };
+
+        bool done = false;
+        bool success = false;
+        uploadWorkflowService.UploadSelectedFile(
+            file,
+            apiClient,
+            result =>
+            {
+                success = result != null && result.success && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.url);
+                if (success)
+                {
+                    draft.mediaUrl = result.payload.url.Trim();
+                    draft.uploadPending = false;
+                    draft.localFileBytes = null;
+                }
+                else
+                {
+                    string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+                    string message = result != null ? result.message : "No result";
+                    draft.lastError = $"Upload failed [{code}] {message}";
+                    draft.uploadPending = true;
+                    Debug.LogWarning($"Draft upload failed ({draft.draftId}): {draft.lastError}");
+                }
+                done = true;
+            },
+            uploadTimeoutSeconds);
+
+        while (!done)
+            yield return null;
+
+        onCompleted?.Invoke(success);
+    }
+
+    private IEnumerator SyncDraftRoutine(ContentDraftState draft, Action<bool> onCompleted)
+    {
+        if (draft == null || draft.contentTransform == null)
+        {
+            onCompleted?.Invoke(false);
+            yield break;
+        }
+
+        if (draft.contentType != SpawnContentType.Text && string.IsNullOrWhiteSpace(draft.mediaUrl))
+        {
+            draft.lastError = "Persist skipped: mediaUrl is unresolved. Upload must complete before CreateContent.";
+            onCompleted?.Invoke(false);
+            yield break;
+        }
+
+        SpawnRequest syncRequest = BuildSyncRequestFromDraft(draft);
+        bool done = false;
+        bool success = false;
         spawnerManager.BeginSyncCreateContent(
             apiClient,
             syncRequest,
-            authoringSpatialTarget,
-            OnCreateContentSyncCompleted,
+            draft.contentTransform,
+            result =>
+            {
+                success = result != null && result.success;
+                if (!success)
+                {
+                    string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
+                    string message = result != null ? result.message : "No result";
+                    draft.lastError = $"Persist failed [{code}] {message}";
+                    Debug.LogWarning($"Draft persist failed ({draft.draftId}): {draft.lastError}");
+                }
+                done = true;
+            },
             createContentTimeoutSeconds);
+
+        while (!done)
+            yield return null;
+
+        onCompleted?.Invoke(success);
     }
 
-    private SpawnRequest BuildSyncRequest(string contentTypeValue, string mediaValue, string targetId, Vector3 position, float scale)
+    private SpawnRequest BuildSyncRequestFromDraft(ContentDraftState draft)
     {
-        SpawnContentType inferredType = InferSpawnContentType(contentTypeValue, mediaValue);
-        SpawnRequest request = new SpawnRequest
+        Vector3 localScale = draft.contentTransform != null ? draft.contentTransform.localScale : Vector3.one;
+        return new SpawnRequest
         {
-            contentType = inferredType,
-            targetId = targetId,
-            mediaUrl = inferredType == SpawnContentType.Text ? "" : mediaValue,
-            textPayload = inferredType == SpawnContentType.Text ? mediaValue : "",
+            contentType = draft.contentType,
+            targetId = draft.targetId ?? "",
+            mediaUrl = draft.contentType == SpawnContentType.Text ? "" : (draft.mediaUrl ?? ""),
+            textPayload = draft.contentType == SpawnContentType.Text ? (draft.textPayload ?? "") : "",
             hasTransformOverride = true,
             transformOverride = new SpawnTransformData
             {
-                localPosition = position,
-                localEuler = Vector3.zero,
-                localScale = new Vector3(scale, scale, scale)
+                localPosition = draft.contentTransform != null ? draft.contentTransform.localPosition : Vector3.zero,
+                localEuler = draft.contentTransform != null ? draft.contentTransform.localEulerAngles : Vector3.zero,
+                localScale = localScale
             }
         };
-        return request;
     }
 
-    private static SpawnContentType InferSpawnContentType(string contentTypeValue, string mediaValue)
+    private string ResolveDraftTargetId(ContentDraftState draft)
     {
-        string type = string.IsNullOrWhiteSpace(contentTypeValue)
-            ? ""
-            : contentTypeValue.Trim().ToLowerInvariant();
-        if (type.Contains("text"))
-            return SpawnContentType.Text;
-        if (type.Contains("model"))
-            return SpawnContentType.Model;
-
-        string media = string.IsNullOrWhiteSpace(mediaValue) ? "" : mediaValue.Trim().ToLowerInvariant();
-        if (media.EndsWith(".glb") || media.EndsWith(".gltf") || media.EndsWith(".fbx") || media.EndsWith(".obj"))
-            return SpawnContentType.Model;
-        return SpawnContentType.Image;
-    }
-
-    private void OnCreateContentSyncCompleted(ApiResult<CreateContentResponseDto> result)
-    {
-        bool success = result != null && result.success;
-        if (success)
-        {
-            saveButton.text = "Saved Successfully! ✓";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
-            Debug.Log($"CreateContent sync success: {result.payload?.contentId}");
-            return;
-        }
-
-        string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
-        string message = result != null ? result.message : "No result";
-        saveButton.text = "Save Failed!";
-        saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2200);
-        Debug.LogWarning($"CreateContent sync failed (local content kept): [{code}] {message}");
+        if (draft == null)
+            return "";
+        if (!string.IsNullOrWhiteSpace(draft.targetId))
+            return draft.targetId;
+        return GetActiveTargetIdForSave();
     }
 
     // This MUST be public so the DraggableObject can see it!

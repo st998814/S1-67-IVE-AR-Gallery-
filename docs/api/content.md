@@ -8,7 +8,14 @@ Base path prefix: `/api`. See `common.md` for success/error conventions, `ApiVec
 
 ## `POST /api/content`
 
-Creates content and binds it to a target. Aligns with `CreateContentRequestDto` / `CreateContentResponseDto` in Unity.
+Persists local draft content and binds it to a target. Aligns with `CreateContentRequestDto` / `CreateContentResponseDto` in Unity.
+
+### Save-driven semantics
+
+- Runtime content is created/edited locally first.
+- File selection and local spawn do not call `POST /api/content`.
+- `POST /api/content` is sent on explicit Save to persist the current local state.
+- For non-text content, `mediaUrl` should be canonical/resolved at save time (usually from `POST /api/upload`).
 
 ### Request
 
@@ -19,7 +26,7 @@ Creates content and binds it to a target. Aligns with `CreateContentRequestDto` 
 | `contentId` | string | yes | Client-proposed or generated id. |
 | `targetId` | string | yes | Parent target canonical id. |
 | `contentType` | string | yes | e.g. `image`, `video`, `text`, `empty`, `model(3D)`. |
-| `mediaUrl` | string | no | Often `UploadFileResponseDto.url` after upload; may be external URL or empty for some types. |
+| `mediaUrl` | string | conditional | Required for `image`/`video`/`model` at save-time persistence; usually from `UploadFileResponseDto.url`. Optional/empty for `text`. |
 | `localPosition` | object | yes | `ApiVector3Dto`. |
 | `localEuler` | object | yes | `ApiVector3Dto` (degrees). |
 | `localScale` | object | yes | `ApiVector3Dto`. |
@@ -126,7 +133,7 @@ Body: same shape as `CreateContentResponseDto` (current state after patch), or b
 
 ## Errors
 
-Standard error body from `common.md`. Examples: `404` if `contentId` or referenced `targetId` is invalid; `VALIDATION_ERROR` for invalid `contentType` or transform data.
+Standard error body from `common.md`. Examples: `404` if `contentId` or referenced `targetId` is invalid; `VALIDATION_ERROR` for invalid `contentType`, invalid transform data, or unresolved `mediaUrl` for non-text content.
 
 ---
 
@@ -134,4 +141,4 @@ Standard error body from `common.md`. Examples: `404` if `contentId` or referenc
 
 - **Target linkage:** `targetId` in the JSON body ties content to a target for both `POST` and (when provided) `PATCH`.  
 - **Transform data:** `localPosition`, `localEuler`, and `localScale` describe the content instance relative to its parent/context as defined by the product (see authoring docs in Unity repo for scene semantics).  
-- **Upload linkage:** When media is uploaded first, set `mediaUrl` to the `url` returned from `POST /api/upload` (see `upload.md`).
+- **Upload linkage:** For save-time persistence of unresolved local assets, upload first and set `mediaUrl` to the `url` returned from `POST /api/upload` (see `upload.md`).
