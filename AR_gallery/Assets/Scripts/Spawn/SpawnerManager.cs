@@ -55,7 +55,7 @@ namespace ARGallery.Spawning
 
                 case SpawnContentType.Image:
                 case SpawnContentType.Model:
-                    return CreateUploadedContent(request);
+                    return CreateMediaContent(request);
 
                 default:
                     return FailContent(
@@ -194,20 +194,22 @@ namespace ARGallery.Spawning
             };
         }
 
-        private SpawnContentResult CreateUploadedContent(SpawnRequest request)
+        private SpawnContentResult CreateMediaContent(SpawnRequest request)
         {
             if (runner == null)
             {
                 return FailContent(
-                    "SpawnerManager requires a MonoBehaviour runner for upload-based content creation.",
+                    "SpawnerManager requires a MonoBehaviour runner for media content creation.",
                     request.contentType,
                     ResolveRenderKind(request.contentType));
             }
 
-            if (string.IsNullOrWhiteSpace(request.mediaUrl))
+            bool hasRemoteUrl = !string.IsNullOrWhiteSpace(request.mediaUrl);
+            bool hasLocalBytes = request.localFileBytes != null && request.localFileBytes.Length > 0;
+            if (!hasRemoteUrl && !hasLocalBytes)
             {
                 return FailContent(
-                    "mediaUrl is required for image/model content creation.",
+                    "Either mediaUrl or localFileBytes is required for image/model content creation.",
                     request.contentType,
                     ResolveRenderKind(request.contentType));
             }
@@ -216,8 +218,15 @@ namespace ARGallery.Spawning
                 ? request.mediaUrl
                 : request.originalFileName;
 
-            ContentCreationCoordinator.LocalContentSpawnOutcome outcome =
-                contentCoordinator.SpawnFromContentUpload(
+            ContentCreationCoordinator.LocalContentSpawnOutcome outcome = hasLocalBytes
+                ? contentCoordinator.SpawnFromLocalFile(
+                    runner,
+                    picturePrefab,
+                    modelContainerPrefab,
+                    request.localFileBytes,
+                    originalFileName,
+                    request.localMimeType)
+                : contentCoordinator.SpawnFromContentUpload(
                     runner,
                     picturePrefab,
                     modelContainerPrefab,

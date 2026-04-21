@@ -4,6 +4,8 @@ Base path: **`POST /api/upload`**. See `common.md` for success/error conventions
 
 Upload supplies raw file bytes; the backend stores the file and returns a **stable URL** the client uses elsewhere (e.g. `mediaUrl` on `POST /api/content`, or `targetImageUrl` on targets).
 
+In the current authoring flow, upload is generally a **Save-time persistence step** for unresolved local drafts (not a required immediate step at file-selection time).
+
 ---
 
 ## Request
@@ -67,10 +69,18 @@ Body is a **raw JSON** object matching `UploadFileResponseDto` (no envelope):
 
 1. Client calls **`POST /api/upload`** with `multipart/form-data` and part **`file`**.  
 2. On success, client reads **`url`** from the JSON body.  
-3. Client passes that value as **`mediaUrl`** when creating or patching content (`content.md`), or as **`targetImageUrl`** / other URL fields on targets (`target.md`) when applicable.  
+3. Client passes that value as **`mediaUrl`** when persisting content on Save (`content.md`), or as **`targetImageUrl`** / other URL fields on targets (`target.md`) when applicable.  
 4. Backends may return CDN URLs, signed URLs, or long-lived public URLs; **contract minimum** is a string usable in subsequent JSON requests and at runtime.
 
 External media (e.g. hosted video links) may skip upload and set `mediaUrl` directly per content contract.
+
+---
+
+## Save-driven flow notes
+
+- Local-first authoring can spawn/edit objects from local files before any backend call.
+- On Save, the client uploads unresolved local assets and then persists content metadata through `POST /api/content`.
+- For non-text content, `mediaUrl` is expected to be canonical/resolved by the time `POST /api/content` is sent.
 
 ---
 

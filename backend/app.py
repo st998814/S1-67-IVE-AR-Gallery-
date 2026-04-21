@@ -1,6 +1,7 @@
 import os
 import logging
 import traceback
+import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.exceptions import NotFound
 from flask_cors import CORS
@@ -43,6 +44,71 @@ DB_PASS = "postgres" # Put your password back here!
 def get_db_connection():
     conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
     return conn
+
+
+def _guess_ext_from_mimetype(mimetype: str) -> str:
+    if not mimetype:
+        return ""
+    lower = mimetype.lower()
+    if "image/png" in lower:
+        return ".png"
+    if "image/jpeg" in lower or "image/jpg" in lower:
+        return ".jpg"
+    if "image/webp" in lower:
+        return ".webp"
+    if "image/gif" in lower:
+        return ".gif"
+    if "model/gltf-binary" in lower or "glb" in lower:
+        return ".glb"
+    if "video/mp4" in lower:
+        return ".mp4"
+    return ""
+
+
+def _guess_ext_from_magic(file_storage) -> str:
+    try:
+        pos = file_storage.stream.tell()
+    except Exception:
+        pos = None
+    try:
+        head = file_storage.stream.read(16)
+        if pos is not None:
+            file_storage.stream.seek(pos)
+    except Exception:
+        return ""
+
+    if not head:
+        return ""
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head.startswith(b"GIF87a") or head.startswith(b"GIF89a"):
+        return ".gif"
+    if len(head) >= 4 and head[0:4] == b"glTF":
+        return ".glb"
+    return ""
+
+
+def _resolve_safe_upload_filename(file_storage) -> str:
+    original = secure_filename(file_storage.filename or "")
+    stem, ext = os.path.splitext(original)
+    if not stem:
+        stem = "upload"
+    ext = ext.lower()
+
+    if not ext:
+        ext = _guess_ext_from_mimetype(getattr(file_storage, "mimetype", "")) or _guess_ext_from_magic(file_storage)
+
+    final_name = f"{stem}{ext}" if ext else stem
+
+    # Avoid accidental overwrite for same file name.
+    candidate = final_name
+    base_stem, base_ext = os.path.splitext(final_name)
+    while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], candidate)):
+        candidate = f"{base_stem}-{uuid.uuid4().hex[:8]}{base_ext}"
+
+    return candidate
 
 
 def _table_has_column(conn, table_name: str, column_name: str) -> bool:
@@ -95,10 +161,10 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
 
     try:
-        filename = secure_filename(file.filename)
+        filename = _resolve_safe_upload_filename(file)
         save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(save_path)
-        logger.info("File uploaded: %s", filename)
+        logger.info("File uploaded: %s (mimetype=%s)", filename, getattr(file, "mimetype", ""))
 
         file_url = f"http://127.0.0.1:{SERVER_PORT}/uploads/{filename}"
         return jsonify({"url": file_url}), 201

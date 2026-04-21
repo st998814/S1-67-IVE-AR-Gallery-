@@ -122,6 +122,61 @@ public class ContentWorkflowService
         };
     }
 
+    public LocalImageSpawnResult SpawnImageLocalFromBytes(
+        GameObject picturePrefab,
+        byte[] imageBytes,
+        string fileNameWithoutExt)
+    {
+        RuntimeContentFactory.ContentCreateResult created = contentFactory.CreateImageContent(picturePrefab);
+        if (!created.success || created.instance == null)
+        {
+            return new LocalImageSpawnResult
+            {
+                success = false,
+                message = created.message
+            };
+        }
+
+        GameObject spawnedPicObj = created.instance;
+        DraggableObject dragHandler = created.draggable;
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            contentFactory.ReleaseToPool(spawnedPicObj);
+            return new LocalImageSpawnResult
+            {
+                success = false,
+                message = "Selected local image has no bytes."
+            };
+        }
+
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        if (!texture.LoadImage(imageBytes, markNonReadable: false))
+        {
+            contentFactory.ReleaseToPool(spawnedPicObj);
+            UnityEngine.Object.Destroy(texture);
+            return new LocalImageSpawnResult
+            {
+                success = false,
+                message = "Failed to decode local image bytes."
+            };
+        }
+
+        Renderer renderer = spawnedPicObj.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material.mainTexture = texture;
+
+        string label = string.IsNullOrWhiteSpace(fileNameWithoutExt) ? "Image" : $"Image ({fileNameWithoutExt})";
+        return new LocalImageSpawnResult
+        {
+            success = true,
+            message = "Local image content spawned from bytes.",
+            contentType = label,
+            spawnedObject = spawnedPicObj,
+            draggableObject = dragHandler
+        };
+    }
+
     public LocalTextSpawnResult SpawnTextLocal(
         GameObject textPrefab,
         string textToDisplay)
