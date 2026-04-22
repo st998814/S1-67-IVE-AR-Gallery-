@@ -1,14 +1,12 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement
-        name="LandingRoot"
-        style="flex-grow: 1; justify-content: center; align-items: center; background-color: rgb(0, 0, 0);">
-        <ui:Label
-            name="TitleLabel"
-            text="AR Authoring Tool Beta"
-            style="color: rgb(255, 255, 255); font-size: 36px; -unity-font-style: bold; margin-bottom: 28px;" />
-        <ui:Button
-            name="StartButton"
-            text="Start"
-            style="width: 180px; height: 52px; color: rgb(255, 255, 255); background-color: rgba(255, 255, 255, 0.12); border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px; border-left-color: rgba(255, 255, 255, 0.45); border-right-color: rgba(255, 255, 255, 0.45); border-top-color: rgba(255, 255, 255, 0.45); border-bottom-color: rgba(255, 255, 255, 0.45); font-size: 18px; -unity-font-style: bold;" />
+    <ui:Style src="../USS/AppTheme.uss" />
+    <ui:Style src="../USS/LandingUI.uss" />
+
+    <ui:VisualElement name="LandingRoot" class="app-root layout-full layout-centered-column landing-root">
+        <ui:VisualElement class="landing-stack">
+            <ui:Label name="TitleLabel" text="AR Authoring Tool Beta" class="text-title landing-title" />
+            <ui:Label text="Build immersive AR content workflows." class="text-muted landing-subtitle" />
+            <ui:Button name="StartButton" text="Start" class="btn btn-primary landing-start-btn" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

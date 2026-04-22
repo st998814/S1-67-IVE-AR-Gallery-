@@ -96,10 +96,8 @@ namespace ARGallery.AppFlow
                 float s = cardScaleCurrent[i];
                 card.style.scale = new Scale(new Vector3(s, s, 1f));
                 card.style.opacity = cardOpacityCurrent[i];
-                card.style.borderLeftColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderRightColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderTopColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
-                card.style.borderBottomColor = isSelected ? new Color(1f, 1f, 1f, 0.75f) : new Color(1f, 1f, 1f, 0.2f);
+                card.EnableInClassList("card--active", isSelected);
+                card.EnableInClassList("card--inactive", !isSelected);
             }
         }
 
@@ -167,25 +165,8 @@ namespace ARGallery.AppFlow
             {
                 WorkspaceSessionContext ws = mockWorkspaces[i];
                 var card = new VisualElement { name = "WorkspaceCard" + i };
-                card.style.width = 240;
-                card.style.height = 150;
-                card.style.marginLeft = 8;
-                card.style.marginRight = 8;
-                card.style.borderTopLeftRadius = 12;
-                card.style.borderTopRightRadius = 12;
-                card.style.borderBottomLeftRadius = 12;
-                card.style.borderBottomRightRadius = 12;
-                card.style.borderLeftWidth = 1;
-                card.style.borderRightWidth = 1;
-                card.style.borderTopWidth = 1;
-                card.style.borderBottomWidth = 1;
-                card.style.borderLeftColor = new Color(1f, 1f, 1f, 0.20f);
-                card.style.borderRightColor = new Color(1f, 1f, 1f, 0.20f);
-                card.style.borderTopColor = new Color(1f, 1f, 1f, 0.20f);
-                card.style.borderBottomColor = new Color(1f, 1f, 1f, 0.20f);
-                card.style.backgroundColor = new Color(0.18f, 0.18f, 0.2f, 1f);
-                card.style.justifyContent = Justify.Center;
-                card.style.alignItems = Align.Center;
+                card.AddToClassList("card");
+                card.AddToClassList("card--inactive");
 
                 var label = new Label(ws.workspaceName);
                 label.style.color = Color.white;

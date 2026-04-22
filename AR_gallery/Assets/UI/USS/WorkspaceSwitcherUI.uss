@@ -1,0 +1,59 @@
+.switcher-root {
+    justify-content: center;
+    align-items: center;
+}
+
+.switcher-title {
+    margin-bottom: 20px;
+}
+
+.switcher-carousel {
+    width: 100%;
+    max-width: 980px;
+    height: 190px;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.switcher-arrow-btn {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+}
+
+.switcher-arrow-left {
+    margin-right: 12px;
+}
+
+.switcher-arrow-right {
+    margin-left: 12px;
+}
+
+.switcher-cards-row {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.switcher-selection-label {
+    margin-bottom: 18px;
+}
+
+.switcher-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.switcher-action-secondary {
+    min-width: 160px;
+    height: 46px;
+}
+
+.switcher-action-primary {
+    min-width: 160px;
+    height: 46px;
+    margin-left: 14px;
+}

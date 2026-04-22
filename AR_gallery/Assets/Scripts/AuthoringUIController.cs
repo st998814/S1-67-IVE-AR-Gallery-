@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using ARGallery.Content;
 using ARGallery.Spawning;
+using ARGallery.AppFlow;
 using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 using System;
 
@@ -41,6 +42,7 @@ public class AuthoringUIController : MonoBehaviour
     private Button spawnTextButton;
 
     private Button browseButton, saveButton;
+    private Button backToSwitcherButton;
 
     // Track the object that is currently "active" in the UI (being dragged)
     private DraggableObject activeDraggedObject;
@@ -120,11 +122,13 @@ public class AuthoringUIController : MonoBehaviour
         
         browseButton = root.Q<Button>("BrowseButton");
         saveButton = root.Q<Button>("SaveButton");
+        backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
 
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
         saveButton.clicked += OnSaveButtonClicked;
+        if (backToSwitcherButton != null) backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
 
         if (createTargetImageUrlInput != null && string.IsNullOrWhiteSpace(createTargetImageUrlInput.value))
@@ -157,6 +161,7 @@ public class AuthoringUIController : MonoBehaviour
         if (browseButton != null) browseButton.clicked -= OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked -= OnBrowseTargetImageButtonClicked;
         if (saveButton != null) saveButton.clicked -= OnSaveButtonClicked;
+        if (backToSwitcherButton != null) backToSwitcherButton.clicked -= OnBackToSwitcherButtonClicked;
         if (spawnTextButton != null) spawnTextButton.clicked -= OnSpawnTextButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked -= OnCreateTargetButtonClicked;
 
@@ -961,6 +966,15 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         StartCoroutine(SaveAllDraftsRoutine());
+    }
+
+    void OnBackToSwitcherButtonClicked()
+    {
+        if (SceneTransitionService.IsTransitioning)
+            return;
+
+        AppFlowController.ClearWorkspaceSession();
+        SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
     }
 
     private IEnumerator SaveAllDraftsRoutine()
