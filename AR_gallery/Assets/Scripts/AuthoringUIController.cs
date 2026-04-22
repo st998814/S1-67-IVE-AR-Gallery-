@@ -1131,6 +1131,18 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                     draft.mediaUrl = result.payload.url.Trim();
                     draft.uploadPending = false;
                     draft.localFileBytes = null;
+                    // --- ADDED THIS TO START PLAYBACK AFTER UPLOAD ---
+                    if (draft.contentType == SpawnContentType.Video && draft.contentTransform != null)
+                    {
+                        var vPlayer = draft.contentTransform.GetComponent<UnityEngine.Video.VideoPlayer>();
+                        if (vPlayer != null)
+                        {
+                            vPlayer.source = UnityEngine.Video.VideoSource.Url;
+                            vPlayer.url = draft.mediaUrl;
+                            vPlayer.Play();
+                        }
+                    }
+                    // -------------------------------------------------
                 }
                 else
                 {
