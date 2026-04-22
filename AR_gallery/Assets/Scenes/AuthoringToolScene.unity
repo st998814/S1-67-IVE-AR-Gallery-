@@ -1234,6 +1234,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HttpApiClient
   baseUrl: http://127.0.0.1:5050
   uploadEndpoint: /api/upload
+  contentEndpoint: /api/content
 --- !u!1 &1900000011
 GameObject:
   m_ObjectHideFlags: 0
@@ -1304,9 +1305,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthoringUIController
   dbManager: {fileID: 1900000003}
+  videoPrefab: {fileID: 5789709158885535786, guid: 43d0f67163787fc49849885478e03636, type: 3}
   targetSelectionManager: {fileID: 1480848358}
   picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
   textPrefab: {fileID: 8795060008269078731, guid: f48d1b2894c30d34c8f4f1b5659f2e98, type: 3}
+  modelContentContainerPrefab: {fileID: 0}
+  apiClientBehaviour: {fileID: 0}
+  createTargetTimeoutSeconds: 20
+  uploadTimeoutSeconds: 20
+  createContentTimeoutSeconds: 20
+  spawnForwardOffsetFromWall: 0.008
 --- !u!114 &1900000015
 MonoBehaviour:
   m_ObjectHideFlags: 0

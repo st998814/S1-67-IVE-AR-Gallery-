@@ -18,7 +18,8 @@ namespace ARGallery.Spawning
     {
         Image,
         Text,
-        Model
+        Model,
+        Video
     }
 
     /// <summary>

@@ -162,6 +162,14 @@ def upload_file():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
+    # --- NEW CHECK START ---
+    # Extract the extension and check if it's allowed
+    ext = os.path.splitext(file.filename)[1].lower().replace('.', '')
+    if ext not in ALLOWED_EXTENSIONS:
+        logger.warning("Upload blocked: Illegal file type '%s'", ext)
+        return jsonify({"error": f"File type .{ext} is not allowed"}), 400
+    # --- NEW CHECK END ---
+
     try:
         filename = _resolve_safe_upload_filename(file)
         save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)

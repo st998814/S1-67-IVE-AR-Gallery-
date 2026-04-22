@@ -13,14 +13,12 @@ namespace ARGallery.Content
     {
         private readonly ContentWorkflowService workflow = new ContentWorkflowService();
 
-        /// <summary>Unified spawn result after upload-driven creation (surface or future volumetric).</summary>
         public struct LocalContentSpawnOutcome
         {
             public bool success;
             public string message;
             public ContentRenderKind renderKind;
             public ContentMediaKind mediaKind;
-            /// <summary>UI label, e.g. "Image (file)" or "Text".</summary>
             public string contentTypeLabel;
             public GameObject spawnedObject;
             public DraggableObject draggableObject;
@@ -31,7 +29,6 @@ namespace ARGallery.Content
             return mediaKind == ContentMediaKind.Model ? ContentRenderKind.Volumetric : ContentRenderKind.Surface;
         }
 
-        /// <summary>Infers media kind from file name extension (upload or local path).</summary>
         public static ContentMediaKind InferMediaKindFromFileName(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -40,10 +37,6 @@ namespace ARGallery.Content
             return MediaKindFromExtension(Path.GetExtension(fileName));
         }
 
-        /// <summary>
-        /// Infers kind for an upload using local file name and server URL. WebGL often omits extensions in
-        /// <c>fileInfo.name</c>, so when the name is inconclusive (treated as image), the URL path is used (e.g. <c>.../Dimond.glb</c>).
-        /// </summary>
         public static ContentMediaKind InferMediaKindForContentUpload(string originalFileName, string uploadedUrl)
         {
             ContentMediaKind fromName = InferMediaKindFromFileName(originalFileName);
@@ -86,7 +79,6 @@ namespace ARGallery.Content
             }
         }
 
-        /// <summary>Absolute URL path or last segment, for extension parsing when local file name has no suffix.</summary>
         private static string GetUrlPathForExtension(string uploadedUrl)
         {
             if (string.IsNullOrWhiteSpace(uploadedUrl))
@@ -98,7 +90,6 @@ namespace ARGallery.Content
             return uploadedUrl;
         }
 
-        /// <summary>Prefer extension from local file name; fall back to upload URL (e.g. WebGL strips <c>.glb</c> from name).</summary>
         private static string GetExtensionForUpload(string originalFileName, string uploadedUrl)
         {
             string e = Path.GetExtension(originalFileName ?? "").ToLowerInvariant();
@@ -109,26 +100,28 @@ namespace ARGallery.Content
             return string.IsNullOrEmpty(path) ? "" : Path.GetExtension(path).ToLowerInvariant();
         }
 
-        /// <summary>Surface text — delegates to <see cref="ContentWorkflowService.SpawnTextLocal"/>.</summary>
         public ContentWorkflowService.LocalTextSpawnResult SpawnText(GameObject textPrefab, string textToDisplay)
         {
             return workflow.SpawnTextLocal(textPrefab, textToDisplay);
         }
 
-        /// <summary>
-        /// After a successful content upload, spawn matching runtime content.
-        /// Image → picture prefab + texture; .glb → model container + <see cref="ModelLoadService"/>; video path reserved.
-        /// </summary>
-        /// <param name="picturePrefab">Surface image prefab (unused for volumetric .glb).</param>
-        /// <param name="modelContainerPrefab">ContentContainer → ContentBody hierarchy; assign from authoring UI.</param>
         public LocalContentSpawnOutcome SpawnFromContentUpload(
             MonoBehaviour runner,
             GameObject picturePrefab,
             GameObject modelContainerPrefab,
+            GameObject videoPrefab,
             string uploadedUrl,
             string originalFileName)
         {
             ContentMediaKind kind = InferMediaKindForContentUpload(originalFileName, uploadedUrl);
+
+            // Safety net: if the URL clearly contains video formats but was missed
+            if (kind == ContentMediaKind.Image && !string.IsNullOrEmpty(uploadedUrl))
+            {
+                string lowerUrl = uploadedUrl.ToLowerInvariant();
+                if (lowerUrl.Contains(".mp4") || lowerUrl.Contains(".mov") || lowerUrl.Contains(".webm"))
+                    kind = ContentMediaKind.Video;
+            }
 
             switch (kind)
             {
@@ -136,13 +129,8 @@ namespace ARGallery.Content
                     return SpawnSurfaceImageInternal(runner, picturePrefab, uploadedUrl, originalFileName, kind);
 
                 case ContentMediaKind.Video:
-                    return new LocalContentSpawnOutcome
-                    {
-                        success = false,
-                        message = "Video surface spawn is not implemented yet; use image or extend the video prefab path.",
-                        renderKind = ContentRenderKind.Surface,
-                        mediaKind = kind
-                    };
+                    // FIXED: Now properly routing to your existing helper method!
+                    return SpawnSurfaceVideoInternal(runner, videoPrefab, uploadedUrl, originalFileName, kind);
 
                 case ContentMediaKind.Model:
                     return SpawnModelFromUpload(runner, modelContainerPrefab, uploadedUrl, originalFileName, kind);
@@ -171,25 +159,54 @@ namespace ARGallery.Content
             MonoBehaviour runner,
             GameObject picturePrefab,
             GameObject modelContainerPrefab,
+            GameObject videoPrefab, 
             byte[] localFileBytes,
             string originalFileName,
             string localMimeType = "")
         {
             ContentMediaKind kind = InferMediaKindFromFileName(originalFileName);
-            if (kind == ContentMediaKind.Image && IsLikelyModelMime(localMimeType))
-                kind = ContentMediaKind.Model;
+            
+            // THE CRITICAL FIX: The WebGL MIME Type Safety Net
+            if (kind == ContentMediaKind.Image && !string.IsNullOrWhiteSpace(localMimeType))
+            {
+                string mime = localMimeType.ToLowerInvariant();
+                if (IsLikelyModelMime(mime)) 
+                    kind = ContentMediaKind.Model;
+                else if (mime.Contains("video") || mime.Contains("mp4")) 
+                    kind = ContentMediaKind.Video;
+            }
 
             switch (kind)
             {
+                case ContentMediaKind.Video:
+                    if (videoPrefab == null)
+                    {
+                        return new LocalContentSpawnOutcome { success = false, message = "Video prefab is missing in the Coordinator call." };
+                    }
+                    
+                    GameObject vObj = UnityEngine.Object.Instantiate(videoPrefab);
+                    vObj.name = "Local_Video_Draft";
+                    return new LocalContentSpawnOutcome { 
+                        success = true, 
+                        message = "Local video draft spawned.",
+                        spawnedObject = vObj, 
+                        draggableObject = vObj.GetComponent<DraggableObject>(),
+                        renderKind = ContentRenderKind.Surface,
+                        mediaKind = kind,
+                        contentTypeLabel = "Video (Draft)"
+                    };
+
                 case ContentMediaKind.Image:
                     return SpawnSurfaceImageFromLocalBytes(picturePrefab, localFileBytes, originalFileName, kind);
+                    
                 case ContentMediaKind.Model:
                     return SpawnModelFromLocalBytes(runner, modelContainerPrefab, localFileBytes, originalFileName, kind);
+
                 default:
                     return new LocalContentSpawnOutcome
                     {
                         success = false,
-                        message = $"Local file spawn currently supports image/model only (got {kind}).",
+                        message = $"Local file spawn not supported for {kind}.",
                         renderKind = GetRenderKind(kind),
                         mediaKind = kind
                     };
@@ -211,25 +228,37 @@ namespace ARGallery.Content
 
             if (!imageResult.success || imageResult.spawnedObject == null)
             {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = imageResult.message,
-                    renderKind = ContentRenderKind.Surface,
-                    mediaKind = mediaKind
-                };
+                return new LocalContentSpawnOutcome { success = false, message = imageResult.message, renderKind = ContentRenderKind.Surface, mediaKind = mediaKind };
             }
 
-            return new LocalContentSpawnOutcome
+            return new LocalContentSpawnOutcome { success = true, message = imageResult.message, renderKind = ContentRenderKind.Surface, mediaKind = mediaKind, contentTypeLabel = imageResult.contentType, spawnedObject = imageResult.spawnedObject, draggableObject = imageResult.draggableObject };
+        }
+
+        private LocalContentSpawnOutcome SpawnSurfaceVideoInternal(
+            MonoBehaviour runner, 
+            GameObject videoPrefab, 
+            string uploadedUrl, 
+            string originalFileName, 
+            ContentMediaKind kind)
+        {
+            if (videoPrefab == null)
             {
-                success = true,
-                message = imageResult.message,
-                renderKind = ContentRenderKind.Surface,
-                mediaKind = mediaKind,
-                contentTypeLabel = imageResult.contentType,
-                spawnedObject = imageResult.spawnedObject,
-                draggableObject = imageResult.draggableObject
-            };
+                return new LocalContentSpawnOutcome { success = false, message = "Video prefab is missing in the Coordinator call.", renderKind = ContentRenderKind.Surface, mediaKind = kind };
+            }
+
+            GameObject spawned = UnityEngine.Object.Instantiate(videoPrefab);
+            spawned.name = "Video_" + originalFileName;
+
+            var vPlayer = spawned.GetComponent<UnityEngine.Video.VideoPlayer>();
+            if (vPlayer != null)
+            {
+                vPlayer.source = UnityEngine.Video.VideoSource.Url;
+                vPlayer.url = uploadedUrl;
+                vPlayer.playOnAwake = true;
+                vPlayer.Play();
+            }
+
+            return new LocalContentSpawnOutcome { success = true, message = "Video surface spawned successfully.", spawnedObject = spawned, draggableObject = spawned.GetComponent<DraggableObject>(), renderKind = ContentRenderKind.Surface, mediaKind = kind, contentTypeLabel = "Video" };
         }
 
         private LocalContentSpawnOutcome SpawnModelFromUpload(
@@ -241,60 +270,29 @@ namespace ARGallery.Content
         {
             string ext = GetExtensionForUpload(originalFileName, uploadedUrl);
             if (ext != ".glb")
-            {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = "Runtime volumetric load supports .glb only (glTFast).",
-                    renderKind = ContentRenderKind.Volumetric,
-                    mediaKind = mediaKind
-                };
-            }
+                return new LocalContentSpawnOutcome { success = false, message = "Runtime volumetric load supports .glb only.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind };
 
             if (modelContainerPrefab == null)
-            {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = "Assign the model content container prefab for 3D uploads.",
-                    renderKind = ContentRenderKind.Volumetric,
-                    mediaKind = mediaKind
-                };
-            }
+                return new LocalContentSpawnOutcome { success = false, message = "Assign model content container prefab.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind };
             
-            // Creation of the model  = Acquire and defesively reset the object
             GameObject instance = global::RuntimeContentPool.Shared.Acquire(RuntimeContentShellType.ModelShell, modelContainerPrefab);
             global::RuntimeContentPoolResetter.ResetForAcquire(instance, RuntimeContentShellType.ModelShell);
 
             ModelContentContainerRoot root = instance.GetComponent<ModelContentContainerRoot>();
-            if (root == null)
-                root = instance.AddComponent<ModelContentContainerRoot>();
+            if (root == null) root = instance.AddComponent<ModelContentContainerRoot>();
 
             DraggableObject drag = instance.GetComponent<DraggableObject>();
 
-            string baseName = !string.IsNullOrWhiteSpace(originalFileName)
-                ? Path.GetFileName(originalFileName)
-                : Path.GetFileName(GetUrlPathForExtension(uploadedUrl) ?? "");
-            if (string.IsNullOrWhiteSpace(baseName))
-                baseName = "model";
+            string baseName = !string.IsNullOrWhiteSpace(originalFileName) ? Path.GetFileName(originalFileName) : Path.GetFileName(GetUrlPathForExtension(uploadedUrl) ?? "");
+            if (string.IsNullOrWhiteSpace(baseName)) baseName = "model";
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
 
             ModelLoadService.BeginLoadGlb(runner, uploadedUrl, root, outcome =>
             {
-                if (!outcome.success)
-                    Debug.LogError("[ModelLoadService] " + outcome.message);
+                if (!outcome.success) Debug.LogError("[ModelLoadService] " + outcome.message);
             });
 
-            return new LocalContentSpawnOutcome
-            {
-                success = true,
-                message = "Model container spawned; GLB load started.",
-                renderKind = ContentRenderKind.Volumetric,
-                mediaKind = mediaKind,
-                contentTypeLabel = $"Model ({fileNameWithoutExt})",
-                spawnedObject = instance,
-                draggableObject = drag
-            };
+            return new LocalContentSpawnOutcome { success = true, message = "Model container spawned; GLB load started.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind, contentTypeLabel = $"Model ({fileNameWithoutExt})", spawnedObject = instance, draggableObject = drag };
         }
 
         private LocalContentSpawnOutcome SpawnSurfaceImageFromLocalBytes(
@@ -310,26 +308,9 @@ namespace ARGallery.Content
                 workflow.SpawnImageLocalFromBytes(picturePrefab, localFileBytes, fileNameWithoutExt);
 
             if (!imageResult.success || imageResult.spawnedObject == null)
-            {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = imageResult.message,
-                    renderKind = ContentRenderKind.Surface,
-                    mediaKind = mediaKind
-                };
-            }
+                return new LocalContentSpawnOutcome { success = false, message = imageResult.message, renderKind = ContentRenderKind.Surface, mediaKind = mediaKind };
 
-            return new LocalContentSpawnOutcome
-            {
-                success = true,
-                message = imageResult.message,
-                renderKind = ContentRenderKind.Surface,
-                mediaKind = mediaKind,
-                contentTypeLabel = imageResult.contentType,
-                spawnedObject = imageResult.spawnedObject,
-                draggableObject = imageResult.draggableObject
-            };
+            return new LocalContentSpawnOutcome { success = true, message = imageResult.message, renderKind = ContentRenderKind.Surface, mediaKind = mediaKind, contentTypeLabel = imageResult.contentType, spawnedObject = imageResult.spawnedObject, draggableObject = imageResult.draggableObject };
         }
 
         private LocalContentSpawnOutcome SpawnModelFromLocalBytes(
@@ -341,33 +322,16 @@ namespace ARGallery.Content
         {
             string ext = Path.GetExtension(originalFileName ?? "").ToLowerInvariant();
             if (ext != ".glb")
-            {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = "Runtime volumetric local load supports .glb only (glTFast).",
-                    renderKind = ContentRenderKind.Volumetric,
-                    mediaKind = mediaKind
-                };
-            }
+                return new LocalContentSpawnOutcome { success = false, message = "Runtime volumetric local load supports .glb only.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind };
 
             if (modelContainerPrefab == null)
-            {
-                return new LocalContentSpawnOutcome
-                {
-                    success = false,
-                    message = "Assign the model content container prefab for 3D local files.",
-                    renderKind = ContentRenderKind.Volumetric,
-                    mediaKind = mediaKind
-                };
-            }
+                return new LocalContentSpawnOutcome { success = false, message = "Assign model container prefab.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind };
 
             GameObject instance = global::RuntimeContentPool.Shared.Acquire(RuntimeContentShellType.ModelShell, modelContainerPrefab);
             global::RuntimeContentPoolResetter.ResetForAcquire(instance, RuntimeContentShellType.ModelShell);
 
             ModelContentContainerRoot root = instance.GetComponent<ModelContentContainerRoot>();
-            if (root == null)
-                root = instance.AddComponent<ModelContentContainerRoot>();
+            if (root == null) root = instance.AddComponent<ModelContentContainerRoot>();
 
             DraggableObject drag = instance.GetComponent<DraggableObject>();
             string baseName = string.IsNullOrWhiteSpace(originalFileName) ? "model.glb" : Path.GetFileName(originalFileName);
@@ -375,20 +339,10 @@ namespace ARGallery.Content
 
             ModelLoadService.BeginLoadGlbBytes(runner, localFileBytes, baseName, root, outcome =>
             {
-                if (!outcome.success)
-                    Debug.LogError("[ModelLoadService] " + outcome.message);
+                if (!outcome.success) Debug.LogError("[ModelLoadService] " + outcome.message);
             });
 
-            return new LocalContentSpawnOutcome
-            {
-                success = true,
-                message = "Model container spawned; local GLB load started.",
-                renderKind = ContentRenderKind.Volumetric,
-                mediaKind = mediaKind,
-                contentTypeLabel = $"Model ({fileNameWithoutExt})",
-                spawnedObject = instance,
-                draggableObject = drag
-            };
+            return new LocalContentSpawnOutcome { success = true, message = "Model container spawned; local GLB load started.", renderKind = ContentRenderKind.Volumetric, mediaKind = mediaKind, contentTypeLabel = $"Model ({fileNameWithoutExt})", spawnedObject = instance, draggableObject = drag };
         }
 
         private static bool IsLikelyModelMime(string mimeType)
@@ -400,14 +354,10 @@ namespace ARGallery.Content
             return normalized.Contains("gltf") || normalized.Contains("glb") || normalized.Contains("model/");
         }
 
-        /// <summary>
-        /// Returns a spawned content object to the runtime pool using its attached pooled tag.
-        /// </summary>
         public bool ReleaseSpawnedContent(GameObject instance)
         {
             return workflow.ReleaseSpawnedContent(instance);
         }
-
 
         public IApiRequestHandle SyncCreateContent(
             IApiClient apiClient,

@@ -1,6 +1,5 @@
 using System.Linq;
 using UnityEditor;
-using UnityEditor.Build;
 
 namespace FrostweepGames.Plugins
 {
@@ -31,15 +30,14 @@ namespace FrostweepGames.Plugins
 
             for (int i = 0; i < buildTargets.Length; i++)
             {
-                NamedBuildTarget namedTarget = NamedBuildTarget.FromBuildTargetGroup(buildTargets[i]);
-                string definesString = PlayerSettings.GetScriptingDefineSymbols(namedTarget);
+                string definesString = PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargets[i]);
                 var defines = definesString.Split(';').ToList();
 
                 if (add)
                     defines.AddRange(definesToChange.Except(defines));
                 else
                     defines.RemoveAll(item => definesToChange.Contains(item));
-                PlayerSettings.SetScriptingDefineSymbols(namedTarget, string.Join(";", defines));
+                PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargets[i], string.Join(";", defines.ToArray()));
             }
         }
     }

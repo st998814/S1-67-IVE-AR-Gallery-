@@ -3,14 +3,15 @@ using UnityEngine.UIElements;
 using System.Collections;
 using System.Collections.Generic;
 using ARGallery.Content;
+using FrostweepGames.Plugins.WebGLFileBrowser;
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
-using FrostweepGames.Plugins.WebGLFileBrowser; // NEW: Access the plugin
 using System;
 
 public class AuthoringUIController : MonoBehaviour
 {
     public DatabaseManager dbManager;
+    public GameObject videoPrefab;
 
     [SerializeField] private TargetSelectionManager targetSelectionManager;
 
@@ -170,6 +171,7 @@ public class AuthoringUIController : MonoBehaviour
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
     }
+
     // dropdown manu maneger
     private void RefreshImageTargetDropdownChoices()
     {
@@ -325,7 +327,7 @@ public class AuthoringUIController : MonoBehaviour
 
         targetWorkflowService.ApplyTargetImageFromUrl(this, targetObject, targetImageUrl);
     }
-    // 
+
     private TargetSelectionManager ResolveTargetSelectionManager()
     {
         if (targetSelectionManager != null)
@@ -402,11 +404,7 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>
     /// Normalize the target id.
     /// </summary>
-    /// <param name="targetIdInput">The target id input.</param>
-    /// <param name="fallbackName">The fallback name.</param>
-    /// <returns>The normalized target id.</returns>
     private string NormalizeTargetId(string targetIdInput, string fallbackName)
-
     {
         string source = string.IsNullOrWhiteSpace(targetIdInput) ? fallbackName : targetIdInput.Trim();
         source = source.ToLowerInvariant();
@@ -440,8 +438,6 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>
     /// Show the create target feedback.
     /// </summary>
-    /// <param name="message">The message to show.</param>
-    /// <param name="isError">True if the message is an error, false otherwise.</param>
     private void ShowCreateTargetFeedback(string message, bool isError)
     {
         if (createTargetButton == null)
@@ -619,13 +615,17 @@ public class AuthoringUIController : MonoBehaviour
     {
         targetSelectionManager = ResolveTargetSelectionManager();
         ITargetContextResolver resolver = new TargetSelectionContextResolver(targetSelectionManager);
+        
+        // Ensure videoPrefab is passed here!
         return new SpawnerManager(
-            this,
-            picturePrefab,
-            textPrefab,
-            GetModelContentContainerPrefab(),
-            resolver,
-            targetWorkflowService: targetWorkflowService,
+            this, 
+            picturePrefab, 
+            textPrefab, 
+            GetModelContentContainerPrefab(), 
+            videoPrefab, 
+            resolver, 
+            contentCoordinator: null, 
+            targetWorkflowService: targetWorkflowService, 
             forwardOffsetFromWall: spawnForwardOffsetFromWall);
     }
 
@@ -658,7 +658,7 @@ public class AuthoringUIController : MonoBehaviour
     void OnBrowseButtonClicked()
     {
         pendingUploadPurpose = UploadPurpose.Content;
-        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.glb", false);
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov", false);
     }
 
     void OnBrowseTargetImageButtonClicked()
@@ -670,7 +670,7 @@ public class AuthoringUIController : MonoBehaviour
     }
 
     // This runs automatically when an image is selected
-    private void OnFilesOpened(File[] files)
+    private void OnFilesOpened(FrostweepGames.Plugins.WebGLFileBrowser.File[] files)
     {
         if (files == null || files.Length == 0)
             return;
@@ -692,25 +692,43 @@ public class AuthoringUIController : MonoBehaviour
             SpawnLocalContentFromFileSelection(selectedFile);
     }
 
-    private void SpawnLocalContentFromFileSelection(File selectedFile)
+private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
+{
+    spawnerManager ??= BuildSpawnerManager();
+    if (selectedFile == null || selectedFile.fileInfo == null || selectedFile.data == null || selectedFile.data.Length == 0)
     {
-        spawnerManager ??= BuildSpawnerManager();
-        if (selectedFile == null || selectedFile.fileInfo == null || selectedFile.data == null || selectedFile.data.Length == 0)
-        {
-            if (filePathInput != null)
-                filePathInput.value = "Invalid local file";
-            return;
-        }
+        if (filePathInput != null) filePathInput.value = "Invalid local file";
+        return;
+    }
 
-        string baseName = !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name)
-            ? selectedFile.fileInfo.name
-            : "local-file";
-        string extension = selectedFile.fileInfo.extension ?? "";
-        string displayName = extension.StartsWith(".") || string.IsNullOrWhiteSpace(extension)
-            ? baseName
-            : baseName + "." + extension;
-        string lowerName = displayName.ToLowerInvariant();
-        SpawnContentType type = lowerName.EndsWith(".glb") ? SpawnContentType.Model : SpawnContentType.Image;
+    string baseName = !string.IsNullOrWhiteSpace(selectedFile.fileInfo.name) ? selectedFile.fileInfo.name : "local-file";
+    string extension = selectedFile.fileInfo.extension ?? "";
+    
+    // --- THE FIX: FOOLPROOF EXTENSION GLUE ---
+    string displayName = baseName;
+    if (!string.IsNullOrWhiteSpace(extension) && !baseName.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+    {
+        displayName += extension.StartsWith(".") ? extension : "." + extension;
+    }
+    // -----------------------------------------
+
+    string lowerName = displayName.ToLowerInvariant();
+
+    SpawnContentType type;
+    if (lowerName.EndsWith(".glb"))
+    {
+        type = SpawnContentType.Model;
+    }
+    else if (lowerName.EndsWith(".mp4") || lowerName.EndsWith(".mov") || lowerName.EndsWith(".webm"))
+    {
+        type = SpawnContentType.Video;
+    }
+    else
+    {
+        type = SpawnContentType.Image;
+    }
+
+    // ... rest of the method remains exactly the same
 
         SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
         {
@@ -720,6 +738,7 @@ public class AuthoringUIController : MonoBehaviour
             localMimeType = GuessMimeTypeFromExtension(extension),
             isLocalDraft = true
         });
+
         if (!outcome.success || outcome.spawnedObject == null)
         {
             if (filePathInput != null)
@@ -736,14 +755,19 @@ public class AuthoringUIController : MonoBehaviour
         if (outcome.draggableObject != null)
         {
             RegisterLocalDraft(outcome.draggableObject, outcome.contentType, selectedFile, displayName);
-            string label = outcome.contentType == SpawnContentType.Model ? "Model" : "Image";
+            
+            string label = "Object";
+            if (outcome.contentType == SpawnContentType.Model) label = "Model";
+            else if (outcome.contentType == SpawnContentType.Video) label = "Video";
+            else if (outcome.contentType == SpawnContentType.Image) label = "Image";
+
             SetActiveAuthoringObject(outcome.draggableObject, "", label);
         }
 
         FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
     }
 
-    private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, File selectedFile)
+    private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
     {
         if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.url))
         {
@@ -764,7 +788,6 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetImageUrlInput != null)
             createTargetImageUrlInput.value = "Ready: " + displayName;
 
-        // If a target is already active, apply the freshly uploaded target texture immediately.
         targetSelectionManager = ResolveTargetSelectionManager();
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
         ApplyPendingTargetImageToTarget(activeTarget);
@@ -772,7 +795,6 @@ public class AuthoringUIController : MonoBehaviour
         Debug.Log("Target image upload complete via IApiClient! URL: " + pendingTargetImageUrl);
     }
 
-    // Helper: When an object is spawned or selected, update UI fields
     private void SetActiveAuthoringObject(DraggableObject targetObj, string mediaValue, string contentType)
     {
         activeDraggedObject = targetObj;
@@ -798,9 +820,7 @@ public class AuthoringUIController : MonoBehaviour
         else
             ApplyUrlToMediaFields(mediaValue);
 
-        // Set Content Type
         contentTypeInput.value = contentType;
-        
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
@@ -867,7 +887,7 @@ public class AuthoringUIController : MonoBehaviour
         contentDraftsByTransform[draggableObject.transform] = draft;
     }
 
-    private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, File selectedFile, string localFileName)
+    private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
     {
         if (draggableObject == null)
             return;
@@ -920,7 +940,6 @@ public class AuthoringUIController : MonoBehaviour
         activeContentDraft.targetId = GetActiveTargetIdForSave();
     }
 
-
     private static bool LooksLikeYouTubeUrl(string u)
     {
         if (string.IsNullOrWhiteSpace(u))
@@ -929,7 +948,6 @@ public class AuthoringUIController : MonoBehaviour
         return lower.Contains("youtube.com/") || lower.Contains("youtu.be/");
     }
 
-    /// <summary>YouTube 填在独立框；保存时仍写入现有 MediaURL 字段，后端无需改表。</summary>
     private void ApplyUrlToMediaFields(string url)
     {
         if (youtubeUrlInput != null) youtubeUrlInput.value = "";
@@ -949,7 +967,6 @@ public class AuthoringUIController : MonoBehaviour
             filePathInput.value = t;
     }
 
-    // Coroutine and SaveButton method from earlier
     void OnSaveButtonClicked()
     {
         if (isSaveInProgress)
@@ -1090,10 +1107,11 @@ public class AuthoringUIController : MonoBehaviour
         draft.uploadPending = true;
         draft.lastError = "";
 
-        var file = new File
+        // Fully qualified to prevent System.IO conflicts
+        var file = new FrostweepGames.Plugins.WebGLFileBrowser.File
         {
             data = draft.localFileBytes,
-            fileInfo = new FileInfo
+            fileInfo = new FrostweepGames.Plugins.WebGLFileBrowser.FileInfo
             {
                 name = draft.localFileName,
                 extension = System.IO.Path.GetExtension(draft.localFileName ?? "")

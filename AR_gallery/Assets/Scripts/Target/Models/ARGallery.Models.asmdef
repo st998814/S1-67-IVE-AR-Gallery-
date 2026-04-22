@@ -1,7 +1,9 @@
 {
     "name": "ARGallery.Models",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "GUID:2a134760fdcacb147a2148c07830a55d"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
