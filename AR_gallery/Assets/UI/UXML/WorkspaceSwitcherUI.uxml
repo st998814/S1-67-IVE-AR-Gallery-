@@ -1,0 +1,18 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="../USS/AppTheme.uss" />
+    <ui:Style src="../USS/WorkspaceSwitcherUI.uss" />
+
+    <ui:VisualElement name="WorkspaceSwitcherRoot" class="app-root layout-full layout-centered-column switcher-root">
+        <ui:Label text="Workspace Switcher" class="text-title switcher-title" />
+        <ui:VisualElement class="layout-row switcher-carousel">
+            <ui:Button name="LeftArrowButton" text="&lt;" class="btn switcher-arrow-btn switcher-arrow-left" />
+            <ui:VisualElement name="WorkspaceCardsRow" class="switcher-cards-row" />
+            <ui:Button name="RightArrowButton" text="&gt;" class="btn switcher-arrow-btn switcher-arrow-right" />
+        </ui:VisualElement>
+        <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label" />
+        <ui:VisualElement class="switcher-actions">
+            <ui:Button name="NewButton" text="NEW" class="btn switcher-action-secondary" />
+            <ui:Button name="EditButton" text="EDIT" class="btn btn-primary switcher-action-primary" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
