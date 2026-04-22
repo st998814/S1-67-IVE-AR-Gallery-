@@ -20,6 +20,8 @@ UPLOAD_FOLDER = os.path.join(_BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'webm'}
+
 # ---------------------------------------------------------------------------
 # Logging setup — writes to server.log AND console
 # ---------------------------------------------------------------------------
