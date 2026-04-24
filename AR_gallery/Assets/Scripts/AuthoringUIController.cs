@@ -7,6 +7,7 @@ using FrostweepGames.Plugins.WebGLFileBrowser;
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
 using System;
+using UnityEngine.InputSystem;
 
 public class AuthoringUIController : MonoBehaviour
 {
@@ -44,6 +45,13 @@ public class AuthoringUIController : MonoBehaviour
 
     private Button browseButton, saveButton;
     private Button backToSwitcherButton;
+
+    // --- TASK 6: 新增 UI 变量 ---
+    private VisualElement _loadingOverlay;
+    private VisualElement _errorToast;
+    private Label _errorLabel;
+    private Coroutine _errorToastCoroutine;
+    // ----------------------------
 
     // Track the object that is currently "active" in the UI (being dragged)
     private DraggableObject activeDraggedObject;
@@ -125,6 +133,15 @@ public class AuthoringUIController : MonoBehaviour
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
 
+        // --- TASK 6: 获取并初始化 Loading 和 Error 元素 ---
+        _loadingOverlay = root.Q<VisualElement>("loading-overlay");
+        _errorToast = root.Q<VisualElement>("error-toast");
+        _errorLabel = root.Q<Label>("error-label");
+
+        HideLoading();
+        HideErrorToast();
+        // ------------------------------------------------
+
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
@@ -171,6 +188,69 @@ public class AuthoringUIController : MonoBehaviour
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
     }
+
+    // --- TASK 6: 用于独立测试的 Update 方法 ---
+    private void Update()
+{
+    // 按 L 键切换 Loading 状态
+    if (Keyboard.current != null && Keyboard.current.lKey.wasPressedThisFrame)
+    {
+        if (_loadingOverlay != null && _loadingOverlay.style.display == DisplayStyle.None)
+            ShowLoading();
+        else
+            HideLoading();
+    }
+
+    // 按 E 键触发报错
+    if (Keyboard.current != null && Keyboard.current.tKey.wasPressedThisFrame)
+    {
+        ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
+    }
+}
+    // ----------------------------------------
+
+    // ==========================================
+    // --- TASK 6: 全局 Loading 遮罩与 Error 弹窗逻辑 ---
+    // ==========================================
+    public void ShowLoading()
+    {
+        if (_loadingOverlay != null)
+            _loadingOverlay.style.display = DisplayStyle.Flex;
+    }
+
+    public void HideLoading()
+    {
+        if (_loadingOverlay != null)
+            _loadingOverlay.style.display = DisplayStyle.None;
+    }
+
+    public void ShowError(string errorMessage)
+    {
+        if (_errorToast == null || _errorLabel == null) return;
+
+        _errorLabel.text = errorMessage;
+        _errorToast.style.display = DisplayStyle.Flex;
+
+        if (_errorToastCoroutine != null)
+        {
+            StopCoroutine(_errorToastCoroutine);
+        }
+        
+        _errorToastCoroutine = StartCoroutine(HideErrorToastAfterDelay(3f));
+    }
+
+    private void HideErrorToast()
+    {
+        if (_errorToast != null)
+            _errorToast.style.display = DisplayStyle.None;
+    }
+
+    private IEnumerator HideErrorToastAfterDelay(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+        HideErrorToast();
+    }
+    // ==========================================
 
     // dropdown manu maneger
     private void RefreshImageTargetDropdownChoices()
@@ -1151,6 +1231,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                     draft.lastError = $"Upload failed [{code}] {message}";
                     draft.uploadPending = true;
                     Debug.LogWarning($"Draft upload failed ({draft.draftId}): {draft.lastError}");
+                    ShowError($"Upload Failed! [{code}] {message}"); // Task 6 NewAdd
                 }
                 done = true;
             },
@@ -1193,6 +1274,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                     string message = result != null ? result.message : "No result";
                     draft.lastError = $"Persist failed [{code}] {message}";
                     Debug.LogWarning($"Draft persist failed ({draft.draftId}): {draft.lastError}");
+                    ShowError($"Save Failed! [{code}] {message}"); // Task6NewAdd
                 }
                 done = true;
             },
