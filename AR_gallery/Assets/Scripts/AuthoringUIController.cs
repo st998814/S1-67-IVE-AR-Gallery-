@@ -45,6 +45,13 @@ public class AuthoringUIController : MonoBehaviour
     private Button browseButton, saveButton;
     private Button backToSwitcherButton;
 
+    // --- TASK 6: 新增 UI 变量 ---
+    private VisualElement _loadingOverlay;
+    private VisualElement _errorToast;
+    private Label _errorLabel;
+    private Coroutine _errorToastCoroutine;
+    // ----------------------------
+
     // Track the object that is currently "active" in the UI (being dragged)
     private DraggableObject activeDraggedObject;
     /// <summary>当前与面板坐标/缩放绑定的 Transform（含无 DraggableObject 的 Cube 等）。</summary>
@@ -125,6 +132,15 @@ public class AuthoringUIController : MonoBehaviour
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
 
+        // --- TASK 6: 获取并初始化 Loading 和 Error 元素 ---
+        _loadingOverlay = root.Q<VisualElement>("loading-overlay");
+        _errorToast = root.Q<VisualElement>("error-toast");
+        _errorLabel = root.Q<Label>("error-label");
+
+        HideLoading();
+        HideErrorToast();
+        // ------------------------------------------------
+
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
@@ -171,6 +187,69 @@ public class AuthoringUIController : MonoBehaviour
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
     }
+
+    // --- TASK 6: 用于独立测试的 Update 方法 ---
+    private void Update()
+    {
+        // 按 L 键切换 Loading 状态
+        if (Input.GetKeyDown(KeyCode.L))
+        {
+            if (_loadingOverlay != null && _loadingOverlay.style.display == DisplayStyle.None) 
+                ShowLoading();
+            else 
+                HideLoading();
+        }
+
+        // 按 E 键触发报错
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            ShowError("上传失败！HTTP 500 内部服务器错误\n" + System.DateTime.Now.ToString("HH:mm:ss"));
+        }
+    }
+    // ----------------------------------------
+
+    // ==========================================
+    // --- TASK 6: 全局 Loading 遮罩与 Error 弹窗逻辑 ---
+    // ==========================================
+    public void ShowLoading()
+    {
+        if (_loadingOverlay != null)
+            _loadingOverlay.style.display = DisplayStyle.Flex;
+    }
+
+    public void HideLoading()
+    {
+        if (_loadingOverlay != null)
+            _loadingOverlay.style.display = DisplayStyle.None;
+    }
+
+    public void ShowError(string errorMessage)
+    {
+        if (_errorToast == null || _errorLabel == null) return;
+
+        _errorLabel.text = errorMessage;
+        _errorToast.style.display = DisplayStyle.Flex;
+
+        if (_errorToastCoroutine != null)
+        {
+            StopCoroutine(_errorToastCoroutine);
+        }
+        
+        _errorToastCoroutine = StartCoroutine(HideErrorToastAfterDelay(3f));
+    }
+
+    private void HideErrorToast()
+    {
+        if (_errorToast != null)
+            _errorToast.style.display = DisplayStyle.None;
+    }
+
+    private IEnumerator HideErrorToastAfterDelay(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+        HideErrorToast();
+    }
+    // ==========================================
 
     // dropdown manu maneger
     private void RefreshImageTargetDropdownChoices()

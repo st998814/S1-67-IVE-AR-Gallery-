@@ -1,49 +1,44 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <ui:VisualElement picking-mode="Ignore" style="flex-grow: 1; flex-direction: row; justify-content: flex-end; padding: 10px; background-color: rgba(0, 0, 0, 0); overflow: visible;">
-        
         <ui:VisualElement picking-mode="Position" style="width: 288px; min-width: 288px; overflow: visible; background-color: rgb(255, 255, 255); padding: 10px; border-radius: 8px; border-width: 1px; border-color: rgb(200, 200, 200);">
-            
-            <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 14px; color: rgb(30, 30, 30); margin-bottom: 6px; -unity-text-align: middle-center;" />
-
+            <ui:Label text="IVE AR Gallery - Content Author" style="-unity-font-style: bold; font-size: 14px; color: rgb(30, 30, 30); margin-bottom: 6px; -unity-text-align: middle-center;"/>
             <ui:VisualElement style="flex-direction: column; margin-bottom: 8px;">
-                <ui:Label text="AR Image Target" style="color: rgb(30, 30, 30); font-size: 11px; -unity-font-style: bold; margin-bottom: 4px;" />
-                <ui:DropdownField name="ImageTargetDropdown" style="color: rgb(30, 30, 30); min-height: 26px; font-size: 11px;" />
+                <ui:Label text="AR Image Target" style="color: rgb(30, 30, 30); font-size: 11px; -unity-font-style: bold; margin-bottom: 4px;"/>
+                <ui:DropdownField name="ImageTargetDropdown" style="color: rgb(30, 30, 30); min-height: 26px; font-size: 11px;"/>
             </ui:VisualElement>
-            <ui:TextField name="CreateTargetNameInput" label="Target Name" value="Poster_C" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-            <ui:TextField name="CreateTargetIdInput" label="Target ID" value="poster_c" style="color: rgb(30, 30, 30); margin-bottom: 6px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-            <ui:Label text="Target Image:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 2px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:TextField name="CreateTargetNameInput" label="Target Name" value="Poster_C" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:TextField name="CreateTargetIdInput" label="Target ID" value="poster_c" style="color: rgb(30, 30, 30); margin-bottom: 6px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:Label text="Target Image:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 2px; margin-bottom: 2px; font-size: 11px;"/>
             <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 6px;">
-                <ui:TextField name="CreateTargetImageUrlInput" value="No target image selected" readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 10px;" />
-                <ui:Button name="BrowseTargetImageButton" text="Browse" style="height: 24px; width: 60px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 4px; font-size: 10px;" />
+                <ui:TextField name="CreateTargetImageUrlInput" value="No target image selected" readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 10px;"/>
+                <ui:Button name="BrowseTargetImageButton" text="Browse" style="height: 24px; width: 60px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 4px; font-size: 10px;"/>
             </ui:VisualElement>
-            <ui:Button name="CreateTargetButton" text="Create Target" style="height: 28px; width: 100%; background-color: rgb(30, 150, 90); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 11px; margin-bottom: 8px;" />
-
-            <ui:TextField name="ContentTypeInput" label="Type" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-
-            <ui:Label text="Spatial Coordinates:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
-            <ui:FloatField name="PosXInput" label="X Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-            <ui:FloatField name="PosYInput" label="Y Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-            <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-
-            <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-            
-            <ui:Label text="Media File:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:Button name="CreateTargetButton" text="Create Target" style="height: 28px; width: 100%; background-color: rgb(30, 150, 90); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 11px; margin-bottom: 8px;"/>
+            <ui:TextField name="ContentTypeInput" label="Type" value="Poster" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:Label text="Spatial Coordinates:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
+            <ui:FloatField name="PosXInput" label="X Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:FloatField name="PosYInput" label="Y Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:FloatField name="PosZInput" label="Z Position" value="0" style="color: rgb(30, 30, 30); margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:FloatField name="ScaleInput" label="Scale" value="1" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:Label text="Media File:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
             <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 6px;">
-                <ui:TextField name="FilePathInput" value="No file..." readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 10px;" />
-                <ui:Button name="BrowseButton" text="Browse" style="height: 24px; width: 60px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 4px; font-size: 10px;" />
+                <ui:TextField name="FilePathInput" value="No file..." readonly="true" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 10px;"/>
+                <ui:Button name="BrowseButton" text="Browse" style="height: 24px; width: 60px; background-color: rgb(220, 220, 220); color: black; -unity-font-style: bold; border-radius: 4px; font-size: 10px;"/>
             </ui:VisualElement>
-
-            <ui:TextField name="YoutubeUrlInput" label="YouTube URL" value="" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" />
-
-            <ui:Label text="Add Text:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;" />
+            <ui:TextField name="YoutubeUrlInput" label="YouTube URL" value="" style="color: rgb(30, 30, 30); margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+            <ui:Label text="Add Text:" style="color: rgb(30, 30, 30); -unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
             <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 10px;">
-                <ui:TextField name="SpawningTextInput" value="Hello World" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 11px;" />
-                <ui:Button name="SpawnTextButton" text="Spawn" style="height: 24px; width: 60px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 4px; font-size: 10px;" />
+                <ui:TextField name="SpawningTextInput" value="Hello World" style="flex-grow: 1; color: rgb(30, 30, 30); min-height: 24px; font-size: 11px;"/>
+                <ui:Button name="SpawnTextButton" text="Spawn" style="height: 24px; width: 60px; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 4px; font-size: 10px;"/>
             </ui:VisualElement>
-
-            <ui:Button name="SaveButton" text="Save to Database" style="height: 32px; width: 100%; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 12px; margin-bottom: 6px;" />
-            <ui:Button name="BackToSwitcherButton" text="Back to Workspace Switcher" style="height: 30px; width: 100%; background-color: rgb(65, 70, 78); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 11px;" />
+            <ui:Button name="SaveButton" text="Save to Database" style="height: 32px; width: 100%; background-color: rgb(0, 120, 200); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 12px; margin-bottom: 6px;"/>
+            <ui:Button name="BackToSwitcherButton" text="Back to Workspace Switcher" style="height: 30px; width: 100%; background-color: rgb(65, 70, 78); color: white; -unity-font-style: bold; border-radius: 6px; font-size: 11px;"/>
         </ui:VisualElement>
-
+    </ui:VisualElement>
+    <ui:VisualElement name="loading-overlay" style="flex-grow: 1; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.59); justify-content: center; align-self: center;">
+        <ui:Label text="Loading..." style="align-self: center; align-items: auto; justify-content: flex-end; font-size: 20px; -unity-font-definition: url(&quot;project://database/Assets/TextMesh%20Pro/Fonts/LiberationSans.ttf?fileID=12800000&amp;guid=e3265ab4bf004d28a9537516768c1c75&amp;type=3#LiberationSans&quot;); -unity-font-style: bold; color: rgb(255, 250, 240); align-content: flex-end;"/>
+    </ui:VisualElement>
+    <ui:VisualElement name="error-toast" style="flex-grow: 1; position: absolute; top: 50px; align-self: center; background-color: rgb(220, 53, 69); border-top-left-radius: 8px; border-top-right-radius: 8px; border-right-width: 0; border-bottom-right-radius: 8px; border-bottom-left-radius: 8px; width: 155px;">
+        <ui:Label text="Error" parse-escape-sequences="true" style="padding-top: 8px; padding-right: 8px; padding-bottom: 8px; padding-left: 8px; align-self: center; -unity-font-style: bold; -unity-text-outline-color: rgb(229, 229, 229); color: rgb(229, 229, 229); display: flex;"/>
     </ui:VisualElement>
 </ui:UXML>
