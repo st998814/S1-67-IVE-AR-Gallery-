@@ -261,11 +261,8 @@ public class ContentTransformController : MonoBehaviour
 
         GameObject activeTarget = targetSelectionManager.GetActiveTarget();
         if (activeTarget == null)
-        {
-            Debug.LogWarning("ContentTransformController: activeTarget is null.");
             return;
-        }
-
+       
         Transform contentRoot = activeTarget.transform.Find("ContentRoot");
         if (contentRoot == null)
         {

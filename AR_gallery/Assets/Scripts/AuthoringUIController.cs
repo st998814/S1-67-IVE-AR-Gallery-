@@ -7,6 +7,7 @@ using FrostweepGames.Plugins.WebGLFileBrowser;
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
 using System;
+using UnityEngine.InputSystem;
 
 public class AuthoringUIController : MonoBehaviour
 {
@@ -190,22 +191,22 @@ public class AuthoringUIController : MonoBehaviour
 
     // --- TASK 6: 用于独立测试的 Update 方法 ---
     private void Update()
+{
+    // 按 L 键切换 Loading 状态
+    if (Keyboard.current != null && Keyboard.current.lKey.wasPressedThisFrame)
     {
-        // 按 L 键切换 Loading 状态
-        if (Input.GetKeyDown(KeyCode.L))
-        {
-            if (_loadingOverlay != null && _loadingOverlay.style.display == DisplayStyle.None) 
-                ShowLoading();
-            else 
-                HideLoading();
-        }
-
-        // 按 E 键触发报错
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            ShowError("上传失败！HTTP 500 内部服务器错误\n" + System.DateTime.Now.ToString("HH:mm:ss"));
-        }
+        if (_loadingOverlay != null && _loadingOverlay.style.display == DisplayStyle.None)
+            ShowLoading();
+        else
+            HideLoading();
     }
+
+    // 按 E 键触发报错
+    if (Keyboard.current != null && Keyboard.current.tKey.wasPressedThisFrame)
+    {
+        ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
+    }
+}
     // ----------------------------------------
 
     // ==========================================
@@ -1230,6 +1231,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                     draft.lastError = $"Upload failed [{code}] {message}";
                     draft.uploadPending = true;
                     Debug.LogWarning($"Draft upload failed ({draft.draftId}): {draft.lastError}");
+                    ShowError($"Upload Failed! [{code}] {message}"); // Task 6 NewAdd
                 }
                 done = true;
             },
@@ -1272,6 +1274,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                     string message = result != null ? result.message : "No result";
                     draft.lastError = $"Persist failed [{code}] {message}";
                     Debug.LogWarning($"Draft persist failed ({draft.draftId}): {draft.lastError}");
+                    ShowError($"Save Failed! [{code}] {message}"); // Task6NewAdd
                 }
                 done = true;
             },

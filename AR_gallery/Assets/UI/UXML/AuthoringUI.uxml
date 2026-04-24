@@ -38,7 +38,7 @@
     <ui:VisualElement name="loading-overlay" style="flex-grow: 1; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.59); justify-content: center; align-self: center;">
         <ui:Label text="Loading..." style="align-self: center; align-items: auto; justify-content: flex-end; font-size: 20px; -unity-font-definition: url(&quot;project://database/Assets/TextMesh%20Pro/Fonts/LiberationSans.ttf?fileID=12800000&amp;guid=e3265ab4bf004d28a9537516768c1c75&amp;type=3#LiberationSans&quot;); -unity-font-style: bold; color: rgb(255, 250, 240); align-content: flex-end;"/>
     </ui:VisualElement>
-    <ui:VisualElement name="error-toast" style="flex-grow: 1; position: absolute; top: 50px; align-self: center; background-color: rgb(220, 53, 69); border-top-left-radius: 8px; border-top-right-radius: 8px; border-right-width: 0; border-bottom-right-radius: 8px; border-bottom-left-radius: 8px; width: 155px;">
-        <ui:Label text="Error" parse-escape-sequences="true" style="padding-top: 8px; padding-right: 8px; padding-bottom: 8px; padding-left: 8px; align-self: center; -unity-font-style: bold; -unity-text-outline-color: rgb(229, 229, 229); color: rgb(229, 229, 229); display: flex;"/>
+    <ui:VisualElement name="error-toast" style="flex-grow: 1; position: absolute; top: 50px; align-self: center; background-color: rgb(220, 53, 69); border-top-left-radius: 8px; border-top-right-radius: 8px; border-right-width: 0; border-bottom-right-radius: 8px; border-bottom-left-radius: 8px; width: 300px; height: 100px;">
+        <ui:Label name="error-label" text="Error" parse-escape-sequences="true" style="padding-top: 8px; padding-right: 8px; padding-bottom: 8px; padding-left: 8px; align-self: center; -unity-font-style: bold; -unity-text-outline-color: rgb(229, 229, 229); color: rgb(229, 229, 229); display: flex;"/>
     </ui:VisualElement>
 </ui:UXML>
