@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 # macOS 默认常占用 5000（隔空播放接收器等），对 POST 会返回 403，改用 5050。
-SERVER_PORT = 5050
+SERVER_PORT = int(os.environ.get("SERVER_PORT", "5050"))
 
 # 始终使用「与 app.py 同级的 uploads」目录，不随终端当前工作目录变化
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,13 +38,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Database connection details
-DB_HOST = "localhost"
-DB_NAME = "ive_ar_gallery"
-DB_USER = "postgres"
-DB_PASS = "postgres" # Put your password back here!
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_PORT = int(os.environ.get("DB_PORT", "5432"))
+DB_NAME = os.environ.get("DB_NAME", "ive_ar_gallery")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASS = os.environ.get("DB_PASS", "postgres")
 
 def get_db_connection():
-    conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+    )
     return conn
 
 

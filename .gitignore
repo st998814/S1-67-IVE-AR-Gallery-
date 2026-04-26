@@ -39,3 +39,4 @@ Thumbs.db
 backend/server.log
 .vscode/
 .claude/
+.env

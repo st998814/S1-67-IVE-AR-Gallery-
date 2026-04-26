@@ -1,0 +1,14 @@
+-- Baseline table for persisted authoring content.
+-- Safe to run multiple times.
+
+CREATE TABLE IF NOT EXISTS AR_Content (
+    id SERIAL PRIMARY KEY,
+    ContentType VARCHAR(64) NOT NULL,
+    PosX DOUBLE PRECISION NOT NULL DEFAULT 0,
+    PosY DOUBLE PRECISION NOT NULL DEFAULT 0,
+    PosZ DOUBLE PRECISION NOT NULL DEFAULT 0,
+    Scale DOUBLE PRECISION NOT NULL DEFAULT 1,
+    MediaURL TEXT NOT NULL DEFAULT '',
+    TargetId VARCHAR(256) NOT NULL DEFAULT '',
+    CreatedAtUtc TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
