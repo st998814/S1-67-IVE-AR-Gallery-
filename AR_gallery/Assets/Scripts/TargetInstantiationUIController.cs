@@ -193,6 +193,18 @@ namespace ARGallery.AppFlow
                     return;
                 }
 
+                bool publishInProgress = result != null
+                                         && result.success
+                                         && result.payload != null
+                                         && string.Equals(Safe(result.payload.publishStatus), "publishing", StringComparison.OrdinalIgnoreCase);
+
+                if (publishInProgress)
+                {
+                    SetStatus("Publish accepted and still in progress. Retry when ready or cancel to switcher.");
+                    UpdateUiState(failureState: true);
+                    return;
+                }
+
                 string publishError = result != null && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.lastPublishError)
                     ? result.payload.lastPublishError
                     : BuildResultMessage(result);

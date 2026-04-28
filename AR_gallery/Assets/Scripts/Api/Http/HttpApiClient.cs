@@ -177,8 +177,11 @@ public class HttpApiClient : MonoBehaviour, IApiClient
 
             if (uwr.result != UnityWebRequest.Result.Success)
             {
-                string err = $"CreateTarget failed: {uwr.error} HTTP {(long)uwr.responseCode}";
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"CreateTarget failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                string err = ExtractServerErrorMessage(body, fallback);
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
                 handle.MarkDone();
                 yield break;
             }
@@ -241,8 +244,11 @@ public class HttpApiClient : MonoBehaviour, IApiClient
 
             if (uwr.result != UnityWebRequest.Result.Success)
             {
-                string err = $"CreateContent failed: {uwr.error} HTTP {(long)uwr.responseCode}";
-                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"CreateContent failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                string err = ExtractServerErrorMessage(body, fallback);
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
+                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(code, err, (int)uwr.responseCode));
                 handle.MarkDone();
                 yield break;
             }
@@ -272,14 +278,26 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         public string details;
     }
 
+    private static ApiErrorBody ParseErrorBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+        return JsonUtility.FromJson<ApiErrorBody>(body);
+    }
+
     private static string ExtractServerErrorMessage(string body, string fallback)
     {
-        if (!string.IsNullOrWhiteSpace(body))
-        {
-            ApiErrorBody parsed = JsonUtility.FromJson<ApiErrorBody>(body);
-            if (parsed != null && !string.IsNullOrWhiteSpace(parsed.message))
-                return parsed.message;
-        }
+        ApiErrorBody parsed = ParseErrorBody(body);
+        if (parsed != null && !string.IsNullOrWhiteSpace(parsed.message))
+            return parsed.message;
+        return fallback;
+    }
+
+    private static string ExtractServerErrorCode(string body, string fallback)
+    {
+        ApiErrorBody parsed = ParseErrorBody(body);
+        if (parsed != null && !string.IsNullOrWhiteSpace(parsed.errorCode))
+            return parsed.errorCode;
         return fallback;
     }
 
@@ -324,7 +342,8 @@ public class HttpApiClient : MonoBehaviour, IApiClient
             {
                 string fallback = $"{(isRetry ? "RetryPublish" : "Publish")} failed: {uwr.error} HTTP {(long)uwr.responseCode}";
                 string err = ExtractServerErrorMessage(body, fallback);
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
                 handle.MarkDone();
                 yield break;
             }
