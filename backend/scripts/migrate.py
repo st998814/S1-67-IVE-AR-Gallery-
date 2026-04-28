@@ -6,8 +6,10 @@ from pathlib import Path
 import psycopg2
 
 
-ROOT = Path(__file__).resolve().parents[2]
-MIGRATIONS_DIR = ROOT / "db_migrations"
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+DB_DIR = BACKEND_DIR / "db"
+INIT_FILE = DB_DIR / "001_init.sql"
+MIGRATIONS_DIR = DB_DIR / "migrations"
 
 
 def connect():
@@ -37,7 +39,11 @@ def read_applied(cur):
 
 
 def migration_files():
-    return sorted([p for p in MIGRATIONS_DIR.glob("*.sql") if p.is_file()], key=lambda p: p.name)
+    files = []
+    if INIT_FILE.exists():
+        files.append(INIT_FILE)
+    files.extend(sorted([p for p in MIGRATIONS_DIR.glob("*.sql") if p.is_file()], key=lambda p: p.name))
+    return files
 
 
 def apply_migration(cur, version: str, sql_text: str):
@@ -60,7 +66,7 @@ def cmd_status():
 def cmd_up():
     files = migration_files()
     if not files:
-        print(f"No migration files found in {MIGRATIONS_DIR}")
+        print(f"No migration files found in {DB_DIR}")
         return
 
     with connect() as conn:

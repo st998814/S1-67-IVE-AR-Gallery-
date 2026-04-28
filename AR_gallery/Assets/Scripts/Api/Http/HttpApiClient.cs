@@ -12,6 +12,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     [Header("Backend")]
     [SerializeField] private string baseUrl = "http://127.0.0.1:5050";
     [SerializeField] private string uploadEndpoint = "/api/upload";
+    [SerializeField] private string targetEndpoint = "/api/targets";
     [SerializeField] private string contentEndpoint = "/api/content";
 
     public IApiRequestHandle UploadFile(
@@ -30,10 +31,10 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         Action<ApiResult<CreateTargetResponseDto>> onCompleted,
         float timeoutSeconds = 20f)
     {
-        onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
-            ApiErrorCodes.Unknown,
-            "HttpApiClient.CreateTarget not wired yet. Implement /api/targets."));
-        return null;
+        var handle = new CoroutineApiRequestHandle(this);
+        Coroutine c = StartCoroutine(CreateTargetRoutine(request, onCompleted, timeoutSeconds, handle));
+        handle.BindCoroutine(c);
+        return handle;
     }
 
     public IApiRequestHandle CreateContent(
@@ -118,23 +119,61 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return basePart + endPart;
     }
 
-    [Serializable]
-    private class LegacyCreateContentRequestBody
+    private IEnumerator CreateTargetRoutine(
+        CreateTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds,
+        CoroutineApiRequestHandle handle)
     {
-        public string ContentType;
-        public float PosX;
-        public float PosY;
-        public float PosZ;
-        public float Scale;
-        public string MediaURL;
-        public string TargetId;
-    }
+        if (request == null)
+        {
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.ValidationError, "CreateTarget request is null"));
+            handle.MarkDone();
+            yield break;
+        }
 
-    [Serializable]
-    private class LegacyCreateContentResponseBody
-    {
-        public int id;
-        public string message;
+        string url = BuildUrl(targetEndpoint);
+        string json = JsonUtility.ToJson(request);
+        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
+
+        using (UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+        {
+            uwr.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            uwr.downloadHandler = new DownloadHandlerBuffer();
+            uwr.SetRequestHeader("Content-Type", "application/json");
+            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 20f : timeoutSeconds));
+            yield return uwr.SendWebRequest();
+
+            if (handle.IsCancelled)
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
+                handle.MarkDone();
+                yield break;
+            }
+
+            if (uwr.result != UnityWebRequest.Result.Success)
+            {
+                string err = $"CreateTarget failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+            CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
+                    ApiErrorCodes.ServerError,
+                    "CreateTarget succeeded but response has no targetId.",
+                    (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Ok(parsed, "create target ok", (int)uwr.responseCode));
+            handle.MarkDone();
+        }
     }
 
     private IEnumerator CreateContentRoutine(
@@ -150,19 +189,15 @@ public class HttpApiClient : MonoBehaviour, IApiClient
             yield break;
         }
 
-        var legacyBody = new LegacyCreateContentRequestBody
-        {
-            ContentType = string.IsNullOrWhiteSpace(request.contentType) ? "empty" : request.contentType,
-            PosX = request.localPosition != null ? request.localPosition.x : 0f,
-            PosY = request.localPosition != null ? request.localPosition.y : 0f,
-            PosZ = request.localPosition != null ? request.localPosition.z : 0f,
-            Scale = request.localScale != null ? request.localScale.x : 1f,
-            MediaURL = request.mediaUrl ?? "",
-            TargetId = request.targetId ?? ""
-        };
+        if (string.IsNullOrWhiteSpace(request.contentId))
+            request.contentId = Guid.NewGuid().ToString("N");
+        if (string.IsNullOrWhiteSpace(request.contentType))
+            request.contentType = "empty";
+        if (request.mediaUrl == null)
+            request.mediaUrl = "";
 
         string url = BuildUrl(contentEndpoint);
-        string json = JsonUtility.ToJson(legacyBody);
+        string json = JsonUtility.ToJson(request);
         byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
 
         using (UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
@@ -189,21 +224,18 @@ public class HttpApiClient : MonoBehaviour, IApiClient
             }
 
             string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
-            LegacyCreateContentResponseBody parsed = null;
-            try { parsed = JsonUtility.FromJson<LegacyCreateContentResponseBody>(body); }
-            catch { parsed = null; }
-
-            var response = new CreateContentResponseDto
+            CreateContentResponseDto parsed = JsonUtility.FromJson<CreateContentResponseDto>(body);
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.contentId))
             {
-                contentId = !string.IsNullOrWhiteSpace(request.contentId)
-                    ? request.contentId
-                    : (parsed != null && parsed.id > 0 ? parsed.id.ToString() : Guid.NewGuid().ToString("N")),
-                targetId = request.targetId ?? "",
-                status = "created",
-                createdAtUtc = DateTime.UtcNow.ToString("o")
-            };
+                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(
+                    ApiErrorCodes.ServerError,
+                    "CreateContent succeeded but response has no contentId.",
+                    (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
 
-            onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Ok(response, "create content ok", (int)uwr.responseCode));
+            onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Ok(parsed, "create content ok", (int)uwr.responseCode));
             handle.MarkDone();
         }
     }

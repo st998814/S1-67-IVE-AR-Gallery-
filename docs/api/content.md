@@ -81,6 +81,88 @@ Body matches `CreateContentResponseDto`:
 
 ---
 
+## `GET /api/content`
+
+Returns persisted content records for AR runtime restore, gallery sync, or authoring management.
+
+### Request
+
+No body.
+
+Optional query parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `targetId` | If provided, returns only content associated with that target. |
+
+### Response `200`
+
+**Content-Type:** `application/json`
+
+Body: **JSON array** of content detail objects (raw array, no envelope). Each item includes the persisted content metadata and transform snapshot.
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `contentId` | string | Canonical content id. |
+| `targetId` | string | Parent target id. |
+| `contentType` | string | e.g. `image`, `video`, `text`, `empty`, `model(3D)`. |
+| `mediaUrl` | string | Stable URL or text payload marker, depending on content type. |
+| `localPosition` | object | `ApiVector3Dto`. |
+| `localEuler` | object | `ApiVector3Dto`. |
+| `localScale` | object | `ApiVector3Dto`. |
+| `renderKind` | string | Optional render strategy. |
+| `assetFormat` | string | Optional asset format hint. |
+| `meta` | object | Stored sync metadata. |
+| `status` | string | e.g. `created`, `accepted`. |
+| `createdAtUtc` | string | ISO-8601 UTC. |
+| `updatedAtUtc` | string | ISO-8601 UTC. |
+
+### Example — success response
+
+```json
+[
+  {
+    "contentId": "content-001",
+    "targetId": "poster-a",
+    "contentType": "image",
+    "mediaUrl": "https://cdn.example.com/uploads/poster_a.jpg",
+    "localPosition": { "x": 0, "y": 0.1, "z": 0 },
+    "localEuler": { "x": 0, "y": 0, "z": 0 },
+    "localScale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+    "renderKind": "surface",
+    "assetFormat": "",
+    "meta": { "schemaVersion": "v1" },
+    "status": "accepted",
+    "createdAtUtc": "2026-04-18T12:05:01Z",
+    "updatedAtUtc": "2026-04-18T12:05:01Z"
+  }
+]
+```
+
+---
+
+## `GET /api/content/{contentId}`
+
+Returns one persisted content record by id.
+
+### Request
+
+Path:
+
+| Parameter | Description |
+|-----------|-------------|
+| `contentId` | Canonical content id (URL-encoded if needed). |
+
+No body required.
+
+### Response `200`
+
+**Content-Type:** `application/json`
+
+Body: one content detail object using the same item shape as `GET /api/content`.
+
+---
+
 ## `PATCH /api/content/{contentId}`
 
 Partial update of an existing content record. **`contentId` in the path** is authoritative; do not send a conflicting `contentId` in the body.
@@ -126,6 +208,42 @@ Body: same shape as `CreateContentResponseDto` (current state after patch), or b
   "targetId": "poster-a",
   "status": "accepted",
   "createdAtUtc": "2026-04-18T12:05:01Z"
+}
+```
+
+---
+
+## `DELETE /api/content/{contentId}`
+
+Deletes one content record by id.
+
+### Request
+
+Path:
+
+| Parameter | Description |
+|-----------|-------------|
+| `contentId` | Canonical content id (URL-encoded if needed). |
+
+No body required.
+
+### Response `200`
+
+**Content-Type:** `application/json`
+
+Minimal confirmation DTO:
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `contentId` | string | Deleted id. |
+| `status` | string | e.g. `deleted`. |
+
+### Example — success response
+
+```json
+{
+  "contentId": "content-001",
+  "status": "deleted"
 }
 ```
 

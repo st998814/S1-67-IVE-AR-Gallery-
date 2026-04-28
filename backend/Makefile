@@ -1,6 +1,18 @@
 SHELL := /bin/zsh
 
-.PHONY: db-up db-down db-logs db-reset migrate migrate-status
+.PHONY: up down logs backend-logs db-up db-down db-logs db-reset migrate migrate-status
+
+up:
+	docker compose up -d --build backend
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f backend db
+
+backend-logs:
+	docker compose logs -f backend
 
 db-up:
 	docker compose up -d db
@@ -16,7 +28,7 @@ db-reset:
 	docker compose up -d db
 
 migrate:
-	python3 backend/scripts/migrate.py up
+	python3 scripts/migrate.py up
 
 migrate-status:
-	python3 backend/scripts/migrate.py status
+	python3 scripts/migrate.py status

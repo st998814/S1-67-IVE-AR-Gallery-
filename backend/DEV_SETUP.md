@@ -1,8 +1,25 @@
-# Backend Collaboration Setup (Lightweight)
+# Backend Collaboration Setup
 
-This setup keeps day-to-day backend development local (venv) while standardizing PostgreSQL with Docker.
+The backend now implements the v1 API contracts in `docs/api/` and stores schema baselines under `backend/db/`.
 
-## 1) Prepare environment
+## Option A: one-command Docker startup
+
+From `backend/`:
+
+```bash
+make up
+make logs
+```
+
+This starts PostgreSQL, builds the Flask backend image, runs `python scripts/migrate.py up`, and exposes the API at `http://127.0.0.1:5050`.
+
+To stop:
+
+```bash
+make down
+```
+
+## Option B: local Flask with Docker PostgreSQL
 
 From repo root:
 
@@ -21,6 +38,7 @@ set +a
 ## 2) Start database
 
 ```bash
+cd backend
 make db-up
 ```
 
@@ -36,11 +54,13 @@ Migrations are tracked in the `schema_migrations` table.
 ## 4) Run backend
 
 ```bash
+cd ..
 python3 backend/app.py
 ```
 
 ## Migration conventions
 
-- Add new SQL files to `db_migrations/` with increasing numeric prefixes.
+- Keep the baseline schema in `backend/db/001_init.sql`.
+- Add new SQL files to `backend/db/migrations/` with increasing numeric prefixes.
 - Do not edit an applied migration file.
 - Create a new migration for every schema change.

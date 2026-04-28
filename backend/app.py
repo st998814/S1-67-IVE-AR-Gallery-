@@ -1,58 +1,179 @@
-import os
 import logging
+import os
 import traceback
 import uuid
-from flask import Flask, request, jsonify, send_from_directory
-from werkzeug.exceptions import NotFound
-from flask_cors import CORS
+from datetime import datetime, timezone
+
 import psycopg2
-from werkzeug.utils import secure_filename # NEW: Helps safely name files
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
+from psycopg2.extras import Json
+from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 CORS(app)
 
-# macOS 默认常占用 5000（隔空播放接收器等），对 POST 会返回 403，改用 5050。
+SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "5050"))
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", f"http://127.0.0.1:{SERVER_PORT}")
 
-# 始终使用「与 app.py 同级的 uploads」目录，不随终端当前工作目录变化
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(_BASE_DIR, 'uploads')
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE_DIR, "uploads"))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'webm'}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
+CONTENT_TYPES_REQUIRING_MEDIA = {"image", "video", "model", "model(3d)", "model3d"}
 
-# ---------------------------------------------------------------------------
-# Logging setup — writes to server.log AND console
-# ---------------------------------------------------------------------------
-LOG_FILE = os.path.join(_BASE_DIR, 'server.log')
-
+LOG_FILE = os.path.join(_BASE_DIR, "server.log")
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
+    format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
         logging.StreamHandler(),
-    ]
+    ],
 )
 logger = logging.getLogger(__name__)
 
-# Database connection details
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = int(os.environ.get("DB_PORT", "5432"))
 DB_NAME = os.environ.get("DB_NAME", "ive_ar_gallery")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASS = os.environ.get("DB_PASS", "postgres")
 
+
 def get_db_connection():
-    conn = psycopg2.connect(
+    return psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
         database=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
     )
-    return conn
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def error_response(message: str, error_code: str, status_code: int, details=None):
+    body = {"message": message, "errorCode": error_code}
+    if details is not None:
+        body["details"] = details
+    return jsonify(body), status_code
+
+
+def _row_timestamp_to_iso(value) -> str:
+    if value is None:
+        return utc_now_iso()
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return str(value)
+
+
+def _require_json_body():
+    if not request.is_json:
+        return None, error_response("Request body must be application/json.", "VALIDATION_ERROR", 400)
+    data = request.get_json(silent=True)
+    if data is None or not isinstance(data, dict):
+        return None, error_response("Request body must be a JSON object.", "VALIDATION_ERROR", 400)
+    return data, None
+
+
+def _clean_text(data: dict, field: str, required: bool = False, default: str = ""):
+    value = data.get(field, default)
+    if value is None:
+        value = default
+    if not isinstance(value, str):
+        return None, f"{field} must be a string."
+    value = value.strip()
+    if required and not value:
+        return None, f"{field} is required."
+    return value, None
+
+
+def _parse_vector(data: dict, field: str, required: bool = True, default=None):
+    if default is None:
+        default = {"x": 0.0, "y": 0.0, "z": 0.0}
+    value = data.get(field)
+    if value is None:
+        if required:
+            return None, f"{field} is required."
+        value = default
+    if not isinstance(value, dict):
+        return None, f"{field} must be an object with x, y, z."
+    try:
+        return (
+            float(value.get("x", default["x"])),
+            float(value.get("y", default["y"])),
+            float(value.get("z", default["z"])),
+        ), None
+    except (TypeError, ValueError):
+        return None, f"{field}.x/y/z must be numbers."
+
+
+def _parse_meta(data: dict):
+    value = data.get("meta") or {}
+    if not isinstance(value, dict):
+        return None, "meta must be an object."
+    return value, None
+
+
+def _target_response(row, status_override=None):
+    return {
+        "targetId": row[0],
+        "targetName": row[1],
+        "displayLabel": row[2],
+        "status": status_override or row[4],
+        "createdAtUtc": _row_timestamp_to_iso(row[5]),
+        "targetImageUrl": row[3],
+    }
+
+
+def _content_response(row, status_override=None):
+    return {
+        "contentId": row[0],
+        "targetId": row[1],
+        "status": status_override or row[2],
+        "createdAtUtc": _row_timestamp_to_iso(row[3]),
+    }
+
+
+def _vector_response(x, y, z):
+    return {"x": float(x), "y": float(y), "z": float(z)}
+
+
+def _content_detail_response(row):
+    return {
+        "contentId": row[0],
+        "targetId": row[1],
+        "contentType": row[2],
+        "mediaUrl": row[3],
+        "localPosition": _vector_response(row[4], row[5], row[6]),
+        "localEuler": _vector_response(row[7], row[8], row[9]),
+        "localScale": _vector_response(row[10], row[11], row[12]),
+        "renderKind": row[13],
+        "assetFormat": row[14],
+        "meta": row[15] or {},
+        "status": row[16],
+        "createdAtUtc": _row_timestamp_to_iso(row[17]),
+        "updatedAtUtc": _row_timestamp_to_iso(row[18]),
+    }
+
+
+CONTENT_DETAIL_SELECT = """
+    SELECT
+        content_id, target_id, content_type, media_url,
+        local_position_x, local_position_y, local_position_z,
+        local_euler_x, local_euler_y, local_euler_z,
+        local_scale_x, local_scale_y, local_scale_z,
+        render_kind, asset_format, meta, status, created_at_utc, updated_at_utc
+    FROM contents
+"""
 
 
 def _guess_ext_from_mimetype(mimetype: str) -> str:
@@ -110,178 +231,486 @@ def _resolve_safe_upload_filename(file_storage) -> str:
         ext = _guess_ext_from_mimetype(getattr(file_storage, "mimetype", "")) or _guess_ext_from_magic(file_storage)
 
     final_name = f"{stem}{ext}" if ext else stem
-
-    # Avoid accidental overwrite for same file name.
     candidate = final_name
     base_stem, base_ext = os.path.splitext(final_name)
-    while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], candidate)):
+    while os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], candidate)):
         candidate = f"{base_stem}-{uuid.uuid4().hex[:8]}{base_ext}"
 
     return candidate
 
 
-def _table_has_column(conn, table_name: str, column_name: str) -> bool:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s AND column_name = %s
-        LIMIT 1
-        """,
-        (table_name.lower(), column_name.lower()),
-    )
-    ok = cur.fetchone() is not None
-    cur.close()
-    return ok
-
-
-# ---------------------------------------------------------------------------
-# Global error handlers — catch anything Flask doesn't handle
-# ---------------------------------------------------------------------------
 @app.errorhandler(404)
 def not_found(e):
     logger.warning("404 Not Found: %s %s", request.method, request.path)
-    return jsonify({"error": "Endpoint not found"}), 404
+    return error_response("Endpoint not found.", "NOT_FOUND", 404)
 
 
 @app.errorhandler(405)
 def method_not_allowed(e):
     logger.warning("405 Method Not Allowed: %s %s", request.method, request.path)
-    return jsonify({"error": "Method not allowed"}), 405
+    return error_response("Method not allowed.", "VALIDATION_ERROR", 405)
 
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(e):
-    logger.error(
-        "Unhandled exception on %s %s\n%s",
-        request.method, request.path, traceback.format_exc()
-    )
-    return jsonify({"error": "Internal server error", "detail": str(e)}), 500
+    if isinstance(e, HTTPException):
+        return error_response(e.description or "Request failed.", "VALIDATION_ERROR", e.code or 500)
+    logger.error("Unhandled exception on %s %s\n%s", request.method, request.path, traceback.format_exc())
+    return error_response("Internal server error.", "SERVER_ERROR", 500)
 
 
-# --- File Upload Endpoint ---
-@app.route('/api/upload', methods=['POST'])
+@app.route("/api/upload", methods=["POST"])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    if "file" not in request.files:
+        return error_response("No file part named 'file'.", "VALIDATION_ERROR", 400)
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return error_response("No selected file.", "VALIDATION_ERROR", 400)
 
-    # --- NEW CHECK START ---
-    # Extract the extension and check if it's allowed
-    ext = os.path.splitext(file.filename)[1].lower().replace('.', '')
+    ext = os.path.splitext(file.filename)[1].lower().replace(".", "")
     if ext not in ALLOWED_EXTENSIONS:
-        logger.warning("Upload blocked: Illegal file type '%s'", ext)
-        return jsonify({"error": f"File type .{ext} is not allowed"}), 400
-    # --- NEW CHECK END ---
+        logger.warning("Upload blocked: illegal file type '%s'", ext)
+        return error_response(f"File type .{ext} is not allowed.", "VALIDATION_ERROR", 415)
 
     try:
         filename = _resolve_safe_upload_filename(file)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(save_path)
-        logger.info("File uploaded: %s (mimetype=%s)", filename, getattr(file, "mimetype", ""))
+        size_bytes = os.path.getsize(save_path)
+        mime_type = getattr(file, "mimetype", "") or "application/octet-stream"
+        uploaded_at = utc_now_iso()
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
 
-        file_url = f"http://127.0.0.1:{SERVER_PORT}/uploads/{filename}"
-        return jsonify({"url": file_url}), 201
-    except OSError as e:
-        logger.error("File save failed for '%s': %s", file.filename, e)
-        return jsonify({"error": "Failed to save file", "detail": str(e)}), 500
-    except Exception as e:
-        logger.error("Unexpected error in upload_file:\n%s", traceback.format_exc())
-        return jsonify({"error": "Internal server error", "detail": str(e)}), 500
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO uploads (file_name, stored_file_name, mime_type, size_bytes, url)
+                        VALUES (%s, %s, %s, %s, %s);
+                        """,
+                        (file.filename, filename, mime_type, size_bytes, file_url),
+                    )
+        except psycopg2.Error:
+            logger.warning("Upload saved but metadata insert failed:\n%s", traceback.format_exc())
 
-
-# --- Endpoint to let Unity download the images to view them ---
-@app.route('/uploads/<filename>')
-def serve_file(filename):
-    try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-    except (FileNotFoundError, NotFound):
-        logger.warning("Requested file not found: %s", filename)
-        return jsonify({"error": f"File '{filename}' not found"}), 404
-    except Exception as e:
-        logger.error("Unexpected error serving file '%s':\n%s", filename, traceback.format_exc())
-        return jsonify({"error": "Internal server error", "detail": str(e)}), 500
-
-
-# --- Database Endpoint ---
-@app.route('/api/content', methods=['POST'])
-def create_content():
-    if not request.is_json or request.json is None:
-        return jsonify({"error": "需要 application/json 请求体"}), 400
-
-    new_data = request.json
-    required = ("ContentType", "PosX", "PosY", "PosZ", "Scale", "MediaURL")
-    missing = [k for k in required if k not in new_data]
-    if missing:
-        return jsonify({"error": f"缺少字段: {', '.join(missing)}"}), 400
-
-    target_id = (new_data.get("TargetId") or "").strip()
-
-    conn = None
-    cur = None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        if _table_has_column(conn, "ar_content", "targetid"):
-            cur.execute(
-                "INSERT INTO AR_Content (ContentType, PosX, PosY, PosZ, Scale, MediaURL, TargetId) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;",
-                (
-                    new_data["ContentType"],
-                    new_data["PosX"],
-                    new_data["PosY"],
-                    new_data["PosZ"],
-                    new_data["Scale"],
-                    new_data["MediaURL"],
-                    target_id,
-                ),
-            )
-        else:
-            cur.execute(
-                "INSERT INTO AR_Content (ContentType, PosX, PosY, PosZ, Scale, MediaURL) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;",
-                (
-                    new_data["ContentType"],
-                    new_data["PosX"],
-                    new_data["PosY"],
-                    new_data["PosZ"],
-                    new_data["Scale"],
-                    new_data["MediaURL"],
-                ),
-            )
-
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        logger.info("AR content created with id=%s, TargetId='%s'", new_id, target_id)
-        return jsonify({"id": new_id, "message": "Content saved successfully"}), 201
-
-    except psycopg2.Error as e:
-        if conn is not None:
-            conn.rollback()
-        logger.error("Database error in create_content (pgcode=%s): %s", getattr(e, 'pgcode', None), e)
+        logger.info("File uploaded: %s (mimetype=%s)", filename, mime_type)
         return jsonify(
             {
-                "error": str(e),
-                "pgcode": getattr(e, "pgcode", None),
-                "hint": "常见原因：表 AR_Content 不存在、列类型不匹配，或需执行 db_migrations/001_add_target_id.sql 以支持 TargetId。",
+                "url": file_url,
+                "fileName": file.filename,
+                "mimeType": mime_type,
+                "sizeBytes": size_bytes,
+                "uploadedAtUtc": uploaded_at,
             }
-        ), 500
-
-    except Exception as e:
-        if conn is not None:
-            conn.rollback()
-        logger.error("Unexpected error in create_content:\n%s", traceback.format_exc())
-        return jsonify({"error": "Internal server error", "detail": str(e)}), 500
-
-    finally:
-        if cur is not None:
-            cur.close()
-        if conn is not None:
-            conn.close()
+        ), 201
+    except OSError as e:
+        logger.error("File save failed for '%s': %s", file.filename, e)
+        return error_response("Failed to save file.", "SERVER_ERROR", 500, str(e))
 
 
-if __name__ == '__main__':
-    logger.info("Starting AR Gallery backend on port %s", SERVER_PORT)
-    app.run(debug=True, port=SERVER_PORT)
+@app.route("/uploads/<filename>")
+def serve_file(filename):
+    try:
+        return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    except (FileNotFoundError, NotFound):
+        logger.warning("Requested file not found: %s", filename)
+        return error_response(f"File '{filename}' not found.", "NOT_FOUND", 404)
+
+
+@app.route("/api/targets", methods=["POST"])
+def create_target():
+    data, err = _require_json_body()
+    if err:
+        return err
+
+    target_id, err_msg = _clean_text(data, "targetId", required=True)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    target_name, err_msg = _clean_text(data, "targetName", required=True)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    display_label, err_msg = _clean_text(data, "displayLabel", default=target_id)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    target_image_url, err_msg = _clean_text(data, "targetImageUrl")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_position, err_msg = _parse_vector(data, "localPosition")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_euler, err_msg = _parse_vector(data, "localEuler")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_scale, err_msg = _parse_vector(data, "localScale", default={"x": 1.0, "y": 1.0, "z": 1.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    meta, err_msg = _parse_meta(data)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
+                existed = cur.fetchone() is not None
+                status = "accepted" if existed else "created"
+                cur.execute(
+                    """
+                    INSERT INTO targets (
+                        target_id, target_name, display_label, target_image_url,
+                        local_position_x, local_position_y, local_position_z,
+                        local_euler_x, local_euler_y, local_euler_z,
+                        local_scale_x, local_scale_y, local_scale_z,
+                        meta, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (target_id) DO UPDATE SET
+                        target_name = EXCLUDED.target_name,
+                        display_label = EXCLUDED.display_label,
+                        target_image_url = EXCLUDED.target_image_url,
+                        local_position_x = EXCLUDED.local_position_x,
+                        local_position_y = EXCLUDED.local_position_y,
+                        local_position_z = EXCLUDED.local_position_z,
+                        local_euler_x = EXCLUDED.local_euler_x,
+                        local_euler_y = EXCLUDED.local_euler_y,
+                        local_euler_z = EXCLUDED.local_euler_z,
+                        local_scale_x = EXCLUDED.local_scale_x,
+                        local_scale_y = EXCLUDED.local_scale_y,
+                        local_scale_z = EXCLUDED.local_scale_z,
+                        meta = EXCLUDED.meta,
+                        status = EXCLUDED.status,
+                        updated_at_utc = NOW()
+                    RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc;
+                    """,
+                    (
+                        target_id,
+                        target_name,
+                        display_label or target_id,
+                        target_image_url,
+                        *local_position,
+                        *local_euler,
+                        *local_scale,
+                        Json(meta),
+                        status,
+                    ),
+                )
+                row = cur.fetchone()
+                return jsonify(_target_response(row, status)), 201 if not existed else 200
+    except psycopg2.Error as e:
+        logger.error("Database error in create_target (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while saving target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/targets", methods=["GET"])
+def list_targets():
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc
+                    FROM targets
+                    ORDER BY created_at_utc ASC, target_id ASC;
+                    """
+                )
+                return jsonify([_target_response(row) for row in cur.fetchall()])
+    except psycopg2.Error as e:
+        logger.error("Database error in list_targets (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while listing targets.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/targets/<path:target_id>", methods=["DELETE"])
+def delete_target(target_id):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM targets WHERE target_id = %s RETURNING target_id;", (target_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return error_response(f"Target '{target_id}' was not found.", "NOT_FOUND", 404)
+                return jsonify({"targetId": row[0], "status": "deleted"})
+    except psycopg2.Error as e:
+        logger.error("Database error in delete_target (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while deleting target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/content", methods=["POST"])
+def create_content():
+    data, err = _require_json_body()
+    if err:
+        return err
+
+    content_id, err_msg = _clean_text(data, "contentId", required=True)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    target_id, err_msg = _clean_text(data, "targetId", required=True)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    content_type, err_msg = _clean_text(data, "contentType", required=True)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    media_url, err_msg = _clean_text(data, "mediaUrl")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    if content_type.lower() in CONTENT_TYPES_REQUIRING_MEDIA and not media_url:
+        return error_response("mediaUrl is required for this contentType.", "VALIDATION_ERROR", 400)
+    local_position, err_msg = _parse_vector(data, "localPosition")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_euler, err_msg = _parse_vector(data, "localEuler")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_scale, err_msg = _parse_vector(data, "localScale", default={"x": 1.0, "y": 1.0, "z": 1.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    render_kind, err_msg = _clean_text(data, "renderKind")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    asset_format, err_msg = _clean_text(data, "assetFormat")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    meta, err_msg = _parse_meta(data)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
+                if cur.fetchone() is None:
+                    return error_response(f"Target '{target_id}' was not found.", "NOT_FOUND", 404)
+
+                cur.execute("SELECT 1 FROM contents WHERE content_id = %s;", (content_id,))
+                existed = cur.fetchone() is not None
+                status = "accepted" if existed else "created"
+                cur.execute(
+                    """
+                    INSERT INTO contents (
+                        content_id, target_id, content_type, media_url,
+                        local_position_x, local_position_y, local_position_z,
+                        local_euler_x, local_euler_y, local_euler_z,
+                        local_scale_x, local_scale_y, local_scale_z,
+                        render_kind, asset_format, meta, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (content_id) DO UPDATE SET
+                        target_id = EXCLUDED.target_id,
+                        content_type = EXCLUDED.content_type,
+                        media_url = EXCLUDED.media_url,
+                        local_position_x = EXCLUDED.local_position_x,
+                        local_position_y = EXCLUDED.local_position_y,
+                        local_position_z = EXCLUDED.local_position_z,
+                        local_euler_x = EXCLUDED.local_euler_x,
+                        local_euler_y = EXCLUDED.local_euler_y,
+                        local_euler_z = EXCLUDED.local_euler_z,
+                        local_scale_x = EXCLUDED.local_scale_x,
+                        local_scale_y = EXCLUDED.local_scale_y,
+                        local_scale_z = EXCLUDED.local_scale_z,
+                        render_kind = EXCLUDED.render_kind,
+                        asset_format = EXCLUDED.asset_format,
+                        meta = EXCLUDED.meta,
+                        status = EXCLUDED.status,
+                        updated_at_utc = NOW()
+                    RETURNING content_id, target_id, status, created_at_utc;
+                    """,
+                    (
+                        content_id,
+                        target_id,
+                        content_type,
+                        media_url,
+                        *local_position,
+                        *local_euler,
+                        *local_scale,
+                        render_kind,
+                        asset_format,
+                        Json(meta),
+                        status,
+                    ),
+                )
+                row = cur.fetchone()
+                return jsonify(_content_response(row, status)), 201 if not existed else 200
+    except psycopg2.Error as e:
+        logger.error("Database error in create_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while saving content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/content", methods=["GET"])
+def list_content():
+    target_id = (request.args.get("targetId") or "").strip()
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if target_id:
+                    cur.execute(
+                        CONTENT_DETAIL_SELECT
+                        + """
+                        WHERE target_id = %s
+                        ORDER BY created_at_utc ASC, content_id ASC;
+                        """,
+                        (target_id,),
+                    )
+                else:
+                    cur.execute(
+                        CONTENT_DETAIL_SELECT
+                        + """
+                        ORDER BY created_at_utc ASC, content_id ASC;
+                        """
+                    )
+                return jsonify([_content_detail_response(row) for row in cur.fetchall()])
+    except psycopg2.Error as e:
+        logger.error("Database error in list_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while listing content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/content/<path:content_id>", methods=["GET"])
+def get_content(content_id):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(CONTENT_DETAIL_SELECT + " WHERE content_id = %s;", (content_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return error_response(f"Content '{content_id}' was not found.", "NOT_FOUND", 404)
+                return jsonify(_content_detail_response(row))
+    except psycopg2.Error as e:
+        logger.error("Database error in get_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while loading content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/content/<path:content_id>", methods=["PATCH"])
+def patch_content(content_id):
+    data, err = _require_json_body()
+    if err:
+        return err
+    if "contentId" in data and data.get("contentId") != content_id:
+        return error_response("contentId in body must not conflict with the path.", "VALIDATION_ERROR", 400)
+    if not data:
+        return error_response("Patch body must include at least one field.", "VALIDATION_ERROR", 400)
+
+    allowed_fields = {
+        "targetId",
+        "contentType",
+        "mediaUrl",
+        "localPosition",
+        "localEuler",
+        "localScale",
+        "renderKind",
+        "assetFormat",
+        "meta",
+    }
+    unknown = [key for key in data if key not in allowed_fields and key != "contentId"]
+    if unknown:
+        return error_response(f"Unsupported patch field(s): {', '.join(unknown)}.", "VALIDATION_ERROR", 400)
+
+    updates = []
+    params = []
+    target_id = None
+    content_type = None
+    media_url = None
+
+    if "targetId" in data:
+        target_id, err_msg = _clean_text(data, "targetId", required=True)
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("target_id = %s")
+        params.append(target_id)
+    if "contentType" in data:
+        content_type, err_msg = _clean_text(data, "contentType", required=True)
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("content_type = %s")
+        params.append(content_type)
+    if "mediaUrl" in data:
+        media_url, err_msg = _clean_text(data, "mediaUrl")
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("media_url = %s")
+        params.append(media_url)
+    for api_field, columns, default in (
+        ("localPosition", ("local_position_x", "local_position_y", "local_position_z"), {"x": 0.0, "y": 0.0, "z": 0.0}),
+        ("localEuler", ("local_euler_x", "local_euler_y", "local_euler_z"), {"x": 0.0, "y": 0.0, "z": 0.0}),
+        ("localScale", ("local_scale_x", "local_scale_y", "local_scale_z"), {"x": 1.0, "y": 1.0, "z": 1.0}),
+    ):
+        if api_field in data:
+            vector, err_msg = _parse_vector(data, api_field, default=default)
+            if err_msg:
+                return error_response(err_msg, "VALIDATION_ERROR", 400)
+            for column, component in zip(columns, vector):
+                updates.append(f"{column} = %s")
+                params.append(component)
+    if "renderKind" in data:
+        render_kind, err_msg = _clean_text(data, "renderKind")
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("render_kind = %s")
+        params.append(render_kind)
+    if "assetFormat" in data:
+        asset_format, err_msg = _clean_text(data, "assetFormat")
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("asset_format = %s")
+        params.append(asset_format)
+    if "meta" in data:
+        meta, err_msg = _parse_meta(data)
+        if err_msg:
+            return error_response(err_msg, "VALIDATION_ERROR", 400)
+        updates.append("meta = %s")
+        params.append(Json(meta))
+
+    if not updates:
+        return error_response("Patch body must include at least one patchable field.", "VALIDATION_ERROR", 400)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT content_type, media_url FROM contents WHERE content_id = %s;", (content_id,))
+                existing = cur.fetchone()
+                if existing is None:
+                    return error_response(f"Content '{content_id}' was not found.", "NOT_FOUND", 404)
+
+                final_content_type = content_type or existing[0]
+                final_media_url = media_url if media_url is not None else existing[1]
+                if final_content_type.lower() in CONTENT_TYPES_REQUIRING_MEDIA and not final_media_url:
+                    return error_response("mediaUrl is required for this contentType.", "VALIDATION_ERROR", 400)
+
+                if target_id is not None:
+                    cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
+                    if cur.fetchone() is None:
+                        return error_response(f"Target '{target_id}' was not found.", "NOT_FOUND", 404)
+
+                params.append(content_id)
+                cur.execute(
+                    f"""
+                    UPDATE contents
+                    SET {', '.join(updates)}, status = 'accepted', updated_at_utc = NOW()
+                    WHERE content_id = %s
+                    RETURNING content_id, target_id, status, created_at_utc;
+                    """,
+                    params,
+                )
+                return jsonify(_content_response(cur.fetchone(), "accepted"))
+    except psycopg2.Error as e:
+        logger.error("Database error in patch_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while updating content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/content/<path:content_id>", methods=["DELETE"])
+def delete_content(content_id):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM contents WHERE content_id = %s RETURNING content_id;", (content_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return error_response(f"Content '{content_id}' was not found.", "NOT_FOUND", 404)
+                return jsonify({"contentId": row[0], "status": "deleted"})
+    except psycopg2.Error as e:
+        logger.error("Database error in delete_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while deleting content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+if __name__ == "__main__":
+    logger.info("Starting AR Gallery backend on %s:%s", SERVER_HOST, SERVER_PORT)
+    app.run(debug=True, host=SERVER_HOST, port=SERVER_PORT)
