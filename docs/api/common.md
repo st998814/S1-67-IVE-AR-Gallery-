@@ -32,6 +32,26 @@ Example error codes (non-exhaustive; backend owns the canonical list): `VALIDATI
 
 ---
 
+## Status field semantics (for frontend flow control)
+
+Some endpoints (notably target create/publish) return both transport status and domain status fields.
+
+Use them distinctly:
+
+- HTTP status code indicates transport/request outcome.
+- Body `status` indicates endpoint-level processing outcome (`created`, `accepted`, `failed`, etc.).
+- Body lifecycle fields (for target flows), especially `publishStatus`, indicate publish state machine.
+
+For target-scene gate decisions, frontend should rely on:
+
+- `publishStatus`
+- `cloudTargetId`
+- `lastPublishError` (when available)
+
+not only on HTTP `200`.
+
+---
+
 ## `ApiVector3Dto` (Vector3)
 
 Used for local position, Euler rotation (degrees), and scale in authoring/runtime snapshots.
@@ -72,6 +92,7 @@ Optional on requests where noted; helps idempotency and tracing.
 
 - JSON property names: **camelCase** (matches Unity `JsonUtility` field names as serialized).
 - Identifiers: **`targetId`**, **`contentId`** are canonical keys across APIs.
+- Target publish lifecycle strings: `draft`, `publishing`, `published`, `failed`.
 - Timestamps: **ISO-8601 UTC** (e.g. `2026-04-18T12:00:00Z`).
 - Enum-like strings: lowercase with hyphens where already established (e.g. `poster-a`); `contentType` values such as `image`, `video`, `text`, `empty`, `model(3D)` as agreed with backend.
 

@@ -21,7 +21,15 @@ public interface IApiClient
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
         float timeoutSeconds = 20f);
 
-    // Future extension (DEV-94+):
-    // IApiRequestHandle GetTargets(...)
-    // IApiRequestHandle GetContents(...)
+    IApiRequestHandle PublishTarget(
+        string targetId,
+        PublishTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds = 20f);
+
+    IApiRequestHandle RetryPublishTarget(
+        string targetId,
+        PublishTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds = 20f);
 }

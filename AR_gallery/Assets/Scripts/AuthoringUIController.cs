@@ -83,6 +83,33 @@ public class AuthoringUIController : MonoBehaviour
         TargetImage
     }
 
+    private bool IsWorkspaceReadyForAuthoring(bool showBlockedMessage)
+    {
+        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext workspace) || workspace == null)
+            return true;
+
+        if (workspace.IsReadyForAuthoring())
+            return true;
+
+        if (showBlockedMessage)
+        {
+            ShowError("Target setup is pending. Complete target instantiation before authoring.");
+            Debug.LogWarning("AuthoringUIController: blocked action while workspace setup is pending.");
+        }
+
+        return false;
+    }
+
+    private void RefreshWorkspaceGuardUiState()
+    {
+        bool ready = IsWorkspaceReadyForAuthoring(showBlockedMessage: false);
+        if (saveButton != null) saveButton.SetEnabled(ready);
+        if (browseButton != null) browseButton.SetEnabled(ready);
+        if (spawnTextButton != null) spawnTextButton.SetEnabled(ready);
+        if (createTargetButton != null) createTargetButton.SetEnabled(ready);
+        if (browseTargetImageButton != null) browseTargetImageButton.SetEnabled(ready);
+    }
+
     private sealed class ContentDraftState
     {
         public string draftId;
@@ -169,6 +196,7 @@ public class AuthoringUIController : MonoBehaviour
             imageTargetDropdown.RegisterValueChangedCallback(OnImageTargetDropdownChanged);
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged += OnManagerActiveTargetChanged;
+        RefreshWorkspaceGuardUiState();
     }
 
     void OnDisable()
@@ -329,6 +357,9 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>Create and register a new runtime target from UI inputs.</summary>
     private void OnCreateTargetButtonClicked()
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         targetSelectionManager = ResolveTargetSelectionManager();
         apiClient = ResolveApiClient();
         spawnerManager ??= BuildSpawnerManager();
@@ -712,6 +743,9 @@ public class AuthoringUIController : MonoBehaviour
     // --- NEW: Text Spawning ---
     void OnSpawnTextButtonClicked()
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         spawnerManager ??= BuildSpawnerManager();
         string textToDisplay = spawningTextInput.value;
 
@@ -737,12 +771,18 @@ public class AuthoringUIController : MonoBehaviour
 
     void OnBrowseButtonClicked()
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         pendingUploadPurpose = UploadPurpose.Content;
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov", false);
     }
 
     void OnBrowseTargetImageButtonClicked()
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         pendingUploadPurpose = UploadPurpose.TargetImage;
         if (createTargetImageUrlInput != null)
             createTargetImageUrlInput.value = "Uploading target image...";
@@ -752,6 +792,9 @@ public class AuthoringUIController : MonoBehaviour
     // This runs automatically when an image is selected
     private void OnFilesOpened(FrostweepGames.Plugins.WebGLFileBrowser.File[] files)
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         if (files == null || files.Length == 0)
             return;
 
@@ -1049,6 +1092,9 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
     void OnSaveButtonClicked()
     {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
         if (isSaveInProgress)
             return;
 

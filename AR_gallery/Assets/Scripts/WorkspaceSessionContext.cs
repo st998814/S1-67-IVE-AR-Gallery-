@@ -3,6 +3,12 @@ using UnityEngine;
 
 namespace ARGallery.AppFlow
 {
+    public enum WorkspaceSetupState
+    {
+        PendingTargetSetup = 0,
+        Ready = 1
+    }
+
     /// <summary>
     /// Runtime payload passed from workspace switcher into authoring scene.
     /// A workspace is defined as one target context in this phase.
@@ -15,6 +21,7 @@ namespace ARGallery.AppFlow
         public string targetId = "";
         public bool isNewWorkspace;
         public string thumbnailKey = "";
+        public WorkspaceSetupState setupState = WorkspaceSetupState.PendingTargetSetup;
 
         public WorkspaceSessionContext Clone()
         {
@@ -24,13 +31,19 @@ namespace ARGallery.AppFlow
                 workspaceName = workspaceName,
                 targetId = targetId,
                 isNewWorkspace = isNewWorkspace,
-                thumbnailKey = thumbnailKey
+                thumbnailKey = thumbnailKey,
+                setupState = setupState
             };
         }
 
         public bool IsValid()
         {
             return !string.IsNullOrWhiteSpace(workspaceId);
+        }
+
+        public bool IsReadyForAuthoring()
+        {
+            return setupState == WorkspaceSetupState.Ready;
         }
     }
 }
