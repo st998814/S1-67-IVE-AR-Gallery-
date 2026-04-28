@@ -23,6 +23,8 @@ namespace ARGallery.AppFlow
             if (!workspace.IsReadyForAuthoring())
             {
                 Debug.Log("AuthoringWorkspaceEntry: Workspace setup is pending. Authoring entry is blocked.");
+                if (!SceneTransitionService.IsTransitioning)
+                    SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
                 return;
             }
 
