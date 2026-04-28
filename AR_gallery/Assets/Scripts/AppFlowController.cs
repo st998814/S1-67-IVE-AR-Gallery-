@@ -11,6 +11,7 @@ namespace ARGallery.AppFlow
     {
         public const string LandingSceneName = "LandingScene";
         public const string WorkspaceSwitcherSceneName = "WorkspaceSwitcherScene";
+        public const string TargetInstantiationSceneName = "TargetInstantiationScene";
         public const string AuthoringSceneName = "AuthoringToolScene";
 
         private static WorkspaceSessionContext currentWorkspace;
@@ -75,9 +76,19 @@ namespace ARGallery.AppFlow
             {
                 workspaceId = generatedId,
                 workspaceName = normalizedName,
-                targetId = generatedId,
-                isNewWorkspace = true
+                targetId = "",
+                isNewWorkspace = true,
+                setupState = WorkspaceSetupState.PendingTargetSetup
             };
+        }
+
+        public static void MarkWorkspaceReady(string targetId)
+        {
+            if (currentWorkspace == null)
+                return;
+
+            currentWorkspace.targetId = string.IsNullOrWhiteSpace(targetId) ? currentWorkspace.targetId : targetId.Trim();
+            currentWorkspace.setupState = WorkspaceSetupState.Ready;
         }
     }
 }

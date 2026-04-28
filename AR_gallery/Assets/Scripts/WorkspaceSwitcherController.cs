@@ -251,7 +251,7 @@ namespace ARGallery.AppFlow
 
             WorkspaceSessionContext newWorkspace = AppFlowController.BuildNewWorkspaceSession("New Workspace");
             AppFlowController.SetWorkspaceSession(newWorkspace);
-            SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
+            SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
         }
 
         private void OnEditButtonClicked()
@@ -261,6 +261,7 @@ namespace ARGallery.AppFlow
 
             WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)].Clone();
             selected.isNewWorkspace = false;
+            selected.setupState = WorkspaceSetupState.Ready;
             AppFlowController.SetWorkspaceSession(selected);
             SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
         }
