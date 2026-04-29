@@ -7,6 +7,18 @@ using UnityEngine.UIElements;
 
 namespace ARGallery.CameraControl
 {
+    public readonly struct RuntimeCameraPose
+    {
+        public readonly Vector3 position;
+        public readonly Quaternion rotation;
+
+        public RuntimeCameraPose(Vector3 position, Quaternion rotation)
+        {
+            this.position = position;
+            this.rotation = rotation;
+        }
+    }
+
     public sealed class RuntimeCameraController : MonoBehaviour
     {
         [Header("Movement")]
@@ -28,13 +40,18 @@ namespace ARGallery.CameraControl
         [Tooltip("If empty, found at runtime via FindFirstObjectByType.")]
         [SerializeField] private AuthoringUIController authoringUI;
         [SerializeField] private float interactionRayDistance = 1000f;
+        [SerializeField] private bool clampHeightOnPoseApply = true;
 
         private float _yaw;
         private float _pitch;
         private bool _isLooking;
+        private RuntimeCameraPose _startupPose;
+        private RuntimeCameraPose _lastAppliedPose;
+        private bool _hasLastAppliedPose;
 
         private void Awake()
         {
+            _startupPose = new RuntimeCameraPose(transform.position, transform.rotation);
             Vector3 euler = transform.rotation.eulerAngles;
             _yaw = euler.y;
             _pitch = NormalizePitch(euler.x);
@@ -232,6 +249,55 @@ namespace ARGallery.CameraControl
             while (p > 180f) p -= 360f;
             while (p < -180f) p += 360f;
             return p;
+        }
+
+        /// <summary>
+        /// Applies an external camera pose and synchronizes runtime yaw/pitch
+        /// so the next right-mouse look continues smoothly.
+        /// </summary>
+        public void ApplyPose(RuntimeCameraPose pose, bool rememberAsResetPose = true)
+        {
+            if (_isLooking)
+                EndLook();
+
+            transform.SetPositionAndRotation(pose.position, pose.rotation);
+            if (clampHeightOnPoseApply)
+                ClampHeight();
+
+            SyncAnglesFromTransform();
+            if (rememberAsResetPose)
+            {
+                _lastAppliedPose = new RuntimeCameraPose(transform.position, transform.rotation);
+                _hasLastAppliedPose = true;
+            }
+        }
+
+        public void ApplyPose(Vector3 position, Quaternion rotation, bool rememberAsResetPose = true)
+        {
+            ApplyPose(new RuntimeCameraPose(position, rotation), rememberAsResetPose);
+        }
+
+        public bool TryResetToLastAppliedPose()
+        {
+            if (!_hasLastAppliedPose)
+                return false;
+
+            ApplyPose(_lastAppliedPose, rememberAsResetPose: false);
+            return true;
+        }
+
+        public void ResetToStartupPose()
+        {
+            ApplyPose(_startupPose, rememberAsResetPose: false);
+        }
+
+        private void SyncAnglesFromTransform()
+        {
+            Vector3 euler = transform.rotation.eulerAngles;
+            _yaw = euler.y;
+            _pitch = NormalizePitch(euler.x);
+            _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
+            transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
         }
     }
 }
