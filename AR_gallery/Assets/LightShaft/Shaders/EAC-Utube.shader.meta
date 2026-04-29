@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: c4397d67dc66a104687aebc6093edf4b
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Shaders/EAC-Utube.shader
+  uploadId: 857378

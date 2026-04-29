@@ -1,0 +1,20 @@
+fileFormatVersion: 2
+guid: 606026b32907df249b21d835cf54b3dd
+timeCreated: 1518971429
+licenseType: Store
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/CustomYoutubePlayer/Examples/Scripts/Spinner.cs
+  uploadId: 857378

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 87fc08d9533c69d4b94db5f4b9e2605b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Scripts/YoutubeSimplified.cs
+  uploadId: 857378

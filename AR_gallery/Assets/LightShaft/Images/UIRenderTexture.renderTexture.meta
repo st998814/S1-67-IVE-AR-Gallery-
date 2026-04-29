@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d044847f451ea864da964c8053cb6ad9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 8400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Images/UIRenderTexture.renderTexture
+  uploadId: 857378

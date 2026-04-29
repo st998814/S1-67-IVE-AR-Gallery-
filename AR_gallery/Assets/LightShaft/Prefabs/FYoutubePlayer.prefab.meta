@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: f2253547a45e1e348b003191599f21e4
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Prefabs/FYoutubePlayer.prefab
+  uploadId: 857378

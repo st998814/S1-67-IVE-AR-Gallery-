@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ddb52cc5b6f2d6347b30c071d4a7316a
+timeCreated: 1507827903
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/YoutubeAPI/Scenes/PlaylistDemo.unity
+  uploadId: 857378

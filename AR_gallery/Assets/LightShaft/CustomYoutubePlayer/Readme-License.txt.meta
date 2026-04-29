@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: d5e738e4cee517d4b91e9a5c15810b59
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/CustomYoutubePlayer/Readme-License.txt
+  uploadId: 857378

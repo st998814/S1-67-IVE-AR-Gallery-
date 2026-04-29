@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 70cf7ee82ce132640bfe59841e19e851
+timeCreated: 1511796139
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Scripts/VideoController/Editor/YoutubeAddPlayerToSceneEditor.cs
+  uploadId: 857378

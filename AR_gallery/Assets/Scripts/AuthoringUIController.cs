@@ -778,6 +778,8 @@ public class AuthoringUIController : MonoBehaviour
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov", false);
     }
 
+
+
     void OnBrowseTargetImageButtonClicked()
     {
         if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
@@ -1358,6 +1360,54 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         if (!string.IsNullOrWhiteSpace(draft.targetId))
             return draft.targetId;
         return GetActiveTargetIdForSave();
+    }
+
+
+private void OnSpawnYoutubeClicked()
+    {
+        string url = youtubeUrlInput?.value;
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            Debug.LogWarning("YouTube URL is empty.");
+            return;
+        }
+
+        // 1. Get the current active target ID using your existing helper method
+        string currentTargetId = GetActiveTargetIdForSave();
+
+        // 2. Instantiate the Video Prefab directly into the scene
+        GameObject spawnedObj = Instantiate(videoPrefab);
+        
+        // 3. Create the draft state, explicitly marking it as a YouTube link
+        var newDraft = new ContentDraftState
+        {
+            draftId = System.Guid.NewGuid().ToString(),
+            contentType = SpawnContentType.Video,
+            contentTransform = spawnedObj.transform,
+            draggable = spawnedObj.GetComponentInChildren<DraggableObject>(),
+            isLocalFile = false, // Skips Flask upload
+            mediaUrl = url,
+            targetId = currentTargetId,
+            uploadPending = false 
+        };
+
+        // Add to your existing list of drafts (Check if your list is named _authoringDrafts or authoringDrafts)
+        authoringDrafts.Add(newDraft);
+
+        // 4. Connect to the YouTube Package safely
+        var ytPlayer = spawnedObj.GetComponent("YoutubePlayer");
+        if (ytPlayer != null)
+        {
+            ytPlayer.GetType().GetField("youtubeUrl")?.SetValue(ytPlayer, url);
+            ytPlayer.GetType().GetMethod("Play")?.Invoke(ytPlayer, null);
+        }
+        else
+        {
+            Debug.LogWarning("Remember to attach the 'YoutubePlayer' script to VideoPrefab_Template!");
+        }
+
+        Debug.Log("Successfully spawned YouTube stream to AR wall.");
     }
 
     // This MUST be public so the DraggableObject can see it!

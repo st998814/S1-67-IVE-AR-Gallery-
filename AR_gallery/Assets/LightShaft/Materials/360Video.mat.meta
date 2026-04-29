@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 05ece7f22dee8c945bb12e25df090090
+timeCreated: 1476651487
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Materials/360Video.mat
+  uploadId: 857378

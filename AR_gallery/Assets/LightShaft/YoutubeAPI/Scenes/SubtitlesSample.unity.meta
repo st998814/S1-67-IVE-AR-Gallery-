@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 28cde526b14a6724aa7f309193fcf0db
+timeCreated: 1534262856
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/YoutubeAPI/Scenes/SubtitlesSample.unity
+  uploadId: 857378

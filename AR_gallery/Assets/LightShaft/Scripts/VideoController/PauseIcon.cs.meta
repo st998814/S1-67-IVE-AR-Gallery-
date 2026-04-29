@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 9bf86810d8e77e74f92ff76978a6463b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Scripts/VideoController/PauseIcon.cs
+  uploadId: 857378

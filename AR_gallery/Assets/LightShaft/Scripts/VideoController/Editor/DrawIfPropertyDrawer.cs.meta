@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 66160cee30c8bc448b229cb00fae2e70
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Scripts/VideoController/Editor/DrawIfPropertyDrawer.cs
+  uploadId: 857378

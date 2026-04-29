@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 6d2e6754a304b0c45913a61f70cf437d
+timeCreated: 1534262878
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/YoutubeAPI/Scripts/YoutubeSubtitlesReader.cs
+  uploadId: 857378

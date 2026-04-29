@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: df0fe247d87a31541a3113e71acdcb28
+timeCreated: 1507776074
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/YoutubeAPI/Scripts/Demos/VideoSearchDemo.cs
+  uploadId: 857378

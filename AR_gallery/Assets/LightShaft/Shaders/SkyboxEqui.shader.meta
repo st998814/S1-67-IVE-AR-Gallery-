@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: de097cdde6187e748a117c3487820045
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Shaders/SkyboxEqui.shader
+  uploadId: 857378

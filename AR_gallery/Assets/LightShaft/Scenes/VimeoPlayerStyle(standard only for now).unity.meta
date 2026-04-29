@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: f6af6b5c2ae3723488dee4bf0d3d9dec
+timeCreated: 1518730028
+licenseType: Store
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/Scenes/VimeoPlayerStyle(standard only for now).unity
+  uploadId: 857378

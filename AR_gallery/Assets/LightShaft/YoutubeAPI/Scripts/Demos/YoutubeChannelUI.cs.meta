@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 6a66f17210727814d9d900e5c43de95a
+timeCreated: 1507779299
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 302377
+  packageName: Youtube video player 2026
+  packageVersion: 1.1.3f
+  assetPath: Assets/LightShaft/YoutubeAPI/Scripts/Demos/YoutubeChannelUI.cs
+  uploadId: 857378
