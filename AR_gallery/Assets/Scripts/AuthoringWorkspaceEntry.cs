@@ -13,6 +13,10 @@ namespace ARGallery.AppFlow
     {
         [SerializeField] private bool createMissingTarget = true;
         [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
+        [Header("Orientation Helper")]
+        [SerializeField] private bool showOrientationHelper = true;
+        [SerializeField] private float orientationHelperAxisLength = 0.35f;
+        [SerializeField] private float orientationHelperAxisThickness = 0.01f;
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
 
@@ -139,6 +143,11 @@ namespace ARGallery.AppFlow
             WorkspacePresets.WorkspacePreset preset = WorkspacePresets.WorkspacePresetLibrary.GetPreset(posture);
             Transform targetRoot = targetRootObject.transform;
             targetRoot.localRotation = Quaternion.Euler(preset.target.targetLocalEuler);
+            WorkspacePresets.WorkspaceOrientationHelper.Apply(
+                targetRoot,
+                showOrientationHelper,
+                Mathf.Max(0.05f, orientationHelperAxisLength),
+                Mathf.Max(0.002f, orientationHelperAxisThickness));
 
             CameraControl.RuntimeCameraController cameraController = FindFirstObjectByType<CameraControl.RuntimeCameraController>();
             Camera cameraComponent = cameraController != null
