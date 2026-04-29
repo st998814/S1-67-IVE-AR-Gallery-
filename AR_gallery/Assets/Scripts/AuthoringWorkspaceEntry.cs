@@ -140,6 +140,8 @@ namespace ARGallery.AppFlow
                 return;
             }
 
+            EnsureTargetHierarchyCompatibility(targetRootObject.transform);
+
             WorkspacePresets.WorkspacePreset preset = WorkspacePresets.WorkspacePresetLibrary.GetPreset(posture);
             Transform targetRoot = targetRootObject.transform;
             targetRoot.localRotation = Quaternion.Euler(preset.target.targetLocalEuler);
@@ -171,6 +173,77 @@ namespace ARGallery.AppFlow
             cameraController.ApplyPose(worldPosition, tiltedRotation, rememberAsResetPose: true);
 
             Debug.Log($"AuthoringWorkspaceEntry: Applied workspace preset posture='{posture}' target='{targetRootObject.name}'.");
+        }
+
+        private static void EnsureTargetHierarchyCompatibility(Transform targetRoot)
+        {
+            if (targetRoot == null)
+                return;
+
+            Transform contentRoot = targetRoot.Find("ContentRoot");
+            if (contentRoot == null)
+            {
+                Transform nestedContentRoot = FindDescendantByName(targetRoot, "ContentRoot");
+                if (nestedContentRoot != null)
+                {
+                    nestedContentRoot.SetParent(targetRoot, worldPositionStays: true);
+                    nestedContentRoot.name = "ContentRoot";
+                    contentRoot = nestedContentRoot;
+                    Debug.LogWarning("AuthoringWorkspaceEntry: Re-parented nested ContentRoot to target root for compatibility.");
+                }
+            }
+
+            if (contentRoot == null)
+            {
+                GameObject createdContentRoot = new GameObject("ContentRoot");
+                createdContentRoot.transform.SetParent(targetRoot, false);
+                createdContentRoot.transform.localPosition = Vector3.zero;
+                createdContentRoot.transform.localRotation = Quaternion.identity;
+                createdContentRoot.transform.localScale = Vector3.one;
+                Debug.LogWarning("AuthoringWorkspaceEntry: Created missing ContentRoot for compatibility.");
+            }
+
+            Transform targetVisual = targetRoot.Find("TargetVisual");
+            if (targetVisual == null)
+            {
+                Transform targetPlane = FindDescendantByName(targetRoot, "TargetPlane");
+                if (targetPlane != null)
+                {
+                    targetPlane.SetParent(targetRoot, worldPositionStays: true);
+                    targetPlane.name = "TargetVisual";
+                    targetVisual = targetPlane;
+                    Debug.LogWarning("AuthoringWorkspaceEntry: Promoted TargetPlane to TargetVisual compatibility node.");
+                }
+            }
+
+            if (targetVisual == null)
+            {
+                GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                visual.name = "TargetVisual";
+                visual.transform.SetParent(targetRoot, false);
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+                visual.transform.localScale = Vector3.one;
+                Debug.LogWarning("AuthoringWorkspaceEntry: Created missing TargetVisual for compatibility.");
+            }
+        }
+
+        private static Transform FindDescendantByName(Transform root, string name)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(name))
+                return null;
+
+            Transform[] descendants = root.GetComponentsInChildren<Transform>(includeInactive: true);
+            for (int i = 0; i < descendants.Length; i++)
+            {
+                Transform current = descendants[i];
+                if (current == null || current == root)
+                    continue;
+                if (string.Equals(current.name, name, System.StringComparison.Ordinal))
+                    return current;
+            }
+
+            return null;
         }
     }
 }
