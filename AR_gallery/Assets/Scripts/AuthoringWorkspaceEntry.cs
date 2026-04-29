@@ -1,5 +1,7 @@
 using UnityEngine;
-using ARGallery.Workspace;
+using WorkspaceDomain = global::ARGallery.Workspace;
+using WorkspacePresets = global::ARGallery.Workspace.Presets;
+using CameraControl = global::ARGallery.CameraControl;
 
 namespace ARGallery.AppFlow
 {
@@ -10,7 +12,7 @@ namespace ARGallery.AppFlow
     public class AuthoringWorkspaceEntry : MonoBehaviour
     {
         [SerializeField] private bool createMissingTarget = true;
-        [SerializeField] private string defaultWorkspaceId = MockWorkspaceProvider.DefaultWorkspaceId;
+        [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
 
@@ -28,7 +30,7 @@ namespace ARGallery.AppFlow
             }
 
             string workspaceId = ResolveWorkspaceId(session);
-            WorkspaceDraftState draft = LoadWorkspaceDraft(workspaceId);
+            WorkspaceDomain.WorkspaceDraftState draft = LoadWorkspaceDraft(workspaceId);
             if (draft == null || draft.target == null || string.IsNullOrWhiteSpace(draft.target.targetId))
             {
                 Debug.LogWarning($"AuthoringWorkspaceEntry: Workspace draft '{workspaceId}' is missing target context.");
@@ -38,11 +40,11 @@ namespace ARGallery.AppFlow
             ApplyWorkspaceContext(draft, session);
         }
 
-        private WorkspaceDraftState LoadWorkspaceDraft(string workspaceId)
+        private WorkspaceDomain.WorkspaceDraftState LoadWorkspaceDraft(string workspaceId)
         {
-            LocalWorkspaceStore store = WorkspaceDataServices.LocalStore;
-            IWorkspaceProvider provider = WorkspaceDataServices.Provider;
-            WorkspaceDraftState draft = store.GetOrLoad(workspaceId, provider.GetWorkspace);
+            WorkspaceDomain.LocalWorkspaceStore store = WorkspaceDomain.WorkspaceDataServices.LocalStore;
+            WorkspaceDomain.IWorkspaceProvider provider = WorkspaceDomain.WorkspaceDataServices.Provider;
+            WorkspaceDomain.WorkspaceDraftState draft = store.GetOrLoad(workspaceId, provider.GetWorkspace);
             if (draft == null)
             {
                 Debug.LogWarning($"AuthoringWorkspaceEntry: Workspace '{workspaceId}' not found. Falling back to default.");
@@ -58,10 +60,10 @@ namespace ARGallery.AppFlow
                 return session.workspaceId.Trim();
             if (!string.IsNullOrWhiteSpace(defaultWorkspaceId))
                 return defaultWorkspaceId.Trim();
-            return MockWorkspaceProvider.DefaultWorkspaceId;
+            return WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
         }
 
-        private void ApplyWorkspaceContext(WorkspaceDraftState workspace, WorkspaceSessionContext session)
+        private void ApplyWorkspaceContext(WorkspaceDomain.WorkspaceDraftState workspace, WorkspaceSessionContext session)
         {
             TargetSelectionManager manager = FindFirstObjectByType<TargetSelectionManager>();
             if (manager == null)
@@ -79,6 +81,7 @@ namespace ARGallery.AppFlow
             if (index >= 0)
             {
                 manager.SetActiveTarget(index);
+                ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                     AppFlowController.MarkWorkspaceReady(targetId);
                 Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' (index={index}).");
@@ -102,6 +105,7 @@ namespace ARGallery.AppFlow
                 if (result.isDuplicate && result.duplicateIndex >= 0)
                 {
                     manager.SetActiveTarget(result.duplicateIndex);
+                    ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                     Debug.Log($"AuthoringWorkspaceEntry: Duplicate target resolved by activating index={result.duplicateIndex}.");
                     return;
                 }
@@ -112,13 +116,52 @@ namespace ARGallery.AppFlow
 
             int createdIndex = manager.FindTargetIndexById(targetId);
             if (createdIndex >= 0)
+            {
                 manager.SetActiveTarget(createdIndex);
+                ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
+            }
 
             // Keep app-flow context aligned with provider-loaded target in mock-first mode.
             if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                 AppFlowController.MarkWorkspaceReady(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Created and activated workspace target '{targetId}'.");
+        }
+
+        private void ApplyWorkspacePreset(GameObject targetRootObject, WorkspaceDomain.WorkspacePosture posture)
+        {
+            if (targetRootObject == null)
+            {
+                Debug.LogWarning("AuthoringWorkspaceEntry: Cannot apply preset because target root is null.");
+                return;
+            }
+
+            WorkspacePresets.WorkspacePreset preset = WorkspacePresets.WorkspacePresetLibrary.GetPreset(posture);
+            Transform targetRoot = targetRootObject.transform;
+            targetRoot.localRotation = Quaternion.Euler(preset.target.targetLocalEuler);
+
+            CameraControl.RuntimeCameraController cameraController = FindFirstObjectByType<CameraControl.RuntimeCameraController>();
+            Camera cameraComponent = cameraController != null
+                ? cameraController.GetComponent<Camera>()
+                : Camera.main;
+
+            if (cameraController == null || cameraComponent == null)
+            {
+                Debug.LogWarning("AuthoringWorkspaceEntry: RuntimeCameraController/Main Camera not found; skipped camera preset.");
+                return;
+            }
+
+            Vector3 worldPosition = targetRoot.TransformPoint(preset.camera.localPositionOffset);
+            Vector3 worldLookAt = targetRoot.TransformPoint(preset.camera.localLookAtOffset);
+            Vector3 lookDirection = worldLookAt - worldPosition;
+            if (lookDirection.sqrMagnitude < 0.0001f)
+                lookDirection = targetRoot.forward;
+
+            Quaternion lookRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+            Quaternion tiltedRotation = lookRotation * Quaternion.Euler(preset.camera.tiltDegrees, 0f, 0f);
+            cameraController.ApplyPose(worldPosition, tiltedRotation, rememberAsResetPose: true);
+
+            Debug.Log($"AuthoringWorkspaceEntry: Applied workspace preset posture='{posture}' target='{targetRootObject.name}'.");
         }
     }
 }
