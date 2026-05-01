@@ -3,7 +3,7 @@ using RTG;
 
 /// <summary>
 /// 在播放模式下自动创建 Runtime Transform Gizmos 所需模块（等价于菜单 Tools/Runtime Transform Gizmos/Initialize）。
-/// 仅在存在 <see cref="ContentTransformController"/> 的场景中启用，避免影响其它场景。
+/// 仅在存在 Transform Gizmo 相关控制器的场景中启用，避免影响其它场景。
 /// </summary>
 public static class RTGRuntimeBootstrap
 {
@@ -13,7 +13,9 @@ public static class RTGRuntimeBootstrap
         if (RTGApp.Get != null)
             return;
 
-        if (Object.FindFirstObjectByType<ContentTransformController>() == null)
+        bool hasLegacyController = Object.FindFirstObjectByType<ContentTransformController>() != null;
+        bool hasReusableController = Object.FindFirstObjectByType<TransformGizmoController>() != null;
+        if (!hasLegacyController && !hasReusableController)
             return;
 
         Camera mainCam = Camera.main;

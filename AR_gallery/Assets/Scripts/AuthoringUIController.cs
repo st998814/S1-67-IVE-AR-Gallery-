@@ -1363,7 +1363,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
     }
 
 
-private void OnSpawnYoutubeClicked()
+    private void OnSpawnYoutubeClicked()
     {
         string url = youtubeUrlInput?.value;
 
@@ -1373,40 +1373,31 @@ private void OnSpawnYoutubeClicked()
             return;
         }
 
-        // 1. Get the current active target ID using your existing helper method
+        spawnerManager ??= BuildSpawnerManager();
         string currentTargetId = GetActiveTargetIdForSave();
-
-        // 2. Instantiate the Video Prefab directly into the scene
-        GameObject spawnedObj = Instantiate(videoPrefab);
-        
-        // 3. Create the draft state, explicitly marking it as a YouTube link
-        var newDraft = new ContentDraftState
+        SpawnContentResult localResult = spawnerManager.CreateContent(new SpawnRequest
         {
-            draftId = System.Guid.NewGuid().ToString(),
             contentType = SpawnContentType.Video,
-            contentTransform = spawnedObj.transform,
-            draggable = spawnedObj.GetComponentInChildren<DraggableObject>(),
-            isLocalFile = false, // Skips Flask upload
             mediaUrl = url,
-            targetId = currentTargetId,
-            uploadPending = false 
-        };
-
-        // Add to your existing list of drafts (Check if your list is named _authoringDrafts or authoringDrafts)
-        authoringDrafts.Add(newDraft);
-
-        // 4. Connect to the YouTube Package safely
-        var ytPlayer = spawnedObj.GetComponent("YoutubePlayer");
-        if (ytPlayer != null)
+            targetId = currentTargetId
+        });
+        if (!localResult.success || localResult.spawnedObject == null)
         {
-            ytPlayer.GetType().GetField("youtubeUrl")?.SetValue(ytPlayer, url);
-            ytPlayer.GetType().GetMethod("Play")?.Invoke(ytPlayer, null);
-        }
-        else
-        {
-            Debug.LogWarning("Remember to attach the 'YoutubePlayer' script to VideoPrefab_Template!");
+            Debug.LogError("YouTube content spawn failed: " + localResult.message);
+            return;
         }
 
+        if (localResult.draggableObject != null)
+        {
+            RegisterRemoteBackedDraft(
+                localResult.draggableObject,
+                SpawnContentType.Video,
+                url,
+                localFileName: "youtube-link");
+            SetActiveAuthoringObject(localResult.draggableObject, url, "Video");
+        }
+
+        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
         Debug.Log("Successfully spawned YouTube stream to AR wall.");
     }
 

@@ -191,6 +191,9 @@ namespace ARGallery.CameraControl
 
         private bool IsBlockedBySceneInteraction(Vector2 mouseScreenPos)
         {
+            if (TargetMovementController.IsTargetDragActive)
+                return true;
+
             if (DraggableObject.IsDraggingObjectInteractionActive)
                 return true;
 
