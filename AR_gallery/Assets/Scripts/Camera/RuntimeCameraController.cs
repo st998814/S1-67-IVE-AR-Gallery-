@@ -19,6 +19,10 @@ namespace ARGallery.CameraControl
         }
     }
 
+    /// <summary>
+    /// Runs late in <see cref="MonoBehaviour.Update"/> so RTG / gizmo hover and drag state are current before movement and zoom run.
+    /// </summary>
+    [DefaultExecutionOrder(2000)]
     public sealed class RuntimeCameraController : MonoBehaviour
     {
         [Header("Movement")]
@@ -189,11 +193,12 @@ namespace ARGallery.CameraControl
             return false;
         }
 
+        /// <summary>
+        /// Scene-side camera blocking (after UI). Precedence: RTG active manipulation → active target-plane drag → authored draggable objects → left-click hold on draggable geometry.
+        /// Gizmo hover/drag is evaluated via <see cref="RTGizmosEngine"/>; target drag uses <see cref="TargetMovementController.IsTargetDragActive"/> (updated early in Update).
+        /// </summary>
         private bool IsBlockedBySceneInteraction(Vector2 mouseScreenPos)
         {
-            if (DraggableObject.IsDraggingObjectInteractionActive)
-                return true;
-
             if (RTGizmosEngine.Get != null)
             {
                 if (RTGizmosEngine.Get.DraggedGizmo != null)
@@ -201,6 +206,12 @@ namespace ARGallery.CameraControl
                 if (RTGizmosEngine.Get.HoveredGizmo != null)
                     return true;
             }
+
+            if (TargetMovementController.IsTargetDragActive)
+                return true;
+
+            if (DraggableObject.IsDraggingObjectInteractionActive)
+                return true;
 
             // If user is holding left button over a draggable object, don't move/zoom/rotate camera.
             if (Mouse.current != null && Mouse.current.leftButton.isPressed)

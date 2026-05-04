@@ -1,0 +1,472 @@
+using System;
+using System.Collections;
+using RTG;
+using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
+
+/// <summary>
+/// Binds a runtime gizmo to the current selection and enforces target-local transform constraints.
+/// </summary>
+[DefaultExecutionOrder(1000)]
+public sealed class TransformGizmoController : MonoBehaviour
+{
+    [SerializeField] private ObjectSelectionManager selectionManager;
+    [SerializeField] private TargetLocalTransformService targetLocalTransformService;
+    [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private bool useRuntimeTransformGizmo = true;
+    [Tooltip("For a wall target, Local often avoids fighting the front-Z clamp when using a thick 3D proxy mesh.")]
+    [SerializeField] private GizmoSpace gizmoTransformSpace = GizmoSpace.Global;
+    [SerializeField] private bool enforceUniformScale = true;
+    [SerializeField] private bool allowKeyboardModeShortcuts = true;
+
+    private ObjectTransformGizmo _moveGizmo;
+    private ObjectTransformGizmo _rotateGizmo;
+    private ObjectTransformGizmo _scaleGizmo;
+    private ObjectTransformGizmo _universalGizmo;
+    private ObjectTransformGizmo _workGizmo;
+    private Transform _selected;
+    private bool _wasDragging;
+    private GizmoMode _mode = GizmoMode.Translate;
+    private LocalTransformSnapshot _dragStartSnapshot;
+    private bool _hasDragStartSnapshot;
+    private LocalTransformSnapshot _lastSnapshot;
+    private bool _hasSnapshot;
+    private bool _gizmosInitialized;
+    private int _lastSyncedTargetInstanceId = int.MinValue;
+    private GizmoSpace _lastSyncedGizmoSpace;
+
+    public enum GizmoMode
+    {
+        Translate,
+        Rotate,
+        Scale,
+        Universal
+    }
+
+    public event Action<Transform> ContentTransformChanged;
+    public event Action<TransformChangeEvent> ContentTransformChangedDetailed;
+
+    public readonly struct TransformChangeEvent
+    {
+        public readonly string targetId;
+        public readonly string contentId;
+        public readonly Vector3 localPosition;
+        public readonly Vector3 localEuler;
+        public readonly Vector3 localScale;
+        public readonly GizmoMode mode;
+
+        public TransformChangeEvent(
+            string targetId,
+            string contentId,
+            Vector3 localPosition,
+            Vector3 localEuler,
+            Vector3 localScale,
+            GizmoMode mode)
+        {
+            this.targetId = string.IsNullOrWhiteSpace(targetId) ? "" : targetId.Trim();
+            this.contentId = string.IsNullOrWhiteSpace(contentId) ? "" : contentId.Trim();
+            this.localPosition = localPosition;
+            this.localEuler = localEuler;
+            this.localScale = localScale;
+            this.mode = mode;
+        }
+    }
+
+    public bool IsManipulating
+    {
+        get
+        {
+            if (!_gizmosInitialized || _workGizmo == null || _workGizmo.Gizmo == null || RTGizmosEngine.Get == null)
+                return false;
+            return RTGizmosEngine.Get.DraggedGizmo == _workGizmo.Gizmo;
+        }
+    }
+
+    public GizmoMode CurrentMode => _mode;
+
+    public void ConfigureDependencies(ObjectSelectionManager selectionRef, TargetLocalTransformService localServiceRef, FrontSideConstraint frontConstraintRef)
+    {
+        if (selectionRef != null)
+            selectionManager = selectionRef;
+        if (localServiceRef != null)
+            targetLocalTransformService = localServiceRef;
+        if (frontConstraintRef != null)
+            frontSideConstraint = frontConstraintRef;
+    }
+
+    private void Awake()
+    {
+        if (selectionManager == null)
+            selectionManager = FindFirstObjectByType<ObjectSelectionManager>();
+        if (targetLocalTransformService == null)
+            targetLocalTransformService = FindFirstObjectByType<TargetLocalTransformService>();
+        if (frontSideConstraint == null)
+            frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+    }
+
+    private void OnEnable()
+    {
+        if (selectionManager != null)
+            selectionManager.SelectionChanged += OnSelectionChanged;
+    }
+
+    private void OnDisable()
+    {
+        if (selectionManager != null)
+            selectionManager.SelectionChanged -= OnSelectionChanged;
+    }
+
+    private void Start()
+    {
+        StartCoroutine(InitializeGizmoRoutine());
+    }
+
+    private IEnumerator InitializeGizmoRoutine()
+    {
+        if (!useRuntimeTransformGizmo)
+            yield break;
+
+        // Wait a frame so RTG bootstrap has time to create modules.
+        yield return null;
+
+        if (RTGizmosEngine.Get == null)
+        {
+            Debug.LogWarning("TransformGizmoController: RTGizmosEngine is not ready.");
+            yield break;
+        }
+
+        _moveGizmo = RTGizmosEngine.Get.CreateObjectMoveGizmo();
+        _rotateGizmo = RTGizmosEngine.Get.CreateObjectRotationGizmo();
+        _scaleGizmo = RTGizmosEngine.Get.CreateObjectScaleGizmo();
+        _universalGizmo = RTGizmosEngine.Get.CreateObjectUniversalGizmo();
+
+        if (_moveGizmo == null || _rotateGizmo == null || _scaleGizmo == null || _universalGizmo == null)
+        {
+            Debug.LogWarning("TransformGizmoController: Failed to create one or more RTG gizmos.");
+            yield break;
+        }
+
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
+        _universalGizmo.SetTransformSpace(gizmoTransformSpace);
+
+        SafeSetGizmoEnabled(_moveGizmo, false);
+        SafeSetGizmoEnabled(_rotateGizmo, false);
+        SafeSetGizmoEnabled(_scaleGizmo, false);
+        SafeSetGizmoEnabled(_universalGizmo, false);
+
+        _gizmosInitialized = true;
+        _workGizmo = _moveGizmo;
+        if (_selected != null)
+            PushCurrentSelectionToAllGizmos();
+        ApplyGizmoModeVisualState();
+    }
+
+    private void PushCurrentSelectionToAllGizmos()
+    {
+        if (!_gizmosInitialized || _selected == null)
+            return;
+
+        GameObject targetGo = _selected.gameObject;
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
+        _universalGizmo.SetTransformSpace(gizmoTransformSpace);
+        _moveGizmo.SetTargetObject(targetGo);
+        _rotateGizmo.SetTargetObject(targetGo);
+        _scaleGizmo.SetTargetObject(targetGo);
+        _universalGizmo.SetTargetObject(targetGo);
+        _lastSyncedGizmoSpace = gizmoTransformSpace;
+        _lastSyncedTargetInstanceId = targetGo.GetInstanceID();
+    }
+
+    private void Update()
+    {
+        if (!_gizmosInitialized)
+            return;
+
+#if ENABLE_INPUT_SYSTEM
+        if (allowKeyboardModeShortcuts && Keyboard.current != null)
+        {
+            if (Keyboard.current.digit1Key.wasPressedThisFrame) SetMode(GizmoMode.Translate);
+            if (Keyboard.current.digit2Key.wasPressedThisFrame) SetMode(GizmoMode.Rotate);
+            if (Keyboard.current.digit3Key.wasPressedThisFrame) SetMode(GizmoMode.Scale);
+            if (Keyboard.current.digit4Key.wasPressedThisFrame) SetMode(GizmoMode.Universal);
+        }
+#endif
+
+        if (_selected == null)
+        {
+            DisableAllGizmos();
+            _lastSyncedTargetInstanceId = int.MinValue;
+            return;
+        }
+
+        // Do not call ApplyGizmoModeVisualState every frame: it disables all gizmos first,
+        // which cancels RTG drags and makes handles appear to do nothing.
+        // Only refresh target/space when needed, and never during an active gizmo drag.
+        bool rtgDragging = RTGizmosEngine.Get != null && RTGizmosEngine.Get.DraggedGizmo != null;
+        if (!rtgDragging)
+            SyncAllGizmosTargetAndSpaceIfDirty();
+    }
+
+    private void SyncAllGizmosTargetAndSpaceIfDirty()
+    {
+        if (_selected == null)
+            return;
+
+        int id = _selected.gameObject.GetInstanceID();
+        bool spaceChanged = gizmoTransformSpace != _lastSyncedGizmoSpace;
+        bool targetChanged = id != _lastSyncedTargetInstanceId;
+        if (!spaceChanged && !targetChanged)
+            return;
+
+        _lastSyncedGizmoSpace = gizmoTransformSpace;
+        _lastSyncedTargetInstanceId = id;
+
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
+        _universalGizmo.SetTransformSpace(gizmoTransformSpace);
+
+        GameObject targetGo = _selected.gameObject;
+        _moveGizmo.SetTargetObject(targetGo);
+        _rotateGizmo.SetTargetObject(targetGo);
+        _scaleGizmo.SetTargetObject(targetGo);
+        _universalGizmo.SetTargetObject(targetGo);
+    }
+
+    private void LateUpdate()
+    {
+        if (!_gizmosInitialized || _selected == null || _workGizmo == null || _workGizmo.Gizmo == null || RTGizmosEngine.Get == null)
+            return;
+
+        Gizmo dragged = RTGizmosEngine.Get.DraggedGizmo;
+        bool draggingNow = dragged != null && dragged == _workGizmo.Gizmo;
+        if (draggingNow)
+        {
+            if (!_wasDragging)
+            {
+                _dragStartSnapshot = LocalTransformSnapshot.From(_selected);
+                _hasDragStartSnapshot = true;
+            }
+
+            ApplyModeConstraintRules(_selected);
+            ApplyPostTransformRules(_selected);
+            _wasDragging = true;
+            return;
+        }
+
+        if (RTGizmosEngine.Get.JustReleasedDrag && _wasDragging)
+        {
+            ApplyModeConstraintRules(_selected);
+            ApplyPostTransformRules(_selected);
+            _wasDragging = false;
+            _hasDragStartSnapshot = false;
+        }
+    }
+
+    private void OnSelectionChanged(Transform selected)
+    {
+        _selected = selected;
+        _hasSnapshot = false;
+        _hasDragStartSnapshot = false;
+
+        if (!_gizmosInitialized)
+            return;
+
+        if (_selected == null)
+        {
+            DisableAllGizmos();
+            _lastSyncedTargetInstanceId = int.MinValue;
+            return;
+        }
+
+        PushCurrentSelectionToAllGizmos();
+        ApplyGizmoModeVisualState();
+        ApplyPostTransformRules(_selected);
+    }
+
+    public void SetMode(GizmoMode mode)
+    {
+        _mode = mode;
+        ApplyGizmoModeVisualState();
+    }
+
+    private void ApplyGizmoModeVisualState()
+    {
+        if (!_gizmosInitialized)
+            return;
+
+        DisableAllGizmos();
+
+        _workGizmo = ResolveGizmoForMode(_mode);
+        if (_workGizmo == null || _workGizmo.Gizmo == null)
+            return;
+
+        if (_selected != null)
+            SafeSetGizmoEnabled(_workGizmo, true);
+    }
+
+    private void DisableAllGizmos()
+    {
+        SafeSetGizmoEnabled(_moveGizmo, false);
+        SafeSetGizmoEnabled(_rotateGizmo, false);
+        SafeSetGizmoEnabled(_scaleGizmo, false);
+        SafeSetGizmoEnabled(_universalGizmo, false);
+    }
+
+    private static void SafeSetGizmoEnabled(ObjectTransformGizmo gizmo, bool enabled)
+    {
+        if (gizmo?.Gizmo == null)
+            return;
+        gizmo.Gizmo.SetEnabled(enabled);
+    }
+
+    private ObjectTransformGizmo ResolveGizmoForMode(GizmoMode mode)
+    {
+        switch (mode)
+        {
+            case GizmoMode.Translate: return _moveGizmo;
+            case GizmoMode.Rotate: return _rotateGizmo;
+            case GizmoMode.Scale: return _scaleGizmo;
+            case GizmoMode.Universal: return _universalGizmo;
+            default: return _moveGizmo;
+        }
+    }
+
+    private void ApplyPostTransformRules(Transform content)
+    {
+        if (content == null)
+            return;
+
+        // Always write local-space values through the local service to keep
+        // transform persistence model target-local and explicit.
+        if (targetLocalTransformService != null)
+        {
+            targetLocalTransformService.SetLocalPosition(content, content.localPosition);
+            targetLocalTransformService.SetLocalRotation(content, content.localRotation);
+            if (enforceUniformScale || _mode == GizmoMode.Scale)
+                targetLocalTransformService.NormalizeUniformScale(content);
+        }
+
+        frontSideConstraint?.Enforce(content);
+        RaiseChangedIfNeeded(content);
+    }
+
+    private void ApplyModeConstraintRules(Transform content)
+    {
+        if (content == null || !_hasDragStartSnapshot)
+            return;
+
+        switch (_mode)
+        {
+            case GizmoMode.Translate:
+                // Move only: keep start local rotation + local scale.
+                content.localRotation = _dragStartSnapshot.rotation;
+                content.localScale = _dragStartSnapshot.scale;
+                break;
+
+            case GizmoMode.Rotate:
+                // Rotate only: keep start local position + local scale.
+                content.localPosition = _dragStartSnapshot.position;
+                content.localScale = _dragStartSnapshot.scale;
+                break;
+
+            case GizmoMode.Scale:
+                // Uniform scale only: keep start local position + local rotation.
+                content.localPosition = _dragStartSnapshot.position;
+                content.localRotation = _dragStartSnapshot.rotation;
+                break;
+
+            case GizmoMode.Universal:
+            default:
+                break;
+        }
+    }
+
+    private void RaiseChangedIfNeeded(Transform content)
+    {
+        LocalTransformSnapshot snapshot = LocalTransformSnapshot.From(content);
+        if (_hasSnapshot && _lastSnapshot.Equals(snapshot))
+            return;
+
+        _lastSnapshot = snapshot;
+        _hasSnapshot = true;
+        ContentTransformChanged?.Invoke(content);
+        ContentTransformChangedDetailed?.Invoke(BuildTransformChangeEvent(content));
+    }
+
+    private TransformChangeEvent BuildTransformChangeEvent(Transform content)
+    {
+        Transform targetRoot = ResolveTargetRoot(content);
+        string targetId = ResolveTargetId(targetRoot);
+        string contentId = content != null ? content.name : "";
+        return new TransformChangeEvent(
+            targetId,
+            contentId,
+            content != null ? content.localPosition : Vector3.zero,
+            content != null ? content.localEulerAngles : Vector3.zero,
+            content != null ? content.localScale : Vector3.one,
+            _mode);
+    }
+
+    private static Transform ResolveTargetRoot(Transform content)
+    {
+        if (content == null)
+            return null;
+
+        Transform current = content;
+        while (current != null)
+        {
+            if (string.Equals(current.name, "ContentRoot", StringComparison.Ordinal))
+                return current.parent;
+            current = current.parent;
+        }
+
+        return content.parent;
+    }
+
+    private static string ResolveTargetId(Transform targetRoot)
+    {
+        if (targetRoot == null)
+            return "";
+
+        ArImageTarget arImageTarget = targetRoot.GetComponent<ArImageTarget>();
+        if (arImageTarget != null && !string.IsNullOrWhiteSpace(arImageTarget.TargetId))
+            return arImageTarget.TargetId.Trim();
+
+        ImageTargetPlaceholder placeholder = targetRoot.GetComponentInChildren<ImageTargetPlaceholder>();
+        if (placeholder != null && !string.IsNullOrWhiteSpace(placeholder.TargetId))
+            return placeholder.TargetId.Trim();
+
+        return targetRoot.name;
+    }
+
+    private readonly struct LocalTransformSnapshot : IEquatable<LocalTransformSnapshot>
+    {
+        public readonly Vector3 position;
+        public readonly Quaternion rotation;
+        public readonly Vector3 scale;
+
+        private LocalTransformSnapshot(Vector3 position, Quaternion rotation, Vector3 scale)
+        {
+            this.position = position;
+            this.rotation = rotation;
+            this.scale = scale;
+        }
+
+        public static LocalTransformSnapshot From(Transform transform)
+        {
+            return new LocalTransformSnapshot(transform.localPosition, transform.localRotation, transform.localScale);
+        }
+
+        public bool Equals(LocalTransformSnapshot other)
+        {
+            return position == other.position && rotation == other.rotation && scale == other.scale;
+        }
+    }
+}
