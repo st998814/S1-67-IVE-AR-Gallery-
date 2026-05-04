@@ -277,9 +277,17 @@ public class AuthoringUIController : MonoBehaviour
     private void ApplyPanelState()
     {
         if (leftPanelBody != null)
+        {
+            leftPanelBody.EnableInClassList("panel--expanded", isLeftPanelExpanded);
+            leftPanelBody.EnableInClassList("panel--collapsed", !isLeftPanelExpanded);
             leftPanelBody.style.display = isLeftPanelExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+        }
         if (rightPanelBody != null)
+        {
+            rightPanelBody.EnableInClassList("panel--expanded", isRightPanelExpanded);
+            rightPanelBody.EnableInClassList("panel--collapsed", !isRightPanelExpanded);
             rightPanelBody.style.display = isRightPanelExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+        }
         if (leftPanelToggleButton != null)
             leftPanelToggleButton.text = isLeftPanelExpanded ? "<" : ">";
         if (rightPanelToggleButton != null)

@@ -1,0 +1,90 @@
+.authoring-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.top-bar {
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 12px;
+    padding-right: 12px;
+    background-color: rgba(18, 24, 33, 0.95);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(31, 41, 51);
+}
+
+.text-primary {
+    color: rgb(229, 231, 235);
+}
+
+.text-secondary {
+    color: rgb(156, 163, 175);
+}
+
+.text-disabled {
+    color: rgb(107, 114, 128);
+}
+
+.workspace-layout {
+    flex-grow: 1;
+    flex-direction: row;
+    overflow: visible;
+}
+
+.panel {
+    background-color: rgba(18, 24, 33, 0.95);
+    border-color: rgb(31, 41, 51);
+    padding: 10px;
+}
+
+.panel--collapsed {
+    display: none;
+}
+
+.panel--expanded {
+    display: flex;
+}
+
+.panel-toggle {
+    width: 24px;
+    min-width: 24px;
+    height: 80px;
+    align-self: center;
+    background-color: rgba(18, 24, 33, 0.95);
+    border-width: 1px;
+    border-color: rgb(31, 41, 51);
+    color: rgb(229, 231, 235);
+}
+
+.button {
+    background-color: rgb(31, 41, 51);
+    border-width: 1px;
+    border-color: rgb(55, 65, 81);
+    color: rgb(229, 231, 235);
+    border-radius: 4px;
+}
+
+.button:hover {
+    background-color: rgb(55, 65, 81);
+}
+
+.button--active {
+    background-color: rgb(59, 130, 246);
+    border-color: rgb(59, 130, 246);
+    color: rgb(229, 231, 235);
+}
+
+.input-field {
+    background-color: rgb(17, 24, 39);
+    border-width: 1px;
+    border-color: rgb(55, 65, 81);
+    color: rgb(229, 231, 235);
+}
+
+.input-field:focus {
+    border-color: rgb(59, 130, 246);
+}
