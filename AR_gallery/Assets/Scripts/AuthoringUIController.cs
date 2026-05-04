@@ -47,6 +47,14 @@ public class AuthoringUIController : MonoBehaviour
 
     private Button browseButton, saveButton;
     private Button backToSwitcherButton;
+    private Button leftPanelToggleButton;
+    private Button rightPanelToggleButton;
+    private VisualElement leftPanelBody;
+    private VisualElement rightPanelBody;
+    private Label workspaceNameLabel;
+    private Label modeIndicatorLabel;
+    private bool isLeftPanelExpanded;
+    private bool isRightPanelExpanded;
 
     // --- TASK 6: 新增 UI 变量 ---
     private VisualElement _loadingOverlay;
@@ -161,6 +169,12 @@ public class AuthoringUIController : MonoBehaviour
         browseButton = root.Q<Button>("BrowseButton");
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
+        leftPanelToggleButton = root.Q<Button>("LeftPanelToggle");
+        rightPanelToggleButton = root.Q<Button>("RightPanelToggle");
+        leftPanelBody = root.Q<VisualElement>("LeftPanelBody");
+        rightPanelBody = root.Q<VisualElement>("RightPanelBody");
+        workspaceNameLabel = root.Q<Label>("WorkspaceNameLabel");
+        modeIndicatorLabel = root.Q<Label>("ModeIndicatorLabel");
 
         // --- TASK 6: 获取并初始化 Loading 和 Error 元素 ---
         _loadingOverlay = root.Q<VisualElement>("loading-overlay");
@@ -177,9 +191,16 @@ public class AuthoringUIController : MonoBehaviour
         saveButton.clicked += OnSaveButtonClicked;
         if (backToSwitcherButton != null) backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
+        if (leftPanelToggleButton != null) leftPanelToggleButton.clicked += OnLeftPanelToggleClicked;
+        if (rightPanelToggleButton != null) rightPanelToggleButton.clicked += OnRightPanelToggleClicked;
 
         if (createTargetImageUrlInput != null && string.IsNullOrWhiteSpace(createTargetImageUrlInput.value))
             createTargetImageUrlInput.value = "No target image selected";
+        if (workspaceNameLabel != null)
+            workspaceNameLabel.text = ResolveWorkspaceDisplayName();
+        if (modeIndicatorLabel != null)
+            modeIndicatorLabel.text = "Mode: Move";
+        InitializePanelCollapsedState();
         
         // NEW: Event Listener for spawning text
         spawnTextButton.clicked += OnSpawnTextButtonClicked;
@@ -213,11 +234,56 @@ public class AuthoringUIController : MonoBehaviour
         if (backToSwitcherButton != null) backToSwitcherButton.clicked -= OnBackToSwitcherButtonClicked;
         if (spawnTextButton != null) spawnTextButton.clicked -= OnSpawnTextButtonClicked;
         if (createTargetButton != null) createTargetButton.clicked -= OnCreateTargetButtonClicked;
+        if (leftPanelToggleButton != null) leftPanelToggleButton.clicked -= OnLeftPanelToggleClicked;
+        if (rightPanelToggleButton != null) rightPanelToggleButton.clicked -= OnRightPanelToggleClicked;
 
         if (imageTargetDropdown != null)
             imageTargetDropdown.UnregisterValueChangedCallback(OnImageTargetDropdownChanged);
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
+    }
+
+    private string ResolveWorkspaceDisplayName()
+    {
+        if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext workspace)
+            && workspace != null
+            && !string.IsNullOrWhiteSpace(workspace.workspaceName))
+        {
+            return workspace.workspaceName.Trim();
+        }
+
+        return "Authoring";
+    }
+
+    private void InitializePanelCollapsedState()
+    {
+        isLeftPanelExpanded = false;
+        isRightPanelExpanded = false;
+        ApplyPanelState();
+    }
+
+    private void OnLeftPanelToggleClicked()
+    {
+        isLeftPanelExpanded = !isLeftPanelExpanded;
+        ApplyPanelState();
+    }
+
+    private void OnRightPanelToggleClicked()
+    {
+        isRightPanelExpanded = !isRightPanelExpanded;
+        ApplyPanelState();
+    }
+
+    private void ApplyPanelState()
+    {
+        if (leftPanelBody != null)
+            leftPanelBody.style.display = isLeftPanelExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+        if (rightPanelBody != null)
+            rightPanelBody.style.display = isRightPanelExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+        if (leftPanelToggleButton != null)
+            leftPanelToggleButton.text = isLeftPanelExpanded ? "<" : ">";
+        if (rightPanelToggleButton != null)
+            rightPanelToggleButton.text = isRightPanelExpanded ? ">" : "<";
     }
 
     // --- TASK 6: 用于独立测试的 Update 方法 ---
