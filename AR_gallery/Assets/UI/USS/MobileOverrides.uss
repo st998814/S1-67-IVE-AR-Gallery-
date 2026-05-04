@@ -1,0 +1,22 @@
+/* MobileOverrides.uss */
+
+/* 1. Make all buttons large enough for touch (Apple/Google recommend 44px min) */
+.unity-button {
+    min-height: 60px; 
+    font-size: 24px;  
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* 2. Make text input fields taller for touch */
+.unity-text-field__input {
+    min-height: 50px;
+    font-size: 20px;
+}
+
+/* 3. Override any fixed-width panels to take up the full phone screen */
+.side-panel, .main-container, .popup-window {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0; /* Flat edges on mobile usually look better */
+}

@@ -13,6 +13,7 @@ public class AuthoringUIController : MonoBehaviour
 {
     public DatabaseManager dbManager;
     public GameObject videoPrefab;
+    public StyleSheet mobileStyleSheet;
 
     [SerializeField] private TargetSelectionManager targetSelectionManager;
 
