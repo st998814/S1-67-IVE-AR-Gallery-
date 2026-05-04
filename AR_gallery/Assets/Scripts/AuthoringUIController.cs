@@ -46,6 +46,7 @@ public class AuthoringUIController : MonoBehaviour
     private Button spawnTextButton;
 
     private Button browseButton, saveButton;
+    private Button addContentButton;
     private Button backToSwitcherButton;
     private Button leftPanelToggleButton;
     private Button rightPanelToggleButton;
@@ -53,8 +54,12 @@ public class AuthoringUIController : MonoBehaviour
     private VisualElement rightPanelBody;
     private Label workspaceNameLabel;
     private Label modeIndicatorLabel;
+    private ListView contentHierarchyList;
     private bool isLeftPanelExpanded;
     private bool isRightPanelExpanded;
+    private bool suppressHierarchySelectionCallbacks;
+    private readonly List<ContentLibraryItem> contentLibraryItems = new List<ContentLibraryItem>();
+    private bool hasBootstrappedSceneLibrary;
 
     // --- TASK 6: 新增 UI 变量 ---
     private VisualElement _loadingOverlay;
@@ -115,6 +120,7 @@ public class AuthoringUIController : MonoBehaviour
         bool ready = IsWorkspaceReadyForAuthoring(showBlockedMessage: false);
         if (saveButton != null) saveButton.SetEnabled(ready);
         if (browseButton != null) browseButton.SetEnabled(ready);
+        if (addContentButton != null) addContentButton.SetEnabled(ready);
         if (spawnTextButton != null) spawnTextButton.SetEnabled(ready);
         if (createTargetButton != null) createTargetButton.SetEnabled(ready);
         if (browseTargetImageButton != null) browseTargetImageButton.SetEnabled(ready);
@@ -142,6 +148,18 @@ public class AuthoringUIController : MonoBehaviour
         public string lastError;
     }
 
+    private sealed class ContentLibraryItem
+    {
+        public string libraryId;
+        public string displayName;
+        public SpawnContentType contentType;
+        public byte[] localFileBytes;
+        public string localMimeType;
+        public string originalFileName;
+        public Transform instantiatedTransform;
+        public bool isSaved;
+    }
+
     void OnEnable()
     {
         uiDocument = GetComponent<UIDocument>();
@@ -167,6 +185,7 @@ public class AuthoringUIController : MonoBehaviour
         spawnTextButton = root.Q<Button>("SpawnTextButton");
         
         browseButton = root.Q<Button>("BrowseButton");
+        addContentButton = root.Q<Button>("AddContentButton");
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
         leftPanelToggleButton = root.Q<Button>("LeftPanelToggle");
@@ -175,6 +194,7 @@ public class AuthoringUIController : MonoBehaviour
         rightPanelBody = root.Q<VisualElement>("RightPanelBody");
         workspaceNameLabel = root.Q<Label>("WorkspaceNameLabel");
         modeIndicatorLabel = root.Q<Label>("ModeIndicatorLabel");
+        contentHierarchyList = root.Q<ListView>("ContentLibraryList") ?? root.Q<ListView>("ContentHierarchyList");
 
         // --- TASK 6: 获取并初始化 Loading 和 Error 元素 ---
         _loadingOverlay = root.Q<VisualElement>("loading-overlay");
@@ -187,6 +207,7 @@ public class AuthoringUIController : MonoBehaviour
 
         // Event Listeners
         browseButton.clicked += OnBrowseButtonClicked;
+        if (addContentButton != null) addContentButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
         saveButton.clicked += OnSaveButtonClicked;
         if (backToSwitcherButton != null) backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
@@ -214,13 +235,21 @@ public class AuthoringUIController : MonoBehaviour
         authoringTransformCoordinator = ResolveAuthoringTransformCoordinator();
         apiClient = ResolveApiClient();
         spawnerManager = BuildSpawnerManager();
+        ConfigureHierarchyListView();
 
         RefreshImageTargetDropdownChoices();
         if (imageTargetDropdown != null)
             imageTargetDropdown.RegisterValueChangedCallback(OnImageTargetDropdownChanged);
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged += OnManagerActiveTargetChanged;
+        if (authoringTransformCoordinator != null)
+        {
+            authoringTransformCoordinator.ContentListChanged += OnCoordinatorContentListChanged;
+            authoringTransformCoordinator.ContentSelectionChanged += OnCoordinatorContentSelectionChanged;
+        }
         RefreshWorkspaceGuardUiState();
+        RefreshHierarchyListFromCoordinator();
+        SyncHierarchySelectionFromCoordinator();
     }
 
     void OnDisable()
@@ -229,6 +258,7 @@ public class AuthoringUIController : MonoBehaviour
         WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
 
         if (browseButton != null) browseButton.clicked -= OnBrowseButtonClicked;
+        if (addContentButton != null) addContentButton.clicked -= OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked -= OnBrowseTargetImageButtonClicked;
         if (saveButton != null) saveButton.clicked -= OnSaveButtonClicked;
         if (backToSwitcherButton != null) backToSwitcherButton.clicked -= OnBackToSwitcherButtonClicked;
@@ -241,6 +271,13 @@ public class AuthoringUIController : MonoBehaviour
             imageTargetDropdown.UnregisterValueChangedCallback(OnImageTargetDropdownChanged);
         if (targetSelectionManager != null)
             targetSelectionManager.ActiveTargetChanged -= OnManagerActiveTargetChanged;
+        if (authoringTransformCoordinator != null)
+        {
+            authoringTransformCoordinator.ContentListChanged -= OnCoordinatorContentListChanged;
+            authoringTransformCoordinator.ContentSelectionChanged -= OnCoordinatorContentSelectionChanged;
+        }
+        if (contentHierarchyList != null)
+            contentHierarchyList.onSelectionChange -= OnHierarchySelectionChanged;
     }
 
     private string ResolveWorkspaceDisplayName()
@@ -292,6 +329,355 @@ public class AuthoringUIController : MonoBehaviour
             leftPanelToggleButton.text = isLeftPanelExpanded ? "<" : ">";
         if (rightPanelToggleButton != null)
             rightPanelToggleButton.text = isRightPanelExpanded ? ">" : "<";
+    }
+
+    private void ConfigureHierarchyListView()
+    {
+        if (contentHierarchyList == null)
+            return;
+
+        contentHierarchyList.selectionType = SelectionType.Single;
+        contentHierarchyList.fixedItemHeight = 26;
+        contentHierarchyList.makeItem = () =>
+        {
+            var row = new VisualElement
+            {
+                style =
+                {
+                    flexDirection = FlexDirection.Row,
+                    justifyContent = Justify.SpaceBetween,
+                    alignItems = Align.Center
+                }
+            };
+            row.style.paddingLeft = 6;
+            row.style.paddingRight = 6;
+
+            var nameLabel = new Label { name = "entry-name" };
+            nameLabel.style.fontSize = 11;
+            nameLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
+            nameLabel.style.flexGrow = 1;
+            nameLabel.style.color = new Color(0.90f, 0.91f, 0.92f, 1f);
+
+            var statusLabel = new Label { name = "entry-status" };
+            statusLabel.style.fontSize = 10;
+            statusLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            statusLabel.style.marginLeft = 6;
+            statusLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+
+            row.Add(nameLabel);
+            row.Add(statusLabel);
+            return row;
+        };
+        contentHierarchyList.bindItem = (element, index) =>
+        {
+            var nameLabel = element.Q<Label>("entry-name");
+            var statusLabel = element.Q<Label>("entry-status");
+            if (nameLabel == null || statusLabel == null)
+                return;
+            if (index < 0 || index >= contentLibraryItems.Count || contentLibraryItems[index] == null)
+            {
+                nameLabel.text = "Missing";
+                statusLabel.text = "unsaved";
+                statusLabel.style.color = new Color(0.95f, 0.40f, 0.40f, 1f);
+                return;
+            }
+
+            ContentLibraryItem item = contentLibraryItems[index];
+            nameLabel.text = string.IsNullOrWhiteSpace(item.displayName) ? "Content" : item.displayName;
+            bool isUnsaved = !item.isSaved;
+            statusLabel.text = isUnsaved ? "unsaved" : "saved";
+            statusLabel.style.color = isUnsaved
+                ? new Color(0.95f, 0.40f, 0.40f, 1f)
+                : new Color(0.45f, 0.88f, 0.56f, 1f);
+        };
+        contentHierarchyList.itemsSource = contentLibraryItems;
+        contentHierarchyList.onSelectionChange += OnHierarchySelectionChanged;
+    }
+
+    private bool IsTransformUnsaved(Transform tr)
+    {
+        if (tr == null)
+            return true;
+        if (contentDraftsByTransform.TryGetValue(tr, out ContentDraftState draft) && draft != null)
+            return draft.isUnsaved || draft.persistPending || draft.uploadPending;
+        return false;
+    }
+
+    private void OnHierarchySelectionChanged(IEnumerable<object> selectedItems)
+    {
+        if (suppressHierarchySelectionCallbacks || authoringTransformCoordinator == null)
+            return;
+
+        foreach (object item in selectedItems)
+        {
+            ContentLibraryItem selectedItem = item as ContentLibraryItem;
+            if (selectedItem == null)
+                continue;
+            if (selectedItem.instantiatedTransform != null)
+            {
+                authoringTransformCoordinator.SelectContentTransform(selectedItem.instantiatedTransform, syncAuthoringUi: true);
+            }
+            else if (selectedItem.localFileBytes != null && selectedItem.localFileBytes.Length > 0)
+            {
+                ActivateLibraryItem(selectedItem);
+            }
+            break;
+        }
+    }
+
+    private void OnCoordinatorContentListChanged()
+    {
+        RefreshHierarchyListFromCoordinator();
+    }
+
+    private void OnCoordinatorContentSelectionChanged(Transform _)
+    {
+        SyncHierarchySelectionFromCoordinator();
+    }
+
+    private void RefreshHierarchyListFromCoordinator()
+    {
+        if (contentHierarchyList == null)
+            return;
+
+        SyncLibraryWithActiveSceneContent();
+        RefreshLibrarySavedFlagsFromDrafts();
+
+        // Remove stale entries that have neither payload nor live transform.
+        contentLibraryItems.RemoveAll(item =>
+            item == null
+            || (item.instantiatedTransform == null && (item.localFileBytes == null || item.localFileBytes.Length == 0)));
+
+        if (authoringTransformCoordinator != null)
+            _ = authoringTransformCoordinator.GetActiveContentEntries();
+        contentHierarchyList.Rebuild();
+        SyncHierarchySelectionFromCoordinator();
+    }
+
+    private void SyncHierarchySelectionFromCoordinator()
+    {
+        if (contentHierarchyList == null)
+            return;
+
+        Transform selected = authoringTransformCoordinator != null
+            ? authoringTransformCoordinator.GetSelectedContentTransform()
+            : null;
+
+        suppressHierarchySelectionCallbacks = true;
+        try
+        {
+            if (selected == null)
+            {
+                contentHierarchyList.ClearSelection();
+                return;
+            }
+
+            int idx = -1;
+            for (int i = 0; i < contentLibraryItems.Count; i++)
+            {
+                if (contentLibraryItems[i] != null && contentLibraryItems[i].instantiatedTransform == selected)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0)
+                contentHierarchyList.SetSelectionWithoutNotify(new[] { idx });
+            else
+                contentHierarchyList.ClearSelection();
+        }
+        finally
+        {
+            suppressHierarchySelectionCallbacks = false;
+        }
+    }
+
+    private void SyncLibraryWithActiveSceneContent()
+    {
+        if (authoringTransformCoordinator == null)
+            return;
+
+        // Bootstrap scene content into the library only once. After that, runtime library items
+        // are authoritative to avoid duplicate auto-generated "saved" entries on each switch.
+        if (hasBootstrappedSceneLibrary)
+            return;
+
+        IReadOnlyList<Transform> activeEntries = authoringTransformCoordinator.GetActiveContentEntries();
+        if (activeEntries == null)
+            return;
+
+        for (int i = 0; i < activeEntries.Count; i++)
+        {
+            Transform tr = activeEntries[i];
+            if (tr == null)
+                continue;
+
+            if (FindLibraryItemByTransform(tr) != null)
+                continue;
+
+            var item = new ContentLibraryItem
+            {
+                libraryId = Guid.NewGuid().ToString("N"),
+                displayName = tr.name,
+                contentType = SpawnContentType.Image,
+                instantiatedTransform = tr,
+                isSaved = !IsTransformUnsaved(tr)
+            };
+            contentLibraryItems.Add(item);
+        }
+
+        hasBootstrappedSceneLibrary = true;
+    }
+
+    private void RefreshLibrarySavedFlagsFromDrafts()
+    {
+        for (int i = 0; i < contentLibraryItems.Count; i++)
+        {
+            ContentLibraryItem item = contentLibraryItems[i];
+            if (item == null)
+                continue;
+
+            if (item.instantiatedTransform == null)
+            {
+                if (item.localFileBytes != null && item.localFileBytes.Length > 0)
+                    item.isSaved = false;
+                continue;
+            }
+
+            item.isSaved = !IsTransformUnsaved(item.instantiatedTransform);
+        }
+    }
+
+    private ContentLibraryItem FindLibraryItemByTransform(Transform tr)
+    {
+        for (int i = 0; i < contentLibraryItems.Count; i++)
+        {
+            ContentLibraryItem item = contentLibraryItems[i];
+            if (item != null && item.instantiatedTransform == tr)
+                return item;
+        }
+        return null;
+    }
+
+    private void DestroyCurrentSceneContentAndDetachLibraryRefs()
+    {
+        if (authoringTransformCoordinator == null)
+            return;
+
+        IReadOnlyList<Transform> entries = authoringTransformCoordinator.GetActiveContentEntries();
+        if (entries == null)
+            return;
+
+        var copy = new List<Transform>(entries.Count);
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (entries[i] != null)
+                copy.Add(entries[i]);
+        }
+
+        for (int i = 0; i < copy.Count; i++)
+        {
+            Transform tr = copy[i];
+            ContentLibraryItem linked = FindLibraryItemByTransform(tr);
+            if (linked != null)
+                linked.instantiatedTransform = null;
+
+            RemoveDraftForTransform(tr);
+            if (tr != null && tr.gameObject != null)
+                Destroy(tr.gameObject);
+        }
+    }
+
+    private void RemoveDraftForTransform(Transform tr)
+    {
+        if (tr == null)
+            return;
+
+        if (contentDraftsByTransform.TryGetValue(tr, out ContentDraftState byTransform) && byTransform != null)
+        {
+            if (byTransform.draggableObject != null)
+                contentDraftsByDraggable.Remove(byTransform.draggableObject);
+            contentDraftsByTransform.Remove(tr);
+            if (ReferenceEquals(activeContentDraft, byTransform))
+                activeContentDraft = null;
+            return;
+        }
+
+        DraggableObject draggable = tr.GetComponent<DraggableObject>();
+        if (draggable != null)
+            contentDraftsByDraggable.Remove(draggable);
+    }
+
+    private void ActivateLibraryItem(ContentLibraryItem item)
+    {
+        if (item == null || item.localFileBytes == null || item.localFileBytes.Length == 0)
+            return;
+
+        spawnerManager ??= BuildSpawnerManager();
+        DestroyCurrentSceneContentAndDetachLibraryRefs();
+
+        SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
+        {
+            contentType = item.contentType,
+            originalFileName = item.originalFileName,
+            localFileBytes = item.localFileBytes,
+            localMimeType = item.localMimeType,
+            isLocalDraft = true
+        });
+
+        if (!outcome.success || outcome.spawnedObject == null)
+        {
+            if (filePathInput != null)
+                filePathInput.value = "Library activation failed";
+            Debug.LogError("Library activation spawn failed: " + outcome.message);
+            return;
+        }
+
+        item.instantiatedTransform = outcome.spawnedObject.transform;
+        item.isSaved = false;
+        if (outcome.draggableObject != null)
+        {
+            RegisterLocalDraftFromLibraryItem(item, outcome.draggableObject);
+
+            string label = "Object";
+            if (outcome.contentType == SpawnContentType.Model) label = "Model";
+            else if (outcome.contentType == SpawnContentType.Video) label = "Video";
+            else if (outcome.contentType == SpawnContentType.Image) label = "Image";
+            SetActiveAuthoringObject(outcome.draggableObject, "", label);
+        }
+
+        authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
+        RefreshHierarchyListFromCoordinator();
+    }
+
+    private void RegisterLocalDraftFromLibraryItem(ContentLibraryItem item, DraggableObject draggableObject)
+    {
+        if (item == null || draggableObject == null)
+            return;
+
+        ContentDraftState existing = ResolveDraftForSelection(draggableObject.transform, draggableObject);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = draggableObject,
+            contentTransform = draggableObject.transform
+        };
+
+        draft.contentType = item.contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = item.originalFileName ?? "";
+        draft.localFileBytes = item.localFileBytes;
+        draft.localMimeType = item.localMimeType;
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = true;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByDraggable[draggableObject] = draft;
+        contentDraftsByTransform[draggableObject.transform] = draft;
+        item.instantiatedTransform = draggableObject.transform;
+        item.isSaved = false;
     }
 
     // --- TASK 6: 用于独立测试的 Update 方法 ---
@@ -952,44 +1338,38 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         type = SpawnContentType.Image;
     }
 
-    // ... rest of the method remains exactly the same
+    string mime = GuessMimeTypeFromExtension(extension);
+    var libraryItem = new ContentLibraryItem
+    {
+        libraryId = Guid.NewGuid().ToString("N"),
+        displayName = displayName,
+        contentType = type,
+        localFileBytes = selectedFile.data,
+        localMimeType = mime,
+        originalFileName = displayName,
+        instantiatedTransform = null,
+        isSaved = false
+    };
+    contentLibraryItems.Add(libraryItem);
 
-        SpawnContentResult outcome = spawnerManager.CreateContent(new SpawnRequest
-        {
-            contentType = type,
-            originalFileName = displayName,
-            localFileBytes = selectedFile.data,
-            localMimeType = GuessMimeTypeFromExtension(extension),
-            isLocalDraft = true
-        });
+    bool hasAnySceneContent = authoringTransformCoordinator != null
+        && authoringTransformCoordinator.GetActiveContentEntries() != null
+        && authoringTransformCoordinator.GetActiveContentEntries().Count > 0;
 
-        if (!outcome.success || outcome.spawnedObject == null)
-        {
-            if (filePathInput != null)
-                filePathInput.value = "Local spawn failed";
-            Debug.LogError("Local content spawn failed: " + outcome.message);
-            return;
-        }
-
+    if (hasAnySceneContent)
+    {
         if (filePathInput != null)
-            filePathInput.value = "Local draft: " + displayName;
-        if (youtubeUrlInput != null)
-            youtubeUrlInput.value = "";
-
-        if (outcome.draggableObject != null)
-        {
-            RegisterLocalDraft(outcome.draggableObject, outcome.contentType, selectedFile, displayName);
-            
-            string label = "Object";
-            if (outcome.contentType == SpawnContentType.Model) label = "Model";
-            else if (outcome.contentType == SpawnContentType.Video) label = "Video";
-            else if (outcome.contentType == SpawnContentType.Image) label = "Image";
-
-            SetActiveAuthoringObject(outcome.draggableObject, "", label);
-        }
-
-        authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
+            filePathInput.value = "Added to library: " + displayName;
+        RefreshHierarchyListFromCoordinator();
+        return;
     }
+
+    ActivateLibraryItem(libraryItem);
+    if (filePathInput != null)
+        filePathInput.value = "Local draft: " + displayName;
+    if (youtubeUrlInput != null)
+        youtubeUrlInput.value = "";
+}
 
     private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
     {
@@ -1083,6 +1463,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+        RefreshHierarchyListFromCoordinator();
     }
 
     private void RegisterRemoteBackedDraft(DraggableObject draggableObject, SpawnContentType contentType, string mediaUrl, string localFileName)
@@ -1109,6 +1490,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+        RefreshHierarchyListFromCoordinator();
     }
 
     private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
@@ -1138,6 +1520,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+        RefreshHierarchyListFromCoordinator();
     }
 
     private static string GuessMimeTypeFromExtension(string extension)
@@ -1268,12 +1651,14 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                 draft.uploadPending = false;
                 draft.persistPending = false;
                 draft.lastError = "";
+                MarkLibraryItemSavedByTransform(draft.contentTransform, saved: true);
             }
             else
             {
                 failedCount++;
                 draft.isUnsaved = true;
                 draft.persistPending = true;
+                MarkLibraryItemSavedByTransform(draft.contentTransform, saved: false);
             }
         }
 
@@ -1291,6 +1676,16 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         }
 
         isSaveInProgress = false;
+        RefreshHierarchyListFromCoordinator();
+    }
+
+    private void MarkLibraryItemSavedByTransform(Transform transform, bool saved)
+    {
+        if (transform == null)
+            return;
+        ContentLibraryItem item = FindLibraryItemByTransform(transform);
+        if (item != null)
+            item.isSaved = saved;
     }
 
     private List<ContentDraftState> CollectPendingDrafts()

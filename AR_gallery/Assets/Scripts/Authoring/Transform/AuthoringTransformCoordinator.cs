@@ -27,9 +27,22 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     [SerializeField] private float scaleStep = 0.1f;
 
     private readonly List<Transform> _contentObjects = new List<Transform>();
+    private readonly List<int> _lastContentInstanceIds = new List<int>();
     private int _selectedListIndex = -1;
     private int _authoringSyncedTargetIndex = int.MinValue;
     private bool _suppressAuthoringSyncFromSelection;
+    public event System.Action ContentListChanged;
+    public event System.Action<Transform> ContentSelectionChanged;
+
+    public IReadOnlyList<Transform> GetActiveContentEntries()
+    {
+        return _contentObjects;
+    }
+
+    public Transform GetSelectedContentTransform()
+    {
+        return objectSelectionManager != null ? objectSelectionManager.Selected : null;
+    }
 
     private void Awake()
     {
@@ -145,6 +158,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         {
             _selectedListIndex = -1;
             UpdateSelectionVisual();
+            ContentSelectionChanged?.Invoke(null);
             if (_suppressAuthoringSyncFromSelection)
             {
                 _suppressAuthoringSyncFromSelection = false;
@@ -167,6 +181,8 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         if (authoringUI != null)
             authoringUI.OnContentSelectedInScene(selected);
+
+        ContentSelectionChanged?.Invoke(selected);
     }
 
     private void OnGizmoContentTransformChanged(Transform contentTransform)
@@ -227,6 +243,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         if (contentRoot == null)
         {
             _selectedListIndex = -1;
+            bool wasNotEmpty = _lastContentInstanceIds.Count > 0;
+            _lastContentInstanceIds.Clear();
+            if (wasNotEmpty)
+                ContentListChanged?.Invoke();
             return;
         }
 
@@ -248,6 +268,38 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
                 objectSelectionManager.SetSelected(_contentObjects[0]);
             }
         }
+
+        bool listChanged = HasContentListChanged();
+        if (listChanged)
+            ContentListChanged?.Invoke();
+    }
+
+    private bool HasContentListChanged()
+    {
+        if (_lastContentInstanceIds.Count != _contentObjects.Count)
+        {
+            CacheCurrentContentInstanceIds();
+            return true;
+        }
+
+        for (int i = 0; i < _contentObjects.Count; i++)
+        {
+            int id = _contentObjects[i] != null ? _contentObjects[i].GetInstanceID() : 0;
+            if (_lastContentInstanceIds[i] != id)
+            {
+                CacheCurrentContentInstanceIds();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void CacheCurrentContentInstanceIds()
+    {
+        _lastContentInstanceIds.Clear();
+        for (int i = 0; i < _contentObjects.Count; i++)
+            _lastContentInstanceIds.Add(_contentObjects[i] != null ? _contentObjects[i].GetInstanceID() : 0);
     }
 
     private Transform GetActiveContentRoot()
