@@ -128,12 +128,16 @@ public sealed class TransformGizmoController : MonoBehaviour
         if (!useRuntimeTransformGizmo)
             yield break;
 
-        // Wait a frame so RTG bootstrap has time to create modules.
-        yield return null;
+        const int maxWaitFrames = 180;
+        for (int i = 0; i < maxWaitFrames && RTGizmosEngine.Get == null; i++)
+        {
+            RTGRuntimeBootstrap.EnsureRTGModules();
+            yield return null;
+        }
 
         if (RTGizmosEngine.Get == null)
         {
-            Debug.LogWarning("TransformGizmoController: RTGizmosEngine is not ready.");
+            Debug.LogWarning("TransformGizmoController: RTGizmosEngine is not ready after bootstrap retry.");
             yield break;
         }
 

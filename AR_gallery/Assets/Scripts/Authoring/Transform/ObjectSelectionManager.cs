@@ -18,6 +18,8 @@ public sealed class ObjectSelectionManager : MonoBehaviour
     [SerializeField] private float maxRayDistance = 500f;
     [SerializeField] private bool clearSelectionOnEmptyClick = true;
     [SerializeField] private bool blockWhenPointerOverUi = true;
+    [Tooltip("UI Toolkit: when set, blocks scene selection like ContentTransformController did (EventSystem alone is not enough).")]
+    [SerializeField] private AuthoringUIController authoringUiOverride;
 
     private Transform _selected;
 
@@ -59,7 +61,16 @@ public sealed class ObjectSelectionManager : MonoBehaviour
         if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
             return;
 
-        if (blockWhenPointerOverUi && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        if (DraggableObject.IsDraggingObjectInteractionActive)
+            return;
+
+        if (authoringUiOverride != null)
+        {
+            Vector2 sp = mouse.position.ReadValue();
+            if (authoringUiOverride.IsPointerOverAuthoringUi(sp))
+                return;
+        }
+        else if (blockWhenPointerOverUi && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
         if (RTGizmosEngine.Get != null && RTGizmosEngine.Get.HoveredGizmo != null)

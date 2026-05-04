@@ -16,6 +16,7 @@ public class AuthoringUIController : MonoBehaviour
     public StyleSheet mobileStyleSheet;
 
     [SerializeField] private TargetSelectionManager targetSelectionManager;
+    [SerializeField] private AuthoringTransformCoordinator authoringTransformCoordinator;
 
     // --- NEW: Prefab Templates (Drag these in the Inspector) ---
     public GameObject picturePrefab;
@@ -189,6 +190,7 @@ public class AuthoringUIController : MonoBehaviour
         RegisterSpatialFieldCallbacks();
 
         targetSelectionManager = ResolveTargetSelectionManager();
+        authoringTransformCoordinator = ResolveAuthoringTransformCoordinator();
         apiClient = ResolveApiClient();
         spawnerManager = BuildSpawnerManager();
 
@@ -460,7 +462,29 @@ public class AuthoringUIController : MonoBehaviour
 
         return targetSelectionManager;
     }
-    
+
+    private AuthoringTransformCoordinator ResolveAuthoringTransformCoordinator()
+    {
+        if (authoringTransformCoordinator != null)
+            return authoringTransformCoordinator;
+
+        authoringTransformCoordinator = FindFirstObjectByType<AuthoringTransformCoordinator>();
+        if (authoringTransformCoordinator == null)
+        {
+            var all = Resources.FindObjectsOfTypeAll<AuthoringTransformCoordinator>();
+            foreach (AuthoringTransformCoordinator c in all)
+            {
+                if (c != null && c.gameObject.scene.IsValid())
+                {
+                    authoringTransformCoordinator = c;
+                    break;
+                }
+            }
+        }
+
+        return authoringTransformCoordinator;
+    }
+
     private IApiClient ResolveApiClient()
     {
         if (apiClient != null)
@@ -767,7 +791,7 @@ public class AuthoringUIController : MonoBehaviour
             SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, "Text");
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     void OnBrowseButtonClicked()
@@ -890,7 +914,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             SetActiveAuthoringObject(outcome.draggableObject, "", label);
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
+        authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
     }
 
     private void OnTargetImageUploadCompleted(ApiResult<UploadFileResponseDto> result, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
@@ -1398,7 +1422,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             SetActiveAuthoringObject(localResult.draggableObject, url, "Video");
         }
 
-        FindFirstObjectByType<ContentTransformController>()?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
         Debug.Log("Successfully spawned YouTube stream to AR wall.");
     }
 

@@ -3,25 +3,33 @@ using RTG;
 
 /// <summary>
 /// 在播放模式下自动创建 Runtime Transform Gizmos 所需模块（等价于菜单 Tools/Runtime Transform Gizmos/Initialize）。
-/// 仅在存在 Transform Gizmo 相关控制器的场景中启用，避免影响其它场景。
+/// 仅在存在 Transform Gizmo 相关控制器的场景中启用，避免影响其它 scenes。
+/// <see cref="EnsureRTGModules"/> 可重复调用（幂等），供 <see cref="TransformGizmoController"/> 在引擎尚未就绪时重试。
 /// </summary>
 public static class RTGRuntimeBootstrap
 {
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void EnsureRTGModules()
+    private static void EnsureRTGModulesAfterSceneLoad()
+    {
+        EnsureRTGModules();
+    }
+
+    /// <summary>
+    /// Creates RTG modules if this scene needs them and <see cref="RTGApp"/> does not exist yet.
+    /// Safe to call from gameplay code when <see cref="RTGizmosEngine.Get"/> is still null.
+    /// </summary>
+    public static void EnsureRTGModules()
     {
         if (RTGApp.Get != null)
             return;
 
-        bool hasLegacyController = Object.FindFirstObjectByType<ContentTransformController>() != null;
-        bool hasReusableController = Object.FindFirstObjectByType<TransformGizmoController>() != null;
-        if (!hasLegacyController && !hasReusableController)
+        if (!SceneNeedsRtgAutoBootstrap())
             return;
 
-        Camera mainCam = Camera.main;
+        Camera mainCam = ResolveBootstrapCamera();
         if (mainCam == null)
         {
-            Debug.LogWarning("RTGRuntimeBootstrap: 未找到 Main Camera，无法初始化 Runtime Transform Gizmos。");
+            Debug.LogWarning("RTGRuntimeBootstrap: No Camera found; cannot initialize Runtime Transform Gizmos.");
             return;
         }
 
@@ -32,8 +40,6 @@ public static class RTGRuntimeBootstrap
         CreateChildModule<RTGizmosEngine>(root);
         CreateChildModule<RTScene>(root);
         CreateChildModule<RTSceneGrid>(root);
-        // RTFocusCamera.Awake 要求 TargetCamera 已赋值；AddComponent 会立刻触发 Awake，故先挂到未激活物体上，
-        // SetTargetCamera 后再激活，避免 “RTCamera: No target camera was specified”。
         GameObject focusGo = new GameObject("RTFocusCamera");
         focusGo.SetActive(false);
         focusGo.transform.SetParent(root, false);
@@ -44,6 +50,44 @@ public static class RTGRuntimeBootstrap
         CreateChildModule<RTCameraBackground>(root);
         CreateChildModule<RTInputDevice>(root);
         CreateChildModule<RTUndoRedo>(root);
+    }
+
+    private static bool SceneNeedsRtgAutoBootstrap()
+    {
+        if (FindController<ContentTransformController>())
+            return true;
+        if (FindController<TransformGizmoController>())
+            return true;
+        if (FindController<AuthoringTransformCoordinator>())
+            return true;
+        return false;
+    }
+
+    private static bool FindController<T>() where T : Object
+    {
+#if UNITY_2022_3_OR_NEWER
+        return Object.FindFirstObjectByType<T>(FindObjectsInactive.Include) != null;
+#else
+        return Object.FindObjectOfType<T>(true) != null;
+#endif
+    }
+
+    private static Camera ResolveBootstrapCamera()
+    {
+        Camera c = Camera.main;
+        if (c != null)
+            return c;
+
+        GameObject tagged = GameObject.FindGameObjectWithTag("MainCamera");
+        if (tagged != null && tagged.TryGetComponent(out Camera taggedCam))
+            return taggedCam;
+
+#if UNITY_2022_3_OR_NEWER
+        Camera[] cameras = Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+#else
+        Camera[] cameras = Object.FindObjectsOfType<Camera>();
+#endif
+        return cameras != null && cameras.Length > 0 ? cameras[0] : null;
     }
 
     private static T CreateChildModule<T>(Transform parent) where T : MonoBehaviour

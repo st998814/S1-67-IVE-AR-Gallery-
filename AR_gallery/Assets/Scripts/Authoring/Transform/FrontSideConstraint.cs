@@ -51,6 +51,16 @@ public sealed class FrontSideConstraint : MonoBehaviour
             targetBlockingCollider = FindFirstTargetColliderExcludingContent();
     }
 
+    /// <summary>
+    /// Repoints constraint resolution when the active authoring target changes (multi-target sessions).
+    /// </summary>
+    public void SetTargetContext(Transform newTargetRoot, Transform newContentRoot)
+    {
+        targetRoot = newTargetRoot;
+        contentRoot = newContentRoot;
+        targetBlockingCollider = FindFirstTargetColliderExcludingContent();
+    }
+
     public bool Enforce(Transform contentTransform)
     {
         if (contentTransform == null)

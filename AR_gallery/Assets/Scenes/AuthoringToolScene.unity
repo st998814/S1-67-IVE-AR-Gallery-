@@ -496,6 +496,131 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: f6fc3109a56311c469f8640832defc26, type: 3}
+--- !u!1 &188100001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 188100002}
+  - component: {fileID: 188100003}
+  - component: {fileID: 188100004}
+  - component: {fileID: 188100005}
+  - component: {fileID: 188100006}
+  - component: {fileID: 188100007}
+  m_Layer: 0
+  m_Name: AuthoringTransformSystems
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &188100002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &188100003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99283293bb5354e3eb2889fd56a11cac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FrontSideConstraint
+  frontOffset: 0.02
+--- !u!114 &188100004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d2d2f1a8696f41f7ae2d6c1b64dec5d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TargetLocalTransformService
+  minUniformScale: 0.05
+  maxUniformScale: 8
+--- !u!114 &188100005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 657585086f80748fe9c42998f81fd9bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ObjectSelectionManager
+  raycastCamera: {fileID: 600757515}
+  contentRoot: {fileID: 0}
+  selectionMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maxRayDistance: 500
+  clearSelectionOnEmptyClick: 0
+  blockWhenPointerOverUi: 1
+  authoringUiOverride: {fileID: 1900000014}
+--- !u!114 &188100006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efc574b3ae5c44a1e9c05c5f8fadf179, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TransformGizmoController
+  selectionManager: {fileID: 188100005}
+  targetLocalTransformService: {fileID: 188100004}
+  frontSideConstraint: {fileID: 188100003}
+  useRuntimeTransformGizmo: 1
+  gizmoTransformSpace: 0
+  enforceUniformScale: 1
+  allowKeyboardModeShortcuts: 1
+--- !u!114 &188100007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9c8d7e6f5a44332211098766554433a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AuthoringTransformCoordinator
+  targetSelectionManager: {fileID: 1480848358}
+  objectSelectionManager: {fileID: 188100005}
+  gizmoController: {fileID: 188100006}
+  frontSideConstraint: {fileID: 188100003}
+  authoringUI: {fileID: 1900000014}
+  mainCamera: {fileID: 600757515}
+  enableKeyboardNudges: 1
+  moveStep: 0.1
+  rotateStep: 10
+  scaleStep: 0.1
 --- !u!1 &1480848357
 GameObject:
   m_ObjectHideFlags: 0
@@ -507,7 +632,6 @@ GameObject:
   - component: {fileID: 1480848359}
   - component: {fileID: 1480848358}
   - component: {fileID: 1480848360}
-  - component: {fileID: 1480848361}
   - component: {fileID: 1480848362}
   m_Layer: 0
   m_Name: TargetSelectionManager
@@ -560,30 +684,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ContentPlacementManager
   targetSelectionManager: {fileID: 1480848358}
---- !u!114 &1480848361
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1480848357}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 43ffdd650c83f441a99a773aa3e7ab7c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ContentTransformController
-  targetSelectionManager: {fileID: 1480848358}
-  authoringUI: {fileID: 1900000014}
-  raycastCamera: {fileID: 600757515}
-  moveStep: 0.1
-  rotateStep: 10
-  scaleStep: 0.1
-  useRuntimeTransformGizmo: 1
-  gizmoTransformSpace: 0
-  clickSelectRayDistance: 200
-  clickSelectLayerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
 --- !u!114 &1480848362
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -731,6 +831,7 @@ MonoBehaviour:
   dbManager: {fileID: 1900000003}
   videoPrefab: {fileID: 5789709158885535786, guid: 43d0f67163787fc49849885478e03636, type: 3}
   targetSelectionManager: {fileID: 1480848358}
+  authoringTransformCoordinator: {fileID: 188100007}
   picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
   textPrefab: {fileID: 8795060008269078731, guid: f48d1b2894c30d34c8f4f1b5659f2e98, type: 3}
   modelContentContainerPrefab: {fileID: 0}
@@ -763,6 +864,7 @@ SceneRoots:
   - {fileID: 600757516}
   - {fileID: 887592420}
   - {fileID: 507022752}
+  - {fileID: 188100002}
   - {fileID: 1480848359}
   - {fileID: 1900000002}
   - {fileID: 1900000012}
