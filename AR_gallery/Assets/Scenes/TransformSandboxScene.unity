@@ -555,7 +555,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TargetMovementController
   targetRoot: {fileID: 726244050}
-  contentRoot: {fileID: 0}
+  contentRoot: {fileID: 1511212289}
+  planeAnchor: {fileID: 1899808526}
   raycastCamera: {fileID: 717743726}
   gizmoController: {fileID: 579780270}
   targetMask:
