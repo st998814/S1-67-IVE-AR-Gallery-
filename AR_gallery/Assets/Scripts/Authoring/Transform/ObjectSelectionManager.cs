@@ -24,10 +24,30 @@ public sealed class ObjectSelectionManager : MonoBehaviour
     public event Action<Transform> SelectionChanged;
     public Transform Selected => _selected;
 
+    public void Configure(Camera cameraRef, Transform contentRootRef)
+    {
+        if (cameraRef != null)
+            raycastCamera = cameraRef;
+        if (contentRootRef != null)
+            contentRoot = contentRootRef;
+    }
+
     private void Start()
     {
         if (raycastCamera == null)
             raycastCamera = Camera.main;
+        if (contentRoot == null)
+            contentRoot = FindContentRootInScene();
+    }
+
+    private void LateUpdate()
+    {
+        // Keep selection state valid if the selected object is destroyed/deactivated.
+        if (_selected == null)
+            return;
+
+        if (!IsSelectionStillValid(_selected))
+            SetSelected(null);
     }
 
     private void Update()
@@ -68,6 +88,9 @@ public sealed class ObjectSelectionManager : MonoBehaviour
 
     public void SetSelected(Transform selected)
     {
+        if (selected != null && !IsSelectionStillValid(selected))
+            selected = null;
+
         if (_selected == selected)
             return;
 
@@ -94,5 +117,22 @@ public sealed class ObjectSelectionManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    private bool IsSelectionStillValid(Transform selected)
+    {
+        if (selected == null)
+            return false;
+        if (!selected.gameObject.activeInHierarchy)
+            return false;
+        if (contentRoot == null)
+            return true;
+        return selected.parent == contentRoot || selected.IsChildOf(contentRoot);
+    }
+
+    private static Transform FindContentRootInScene()
+    {
+        GameObject go = GameObject.Find("ContentRoot");
+        return go != null ? go.transform : null;
     }
 }

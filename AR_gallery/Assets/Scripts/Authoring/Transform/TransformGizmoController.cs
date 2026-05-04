@@ -9,17 +9,23 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Binds a runtime gizmo to the current selection and enforces target-local transform constraints.
 /// </summary>
+[DefaultExecutionOrder(1000)]
 public sealed class TransformGizmoController : MonoBehaviour
 {
     [SerializeField] private ObjectSelectionManager selectionManager;
     [SerializeField] private TargetLocalTransformService targetLocalTransformService;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
     [SerializeField] private bool useRuntimeTransformGizmo = true;
+    [Tooltip("For a wall target, Local often avoids fighting the front-Z clamp when using a thick 3D proxy mesh.")]
     [SerializeField] private GizmoSpace gizmoTransformSpace = GizmoSpace.Global;
     [SerializeField] private bool enforceUniformScale = true;
     [SerializeField] private bool allowKeyboardModeShortcuts = true;
 
+    private ObjectTransformGizmo _moveGizmo;
+    private ObjectTransformGizmo _rotateGizmo;
+    private ObjectTransformGizmo _scaleGizmo;
     private ObjectTransformGizmo _universalGizmo;
+    private ObjectTransformGizmo _workGizmo;
     private Transform _selected;
     private bool _wasDragging;
     private GizmoMode _mode = GizmoMode.Translate;
@@ -27,6 +33,9 @@ public sealed class TransformGizmoController : MonoBehaviour
     private bool _hasDragStartSnapshot;
     private LocalTransformSnapshot _lastSnapshot;
     private bool _hasSnapshot;
+    private bool _gizmosInitialized;
+    private int _lastSyncedTargetInstanceId = int.MinValue;
+    private GizmoSpace _lastSyncedGizmoSpace;
 
     public enum GizmoMode
     {
@@ -69,13 +78,23 @@ public sealed class TransformGizmoController : MonoBehaviour
     {
         get
         {
-            if (_universalGizmo == null || RTGizmosEngine.Get == null)
+            if (!_gizmosInitialized || _workGizmo == null || _workGizmo.Gizmo == null || RTGizmosEngine.Get == null)
                 return false;
-            return RTGizmosEngine.Get.DraggedGizmo == _universalGizmo.Gizmo;
+            return RTGizmosEngine.Get.DraggedGizmo == _workGizmo.Gizmo;
         }
     }
 
     public GizmoMode CurrentMode => _mode;
+
+    public void ConfigureDependencies(ObjectSelectionManager selectionRef, TargetLocalTransformService localServiceRef, FrontSideConstraint frontConstraintRef)
+    {
+        if (selectionRef != null)
+            selectionManager = selectionRef;
+        if (localServiceRef != null)
+            targetLocalTransformService = localServiceRef;
+        if (frontConstraintRef != null)
+            frontSideConstraint = frontConstraintRef;
+    }
 
     private void Awake()
     {
@@ -118,15 +137,55 @@ public sealed class TransformGizmoController : MonoBehaviour
             yield break;
         }
 
+        _moveGizmo = RTGizmosEngine.Get.CreateObjectMoveGizmo();
+        _rotateGizmo = RTGizmosEngine.Get.CreateObjectRotationGizmo();
+        _scaleGizmo = RTGizmosEngine.Get.CreateObjectScaleGizmo();
         _universalGizmo = RTGizmosEngine.Get.CreateObjectUniversalGizmo();
+
+        if (_moveGizmo == null || _rotateGizmo == null || _scaleGizmo == null || _universalGizmo == null)
+        {
+            Debug.LogWarning("TransformGizmoController: Failed to create one or more RTG gizmos.");
+            yield break;
+        }
+
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
         _universalGizmo.SetTransformSpace(gizmoTransformSpace);
-        _universalGizmo.Gizmo.SetEnabled(false);
+
+        SafeSetGizmoEnabled(_moveGizmo, false);
+        SafeSetGizmoEnabled(_rotateGizmo, false);
+        SafeSetGizmoEnabled(_scaleGizmo, false);
+        SafeSetGizmoEnabled(_universalGizmo, false);
+
+        _gizmosInitialized = true;
+        _workGizmo = _moveGizmo;
+        if (_selected != null)
+            PushCurrentSelectionToAllGizmos();
         ApplyGizmoModeVisualState();
+    }
+
+    private void PushCurrentSelectionToAllGizmos()
+    {
+        if (!_gizmosInitialized || _selected == null)
+            return;
+
+        GameObject targetGo = _selected.gameObject;
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
+        _universalGizmo.SetTransformSpace(gizmoTransformSpace);
+        _moveGizmo.SetTargetObject(targetGo);
+        _rotateGizmo.SetTargetObject(targetGo);
+        _scaleGizmo.SetTargetObject(targetGo);
+        _universalGizmo.SetTargetObject(targetGo);
+        _lastSyncedGizmoSpace = gizmoTransformSpace;
+        _lastSyncedTargetInstanceId = targetGo.GetInstanceID();
     }
 
     private void Update()
     {
-        if (_universalGizmo == null)
+        if (!_gizmosInitialized)
             return;
 
 #if ENABLE_INPUT_SYSTEM
@@ -141,21 +200,52 @@ public sealed class TransformGizmoController : MonoBehaviour
 
         if (_selected == null)
         {
-            _universalGizmo.Gizmo.SetEnabled(false);
+            DisableAllGizmos();
+            _lastSyncedTargetInstanceId = int.MinValue;
             return;
         }
 
+        // Do not call ApplyGizmoModeVisualState every frame: it disables all gizmos first,
+        // which cancels RTG drags and makes handles appear to do nothing.
+        // Only refresh target/space when needed, and never during an active gizmo drag.
+        bool rtgDragging = RTGizmosEngine.Get != null && RTGizmosEngine.Get.DraggedGizmo != null;
+        if (!rtgDragging)
+            SyncAllGizmosTargetAndSpaceIfDirty();
+    }
+
+    private void SyncAllGizmosTargetAndSpaceIfDirty()
+    {
+        if (_selected == null)
+            return;
+
+        int id = _selected.gameObject.GetInstanceID();
+        bool spaceChanged = gizmoTransformSpace != _lastSyncedGizmoSpace;
+        bool targetChanged = id != _lastSyncedTargetInstanceId;
+        if (!spaceChanged && !targetChanged)
+            return;
+
+        _lastSyncedGizmoSpace = gizmoTransformSpace;
+        _lastSyncedTargetInstanceId = id;
+
+        _moveGizmo.SetTransformSpace(gizmoTransformSpace);
+        _rotateGizmo.SetTransformSpace(gizmoTransformSpace);
+        _scaleGizmo.SetTransformSpace(gizmoTransformSpace);
         _universalGizmo.SetTransformSpace(gizmoTransformSpace);
-        _universalGizmo.SetTargetObject(_selected.gameObject);
-        _universalGizmo.Gizmo.SetEnabled(true);
+
+        GameObject targetGo = _selected.gameObject;
+        _moveGizmo.SetTargetObject(targetGo);
+        _rotateGizmo.SetTargetObject(targetGo);
+        _scaleGizmo.SetTargetObject(targetGo);
+        _universalGizmo.SetTargetObject(targetGo);
     }
 
     private void LateUpdate()
     {
-        if (_selected == null || _universalGizmo == null || RTGizmosEngine.Get == null)
+        if (!_gizmosInitialized || _selected == null || _workGizmo == null || _workGizmo.Gizmo == null || RTGizmosEngine.Get == null)
             return;
 
-        bool draggingNow = RTGizmosEngine.Get.DraggedGizmo == _universalGizmo.Gizmo;
+        Gizmo dragged = RTGizmosEngine.Get.DraggedGizmo;
+        bool draggingNow = dragged != null && dragged == _workGizmo.Gizmo;
         if (draggingNow)
         {
             if (!_wasDragging)
@@ -185,17 +275,18 @@ public sealed class TransformGizmoController : MonoBehaviour
         _hasSnapshot = false;
         _hasDragStartSnapshot = false;
 
-        if (_universalGizmo == null)
+        if (!_gizmosInitialized)
             return;
 
         if (_selected == null)
         {
-            _universalGizmo.Gizmo.SetEnabled(false);
+            DisableAllGizmos();
+            _lastSyncedTargetInstanceId = int.MinValue;
             return;
         }
 
-        _universalGizmo.SetTargetObject(_selected.gameObject);
-        _universalGizmo.Gizmo.SetEnabled(true);
+        PushCurrentSelectionToAllGizmos();
+        ApplyGizmoModeVisualState();
         ApplyPostTransformRules(_selected);
     }
 
@@ -207,17 +298,44 @@ public sealed class TransformGizmoController : MonoBehaviour
 
     private void ApplyGizmoModeVisualState()
     {
-        if (_universalGizmo == null)
+        if (!_gizmosInitialized)
             return;
 
-        // Keep one RTG gizmo instance for stability and portability.
-        // Mode still maps to explicit transform intent for future scene UI wiring.
-        bool isTranslate = _mode == GizmoMode.Translate;
-        bool isRotate = _mode == GizmoMode.Rotate;
-        bool isScale = _mode == GizmoMode.Scale;
-        bool isUniversal = _mode == GizmoMode.Universal;
+        DisableAllGizmos();
 
-        _universalGizmo.Gizmo.SetEnabled(isTranslate || isRotate || isScale || isUniversal);
+        _workGizmo = ResolveGizmoForMode(_mode);
+        if (_workGizmo == null || _workGizmo.Gizmo == null)
+            return;
+
+        if (_selected != null)
+            SafeSetGizmoEnabled(_workGizmo, true);
+    }
+
+    private void DisableAllGizmos()
+    {
+        SafeSetGizmoEnabled(_moveGizmo, false);
+        SafeSetGizmoEnabled(_rotateGizmo, false);
+        SafeSetGizmoEnabled(_scaleGizmo, false);
+        SafeSetGizmoEnabled(_universalGizmo, false);
+    }
+
+    private static void SafeSetGizmoEnabled(ObjectTransformGizmo gizmo, bool enabled)
+    {
+        if (gizmo?.Gizmo == null)
+            return;
+        gizmo.Gizmo.SetEnabled(enabled);
+    }
+
+    private ObjectTransformGizmo ResolveGizmoForMode(GizmoMode mode)
+    {
+        switch (mode)
+        {
+            case GizmoMode.Translate: return _moveGizmo;
+            case GizmoMode.Rotate: return _rotateGizmo;
+            case GizmoMode.Scale: return _scaleGizmo;
+            case GizmoMode.Universal: return _universalGizmo;
+            default: return _moveGizmo;
+        }
     }
 
     private void ApplyPostTransformRules(Transform content)
