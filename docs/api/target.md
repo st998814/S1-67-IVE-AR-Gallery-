@@ -121,6 +121,77 @@ Body matches `CreateTargetResponseDto`:
 
 ---
 
+## `POST /api/targets/cloud`
+
+Uploads a target image to the backend, registers it with Vuforia Cloud Target Web API, and stores the resulting target metadata in PostgreSQL.
+
+Use this endpoint when Unity needs the full flow:
+
+1. Upload target image bytes to Flask.
+2. Flask creates the Cloud Target in Vuforia.
+3. Flask stores `targetId`, `targetImageUrl`, transform data, and Vuforia status in the backend database.
+
+### Request
+
+**Content-Type:** `multipart/form-data`
+
+| Part / Field | Type | Required | Description |
+|--------------|------|----------|-------------|
+| `file` | file | yes | Target image bytes, `png`, `jpg`, or `jpeg`. |
+| `targetId` | string | yes | Canonical target id used by backend and Unity. |
+| `targetName` | string | yes | Display/internal target name. |
+| `displayLabel` | string | no | User-facing label. |
+| `width` | number | no | Vuforia physical target width; backend default comes from `VUFORIA_TARGET_WIDTH`. |
+| `localPosition` | string JSON | no | Stringified `ApiVector3Dto`; defaults to zero. |
+| `localEuler` | string JSON | no | Stringified `ApiVector3Dto`; defaults to zero. |
+| `localScale` | string JSON | no | Stringified `ApiVector3Dto`; defaults to one. |
+| `meta` | string JSON | no | Stringified `ApiSyncMetaDto`. |
+
+### Response `200` / `201`
+
+**Content-Type:** `application/json`
+
+Body extends `CreateTargetResponseDto` with Vuforia fields:
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `targetId` | string | Backend canonical target id. |
+| `targetName` | string | Stored target name. |
+| `displayLabel` | string | Stored display label. |
+| `targetImageUrl` | string | Backend URL for the uploaded target image. |
+| `status` | string | Backend lifecycle status. |
+| `createdAtUtc` | string | ISO-8601 UTC. |
+| `vuforiaTargetId` | string | Vuforia Cloud Target id. |
+| `vuforiaStatus` | string | Vuforia result/status code. |
+
+### Example — success response
+
+```json
+{
+  "targetId": "poster-a",
+  "targetName": "Poster A",
+  "displayLabel": "Main wall poster",
+  "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
+  "status": "created",
+  "createdAtUtc": "2026-04-18T12:00:01Z",
+  "vuforiaTargetId": "xxxxxxxxxxxxxxxxxxxxxxxx",
+  "vuforiaStatus": "TargetCreated"
+}
+```
+
+### Backend configuration
+
+The backend reads Vuforia credentials from environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `VUFORIA_ACCESS_KEY` | Vuforia database access key. |
+| `VUFORIA_SECRET_KEY` | Vuforia database secret key. |
+| `VUFORIA_HOST` | Defaults to `https://vws.vuforia.com`. |
+| `VUFORIA_TARGET_WIDTH` | Default physical target width. |
+
+---
+
 ## `GET /api/targets`
 
 Returns all targets (or the server-defined default list) for gallery / admin / sync.

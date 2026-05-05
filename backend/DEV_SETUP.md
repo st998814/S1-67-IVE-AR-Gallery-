@@ -13,6 +13,18 @@ make logs
 
 This starts PostgreSQL, builds the Flask backend image, runs `python scripts/migrate.py up`, and exposes the API at `http://127.0.0.1:5050`.
 
+To enable Vuforia Cloud Target registration, create a local `.env` from `.env.example` at the repo root and fill:
+
+```bash
+VUFORIA_ACCESS_KEY=your_database_access_key
+VUFORIA_SECRET_KEY=your_database_secret_key
+VUFORIA_TARGET_WIDTH=1.0
+```
+
+For Docker, `DOCKER_DB_HOST=db` uses the bundled PostgreSQL service. To connect the backend container to a cloud PostgreSQL database instead, set `DOCKER_DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASS` to the cloud database values.
+
+Do not commit `.env` or share these keys publicly.
+
 To stop:
 
 ```bash

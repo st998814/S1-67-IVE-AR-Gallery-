@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from flask_cors import CORS
 from psycopg2.extras import Json
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.utils import secure_filename
+from vuforia_service import VuforiaConfig, VuforiaError, register_vuforia_target
 
 app = Flask(__name__)
 CORS(app)
@@ -42,6 +44,12 @@ DB_PORT = int(os.environ.get("DB_PORT", "5432"))
 DB_NAME = os.environ.get("DB_NAME", "ive_ar_gallery")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASS = os.environ.get("DB_PASS", "postgres")
+VUFORIA_CONFIG = VuforiaConfig(
+    access_key=os.environ.get("VUFORIA_ACCESS_KEY") or os.environ.get("VUFORIA_SERVER_ACCESS_KEY", ""),
+    secret_key=os.environ.get("VUFORIA_SECRET_KEY") or os.environ.get("VUFORIA_SERVER_SECRET_KEY", ""),
+    host=os.environ.get("VUFORIA_HOST") or os.environ.get("VUFORIA_BASE_URL", "https://vws.vuforia.com"),
+    target_width=float(os.environ.get("VUFORIA_TARGET_WIDTH", "1.0")),
+)
 
 
 def get_db_connection():
@@ -123,6 +131,17 @@ def _parse_meta(data: dict):
     return value, None
 
 
+def _parse_form_json(field: str, default):
+    raw = request.form.get(field)
+    if raw is None or raw == "":
+        return default, None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, f"{field} must be valid JSON."
+    return value, None
+
+
 def _target_response(row, status_override=None):
     return {
         "targetId": row[0],
@@ -132,6 +151,13 @@ def _target_response(row, status_override=None):
         "createdAtUtc": _row_timestamp_to_iso(row[5]),
         "targetImageUrl": row[3],
     }
+
+
+def _target_cloud_response(row, status_override=None):
+    body = _target_response(row, status_override)
+    body["vuforiaTargetId"] = row[6] if len(row) > 6 else ""
+    body["vuforiaStatus"] = row[7] if len(row) > 7 else ""
+    return body
 
 
 def _content_response(row, status_override=None):
@@ -401,6 +427,143 @@ def create_target():
     except psycopg2.Error as e:
         logger.error("Database error in create_target (pgcode=%s): %s", getattr(e, "pgcode", None), e)
         return error_response("Database error while saving target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/targets/cloud", methods=["POST"])
+def create_cloud_target():
+    if "file" not in request.files:
+        return error_response("No target image file part named 'file'.", "VALIDATION_ERROR", 400)
+
+    file = request.files["file"]
+    if file.filename == "":
+        return error_response("No selected target image file.", "VALIDATION_ERROR", 400)
+
+    target_id = (request.form.get("targetId") or "").strip()
+    target_name = (request.form.get("targetName") or target_id).strip()
+    display_label = (request.form.get("displayLabel") or target_id).strip()
+    if not target_id:
+        return error_response("targetId is required.", "VALIDATION_ERROR", 400)
+    if not target_name:
+        return error_response("targetName is required.", "VALIDATION_ERROR", 400)
+
+    local_position_raw, err_msg = _parse_form_json("localPosition", {"x": 0.0, "y": 0.0, "z": 0.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_euler_raw, err_msg = _parse_form_json("localEuler", {"x": 0.0, "y": 0.0, "z": 0.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_scale_raw, err_msg = _parse_form_json("localScale", {"x": 1.0, "y": 1.0, "z": 1.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    meta, err_msg = _parse_form_json("meta", {"schemaVersion": "v1"})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+
+    form_data = {
+        "localPosition": local_position_raw,
+        "localEuler": local_euler_raw,
+        "localScale": local_scale_raw,
+        "meta": meta,
+    }
+    local_position, err_msg = _parse_vector(form_data, "localPosition")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_euler, err_msg = _parse_vector(form_data, "localEuler")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    local_scale, err_msg = _parse_vector(form_data, "localScale", default={"x": 1.0, "y": 1.0, "z": 1.0})
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    if not isinstance(meta, dict):
+        return error_response("meta must be an object.", "VALIDATION_ERROR", 400)
+
+    ext = os.path.splitext(file.filename)[1].lower().replace(".", "")
+    if ext not in {"png", "jpg", "jpeg"}:
+        return error_response("Vuforia target image must be png, jpg, or jpeg.", "VALIDATION_ERROR", 415)
+
+    try:
+        image_bytes = file.read()
+        file.stream.seek(0)
+        filename = _resolve_safe_upload_filename(file)
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(save_path)
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
+        target_width = float(request.form.get("width") or VUFORIA_CONFIG.target_width)
+
+        vuforia_result = register_vuforia_target(
+            VUFORIA_CONFIG,
+            name=target_id,
+            image_bytes=image_bytes,
+            width=target_width,
+            metadata={"targetId": target_id, "targetName": target_name},
+        )
+        vuforia_target_id = vuforia_result.get("targetId") or ""
+        vuforia_status = vuforia_result.get("resultCode") or "created"
+
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
+                existed = cur.fetchone() is not None
+                status = "accepted" if existed else "created"
+                cur.execute(
+                    """
+                    INSERT INTO targets (
+                        target_id, target_name, display_label, target_image_url,
+                        local_position_x, local_position_y, local_position_z,
+                        local_euler_x, local_euler_y, local_euler_z,
+                        local_scale_x, local_scale_y, local_scale_z,
+                        vuforia_target_id, vuforia_status, vuforia_result,
+                        meta, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (target_id) DO UPDATE SET
+                        target_name = EXCLUDED.target_name,
+                        display_label = EXCLUDED.display_label,
+                        target_image_url = EXCLUDED.target_image_url,
+                        local_position_x = EXCLUDED.local_position_x,
+                        local_position_y = EXCLUDED.local_position_y,
+                        local_position_z = EXCLUDED.local_position_z,
+                        local_euler_x = EXCLUDED.local_euler_x,
+                        local_euler_y = EXCLUDED.local_euler_y,
+                        local_euler_z = EXCLUDED.local_euler_z,
+                        local_scale_x = EXCLUDED.local_scale_x,
+                        local_scale_y = EXCLUDED.local_scale_y,
+                        local_scale_z = EXCLUDED.local_scale_z,
+                        vuforia_target_id = EXCLUDED.vuforia_target_id,
+                        vuforia_status = EXCLUDED.vuforia_status,
+                        vuforia_result = EXCLUDED.vuforia_result,
+                        meta = EXCLUDED.meta,
+                        status = EXCLUDED.status,
+                        updated_at_utc = NOW()
+                    RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc,
+                              vuforia_target_id, vuforia_status;
+                    """,
+                    (
+                        target_id,
+                        target_name,
+                        display_label or target_id,
+                        file_url,
+                        *local_position,
+                        *local_euler,
+                        *local_scale,
+                        vuforia_target_id,
+                        vuforia_status,
+                        Json(vuforia_result),
+                        Json(meta),
+                        status,
+                    ),
+                )
+                row = cur.fetchone()
+                return jsonify(_target_cloud_response(row, status)), 201 if not existed else 200
+    except VuforiaError as e:
+        logger.warning("Vuforia target registration failed for '%s': %s", target_id, e)
+        return error_response(str(e), "VUFORIA_ERROR", e.status_code or 502, e.details)
+    except (OSError, ValueError) as e:
+        logger.error("Cloud target save failed for '%s': %s", file.filename, e)
+        return error_response("Failed to save cloud target.", "SERVER_ERROR", 500, str(e))
+    except psycopg2.Error as e:
+        logger.error("Database error in create_cloud_target (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while saving cloud target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
 
 
 @app.route("/api/targets", methods=["GET"])

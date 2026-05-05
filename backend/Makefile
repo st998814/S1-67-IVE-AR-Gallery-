@@ -1,31 +1,32 @@
 SHELL := /bin/zsh
+COMPOSE_ENV := $(shell test -f ../.env && echo "--env-file ../.env")
 
 .PHONY: up down logs backend-logs db-up db-down db-logs db-reset migrate migrate-status
 
 up:
-	docker compose up -d --build backend
+	docker compose $(COMPOSE_ENV) up -d --build backend
 
 down:
-	docker compose down
+	docker compose $(COMPOSE_ENV) down
 
 logs:
-	docker compose logs -f backend db
+	docker compose $(COMPOSE_ENV) logs -f backend db
 
 backend-logs:
-	docker compose logs -f backend
+	docker compose $(COMPOSE_ENV) logs -f backend
 
 db-up:
-	docker compose up -d db
+	docker compose $(COMPOSE_ENV) up -d db
 
 db-down:
-	docker compose down
+	docker compose $(COMPOSE_ENV) down
 
 db-logs:
-	docker compose logs -f db
+	docker compose $(COMPOSE_ENV) logs -f db
 
 db-reset:
-	docker compose down -v
-	docker compose up -d db
+	docker compose $(COMPOSE_ENV) down -v
+	docker compose $(COMPOSE_ENV) up -d db
 
 migrate:
 	python3 scripts/migrate.py up

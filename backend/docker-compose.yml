@@ -22,18 +22,21 @@ services:
       context: .
     container_name: ive-ar-gallery-backend
     restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
     depends_on:
       db:
         condition: service_healthy
     environment:
       SERVER_HOST: 0.0.0.0
-      SERVER_PORT: 5050
-      PUBLIC_BASE_URL: http://127.0.0.1:5050
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ive_ar_gallery
-      DB_USER: postgres
-      DB_PASS: postgres
+      SERVER_PORT: ${SERVER_PORT:-5050}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:5050}
+      DB_HOST: ${DOCKER_DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-ive_ar_gallery}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
       UPLOAD_FOLDER: /app/uploads
     ports:
       - "5050:5050"

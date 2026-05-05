@@ -1,0 +1,5 @@
+ALTER TABLE targets
+    ADD COLUMN IF NOT EXISTS vuforia_target_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS vuforia_status TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS vuforia_result JSONB NOT NULL DEFAULT '{}'::jsonb;
+

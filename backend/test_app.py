@@ -142,6 +142,42 @@ def test_target_success(client):
     assert body["status"] == "created"
 
 
+def test_cloud_target_missing_file(client):
+    res = client.post("/api/targets/cloud", data={"targetId": "poster-a"})
+    assert res.status_code == 400
+    assert res.get_json()["errorCode"] == "VALIDATION_ERROR"
+
+
+def test_cloud_target_success(client, tmp_path):
+    app.config["UPLOAD_FOLDER"] = str(tmp_path)
+    now = datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.side_effect = [
+        None,
+        ("poster-a", "Poster A", "Main wall poster", "http://127.0.0.1:5050/uploads/poster.jpg", "created", now, "vu-target", "TargetCreated"),
+    ]
+    data = {
+        "targetId": "poster-a",
+        "targetName": "Poster A",
+        "displayLabel": "Main wall poster",
+        "localPosition": '{"x":0,"y":0,"z":0}',
+        "localEuler": '{"x":0,"y":90,"z":0}',
+        "localScale": '{"x":1,"y":1,"z":1}',
+        "meta": '{"schemaVersion":"v1"}',
+        "file": (io.BytesIO(b"fake image data"), "poster.jpg"),
+    }
+
+    with patch("app.register_vuforia_target", return_value={"targetId": "vu-target", "resultCode": "TargetCreated"}), \
+         patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.post("/api/targets/cloud", data=data, content_type="multipart/form-data")
+
+    assert res.status_code == 201
+    body = res.get_json()
+    assert body["targetId"] == "poster-a"
+    assert body["vuforiaTargetId"] == "vu-target"
+    assert body["vuforiaStatus"] == "TargetCreated"
+
+
 def test_list_targets_success(client):
     now = datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc)
     mock_cur = MagicMock()
