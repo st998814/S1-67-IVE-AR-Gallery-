@@ -85,6 +85,9 @@ namespace ARGallery.CameraControl
             Mouse mouse = Mouse.current;
             Keyboard keyboard = Keyboard.current;
 
+            if (authoringUI == null)
+                authoringUI = FindFirstObjectByType<AuthoringUIController>();
+
             Vector2 mousePos = mouse.position.ReadValue();
             if (IsBlockedByUi(mousePos) || IsBlockedBySceneInteraction(mousePos))
             {
@@ -168,6 +171,8 @@ namespace ARGallery.CameraControl
 
         private bool IsBlockedByUi(Vector2 mouseScreenPos)
         {
+            if (authoringUI == null)
+                authoringUI = FindFirstObjectByType<AuthoringUIController>();
             return authoringUI != null && authoringUI.IsPointerOverAuthoringUi(mouseScreenPos);
         }
 

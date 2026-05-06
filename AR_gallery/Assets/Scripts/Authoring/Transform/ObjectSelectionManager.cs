@@ -22,6 +22,7 @@ public sealed class ObjectSelectionManager : MonoBehaviour
     [SerializeField] private AuthoringUIController authoringUiOverride;
 
     private Transform _selected;
+    private bool _loggedMissingContentRootWarning;
 
     public event Action<Transform> SelectionChanged;
     public Transform Selected => _selected;
@@ -40,6 +41,8 @@ public sealed class ObjectSelectionManager : MonoBehaviour
             raycastCamera = Camera.main;
         if (contentRoot == null)
             contentRoot = FindContentRootInScene();
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
     }
 
     private void LateUpdate()
@@ -63,6 +66,9 @@ public sealed class ObjectSelectionManager : MonoBehaviour
 
         if (DraggableObject.IsDraggingObjectInteractionActive)
             return;
+
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
 
         if (authoringUiOverride != null)
         {
@@ -115,7 +121,14 @@ public sealed class ObjectSelectionManager : MonoBehaviour
             return null;
 
         if (contentRoot == null)
-            return hitTransform;
+        {
+            if (!_loggedMissingContentRootWarning)
+            {
+                _loggedMissingContentRootWarning = true;
+                Debug.LogWarning("ObjectSelectionManager: contentRoot is null; blocking scene selection until target context is configured.");
+            }
+            return null;
+        }
 
         Transform current = hitTransform;
         while (current != null)
