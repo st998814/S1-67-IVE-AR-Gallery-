@@ -13,6 +13,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     [SerializeField] private string baseUrl = "http://127.0.0.1:5050";
     [SerializeField] private string uploadEndpoint = "/api/upload";
     [SerializeField] private string targetEndpoint = "/api/targets";
+    [SerializeField] private string cloudTargetEndpoint = "/api/targets/cloud";
     [SerializeField] private string contentEndpoint = "/api/content";
 
     public IApiRequestHandle UploadFile(
@@ -33,6 +34,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     {
         var handle = new CoroutineApiRequestHandle(this);
         Coroutine c = StartCoroutine(CreateTargetRoutine(request, onCompleted, timeoutSeconds, handle));
+        handle.BindCoroutine(c);
+        return handle;
+    }
+
+    public IApiRequestHandle CreateCloudTarget(
+        CreateCloudTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds = 25f)
+    {
+        var handle = new CoroutineApiRequestHandle(this);
+        Coroutine c = StartCoroutine(CreateCloudTargetRoutine(request, onCompleted, timeoutSeconds, handle));
         handle.BindCoroutine(c);
         return handle;
     }
@@ -246,6 +258,76 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         }
     }
 
+    private IEnumerator CreateCloudTargetRoutine(
+        CreateCloudTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds,
+        CoroutineApiRequestHandle handle)
+    {
+        if (request == null || request.fileBytes == null || request.fileBytes.Length == 0)
+        {
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.ValidationError, "Cloud target image file is required."));
+            handle.MarkDone();
+            yield break;
+        }
+
+        string url = BuildUrl(cloudTargetEndpoint);
+        var form = new WWWForm();
+        string targetId = string.IsNullOrWhiteSpace(request.targetId) ? Guid.NewGuid().ToString("N") : request.targetId.Trim();
+        string targetName = string.IsNullOrWhiteSpace(request.targetName) ? targetId : request.targetName.Trim();
+        string fileName = string.IsNullOrWhiteSpace(request.fileName) ? "target.jpg" : request.fileName.Trim();
+        string mimeType = GuessImageMimeType(fileName);
+
+        form.AddField("targetId", targetId);
+        form.AddField("targetName", targetName);
+        form.AddField("displayLabel", string.IsNullOrWhiteSpace(request.displayLabel) ? targetName : request.displayLabel.Trim());
+        form.AddField("workspaceId", string.IsNullOrWhiteSpace(request.workspaceId) ? "default" : request.workspaceId.Trim());
+        form.AddField("width", Mathf.Max(0.01f, request.width).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        form.AddField("localPosition", JsonUtility.ToJson(request.localPosition ?? new ApiVector3Dto(0f, 0f, 0f)));
+        form.AddField("localEuler", JsonUtility.ToJson(request.localEuler ?? new ApiVector3Dto(0f, 0f, 0f)));
+        form.AddField("localScale", JsonUtility.ToJson(request.localScale ?? new ApiVector3Dto(1f, 1f, 1f)));
+        form.AddField("meta", JsonUtility.ToJson(request.meta ?? new ApiSyncMetaDto()));
+        form.AddBinaryData("file", request.fileBytes, fileName, mimeType);
+
+        using (UnityWebRequest uwr = UnityWebRequest.Post(url, form))
+        {
+            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 25f : timeoutSeconds));
+            yield return uwr.SendWebRequest();
+
+            if (handle.IsCancelled)
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
+                handle.MarkDone();
+                yield break;
+            }
+
+            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+            if (uwr.result != UnityWebRequest.Result.Success)
+            {
+                string fallback = $"CreateCloudTarget failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                string err = ExtractServerErrorMessage(body, fallback);
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
+                    ApiErrorCodes.ServerError,
+                    "CreateCloudTarget succeeded but response has no targetId.",
+                    (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Ok(parsed, "create cloud target ok", (int)uwr.responseCode));
+            handle.MarkDone();
+        }
+    }
+
     [Serializable]
     private class ApiErrorBody
     {
@@ -275,6 +357,18 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         if (parsed != null && !string.IsNullOrWhiteSpace(parsed.errorCode))
             return parsed.errorCode;
         return fallback;
+    }
+
+    private static string GuessImageMimeType(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "image/jpeg";
+        string lower = fileName.ToLowerInvariant();
+        if (lower.EndsWith(".png"))
+            return "image/png";
+        if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg"))
+            return "image/jpeg";
+        return "application/octet-stream";
     }
 
 }

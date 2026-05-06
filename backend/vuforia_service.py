@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -38,6 +39,27 @@ def _sign_request(secret_key: str, method: str, content_md5: str, content_type: 
     return base64.b64encode(digest).decode("ascii")
 
 
+def _authorized_request(config: VuforiaConfig, *, method: str, request_path: str, body: Optional[bytes] = None):
+    content_type = "application/json" if body is not None else ""
+    content_md5 = hashlib.md5(body).hexdigest() if body is not None else ""
+    date = _http_date()
+    signature = _sign_request(config.secret_key, method, content_md5, content_type, date, request_path)
+    headers = {
+        "Authorization": f"VWS {config.access_key}:{signature}",
+        "Date": date,
+    }
+    if body is not None:
+        headers["Content-Type"] = content_type
+        headers["Content-MD5"] = content_md5
+
+    return request.Request(
+        config.host.rstrip("/") + request_path,
+        data=body,
+        method=method,
+        headers=headers,
+    )
+
+
 def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: bytes, width: Optional[float] = None, metadata: Optional[dict] = None):
     if not config.enabled:
         raise VuforiaError("Vuforia credentials are not configured.", status_code=503)
@@ -46,7 +68,6 @@ def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: by
 
     request_path = "/targets"
     method = "POST"
-    content_type = "application/json"
     payload = {
         "name": name,
         "width": float(width or config.target_width),
@@ -54,21 +75,7 @@ def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: by
         "application_metadata": base64.b64encode(json.dumps(metadata or {}).encode("utf-8")).decode("ascii"),
     }
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    content_md5 = hashlib.md5(body).hexdigest()
-    date = _http_date()
-    signature = _sign_request(config.secret_key, method, content_md5, content_type, date, request_path)
-
-    req = request.Request(
-        config.host.rstrip("/") + request_path,
-        data=body,
-        method=method,
-        headers={
-            "Authorization": f"VWS {config.access_key}:{signature}",
-            "Content-Type": content_type,
-            "Content-MD5": content_md5,
-            "Date": date,
-        },
-    )
+    req = _authorized_request(config, method=method, request_path=request_path, body=body)
 
     try:
         with request.urlopen(req, timeout=20) as resp:
@@ -89,4 +96,46 @@ def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: by
         raise VuforiaError("Vuforia target registration failed.", status_code=exc.code, details=details) from exc
     except error.URLError as exc:
         raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+
+
+def get_vuforia_target(config: VuforiaConfig, target_id: str):
+    if not config.enabled:
+        raise VuforiaError("Vuforia credentials are not configured.", status_code=503)
+    if not target_id:
+        raise VuforiaError("Vuforia target id is required.", status_code=400)
+
+    request_path = f"/targets/{target_id}"
+    req = _authorized_request(config, method="GET", request_path=request_path)
+    try:
+        with request.urlopen(req, timeout=20) as resp:
+            response_body = resp.read().decode("utf-8")
+            return json.loads(response_body) if response_body else {}
+    except error.HTTPError as exc:
+        response_body = exc.read().decode("utf-8", errors="replace")
+        try:
+            details = json.loads(response_body)
+        except json.JSONDecodeError:
+            details = response_body
+        raise VuforiaError("Vuforia target status check failed.", status_code=exc.code, details=details) from exc
+    except error.URLError as exc:
+        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+
+
+def wait_vuforia_target_ready(config: VuforiaConfig, target_id: str, *, timeout_seconds: float = 20.0, poll_interval_seconds: float = 1.5):
+    deadline = time.time() + max(0.0, timeout_seconds)
+    last = {}
+    while time.time() <= deadline:
+        info = get_vuforia_target(config, target_id)
+        last = info or {}
+        record = last.get("target_record") or {}
+        status = str(record.get("status") or "").lower()
+        active_flag = record.get("active_flag")
+        if status in {"success", "active"}:
+            return {"ready": True, "status": status, "raw": last}
+        if status in {"failed", "failure"}:
+            raise VuforiaError("Vuforia target processing failed.", status_code=502, details=last)
+        if active_flag == 1 and status not in {"processing", "reprocessing"}:
+            return {"ready": True, "status": status or "active", "raw": last}
+        time.sleep(max(0.2, poll_interval_seconds))
+    return {"ready": False, "status": "processing", "raw": last}
 

@@ -66,3 +66,19 @@ public class CreateTargetResponseDto
     /// <summary>Possible values: ISO-8601 UTC timestamp.</summary>
     public string createdAtUtc;
 }
+
+[Serializable]
+public class CreateCloudTargetRequestDto
+{
+    public string targetId;
+    public string targetName;
+    public string displayLabel;
+    public string workspaceId = "default";
+    public float width = 1.0f;
+    public ApiVector3Dto localPosition = new ApiVector3Dto(0f, 0f, 0f);
+    public ApiVector3Dto localEuler = new ApiVector3Dto(0f, 0f, 0f);
+    public ApiVector3Dto localScale = new ApiVector3Dto(1f, 1f, 1f);
+    public ApiSyncMetaDto meta = new ApiSyncMetaDto();
+    public string fileName;
+    public byte[] fileBytes;
+}

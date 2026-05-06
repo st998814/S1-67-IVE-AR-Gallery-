@@ -90,5 +90,13 @@ namespace ARGallery.AppFlow
             currentWorkspace.targetId = string.IsNullOrWhiteSpace(targetId) ? currentWorkspace.targetId : targetId.Trim();
             currentWorkspace.setupState = WorkspaceSetupState.Ready;
         }
+
+        public static void SetWorkspaceTargetImage(byte[] imageBytes, string fileName = "")
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.targetImageBytes = imageBytes != null ? (byte[])imageBytes.Clone() : null;
+            currentWorkspace.targetImageFileName = fileName ?? "";
+        }
     }
 }

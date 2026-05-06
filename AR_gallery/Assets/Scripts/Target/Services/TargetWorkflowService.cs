@@ -177,6 +177,37 @@ public class TargetWorkflowService
         return runner.StartCoroutine(ApplyTargetImageFromUrlRoutine(targetObject, targetImageUrl.Trim()));
     }
 
+    public bool ApplyTargetImageBytes(GameObject targetObject, byte[] imageBytes)
+    {
+        if (targetObject == null || imageBytes == null || imageBytes.Length == 0)
+            return false;
+        Transform visual = FindTargetVisual(targetObject);
+        if (visual == null)
+            return false;
+        Renderer renderer = visual.GetComponent<Renderer>();
+        if (renderer == null)
+            return false;
+
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!texture.LoadImage(imageBytes))
+            return false;
+
+        Material material = renderer.material;
+        if (material == null || !material.HasProperty("_MainTex"))
+        {
+            Shader textureShader = Shader.Find("Unlit/Texture");
+            if (textureShader == null)
+                textureShader = Shader.Find("Standard");
+            if (textureShader != null)
+                renderer.material = new Material(textureShader);
+        }
+        renderer.material.mainTexture = texture;
+        Transform label = visual.Find("TargetLabel");
+        if (label != null)
+            label.gameObject.SetActive(false);
+        return true;
+    }
+
     private IEnumerator ApplyTargetImageFromUrlRoutine(GameObject targetObject, string imageUrl)
     {
         Transform visual = FindTargetVisual(targetObject);

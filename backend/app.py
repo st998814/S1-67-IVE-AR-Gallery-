@@ -13,6 +13,31 @@ from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.utils import secure_filename
 from vuforia_service import VuforiaConfig, VuforiaError, register_vuforia_target
 
+
+def _load_local_env_file(base_dir: str):
+    """Best-effort .env loader for local/dev runs."""
+    env_path = os.path.join(base_dir, ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip("\r").strip("'").strip('"')
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        # Keep startup resilient; explicit env vars still take precedence.
+        pass
+
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_load_local_env_file(_BASE_DIR)
+
 app = Flask(__name__)
 CORS(app)
 
@@ -20,10 +45,14 @@ SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "5050"))
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", f"http://127.0.0.1:{SERVER_PORT}")
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE_DIR, "uploads"))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+UPLOAD_TARGET_FOLDER = os.path.join(UPLOAD_FOLDER, "target")
+UPLOAD_CONTENT_FOLDER = os.path.join(UPLOAD_FOLDER, "content")
+UPLOAD_TARGET_REF_FOLDER = os.path.join(UPLOAD_FOLDER, "target_ref")
+for _d in (UPLOAD_TARGET_FOLDER, UPLOAD_CONTENT_FOLDER, UPLOAD_TARGET_REF_FOLDER):
+    os.makedirs(_d, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
 CONTENT_TYPES_REQUIRING_MEDIA = {"image", "video", "model", "model(3d)", "model3d"}
@@ -267,7 +296,7 @@ def _guess_ext_from_magic(file_storage) -> str:
     return ""
 
 
-def _resolve_safe_upload_filename(file_storage) -> str:
+def _resolve_safe_upload_filename(file_storage, upload_dir: str) -> str:
     original = secure_filename(file_storage.filename or "")
     stem, ext = os.path.splitext(original)
     if not stem:
@@ -280,7 +309,7 @@ def _resolve_safe_upload_filename(file_storage) -> str:
     final_name = f"{stem}{ext}" if ext else stem
     candidate = final_name
     base_stem, base_ext = os.path.splitext(final_name)
-    while os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], candidate)):
+    while os.path.exists(os.path.join(upload_dir, candidate)):
         candidate = f"{base_stem}-{uuid.uuid4().hex[:8]}{base_ext}"
 
     return candidate
@@ -321,13 +350,13 @@ def upload_file():
         return error_response(f"File type .{ext} is not allowed.", "VALIDATION_ERROR", 415)
 
     try:
-        filename = _resolve_safe_upload_filename(file)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        filename = _resolve_safe_upload_filename(file, UPLOAD_CONTENT_FOLDER)
+        save_path = os.path.join(UPLOAD_CONTENT_FOLDER, filename)
         file.save(save_path)
         size_bytes = os.path.getsize(save_path)
         mime_type = getattr(file, "mimetype", "") or "application/octet-stream"
         uploaded_at = utc_now_iso()
-        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/content/{filename}"
 
         try:
             with get_db_connection() as conn:
@@ -357,7 +386,7 @@ def upload_file():
         return error_response("Failed to save file.", "SERVER_ERROR", 500, str(e))
 
 
-@app.route("/uploads/<filename>")
+@app.route("/uploads/<path:filename>")
 def serve_file(filename):
     try:
         return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
@@ -516,10 +545,10 @@ def create_cloud_target():
     try:
         image_bytes = file.read()
         file.stream.seek(0)
-        filename = _resolve_safe_upload_filename(file)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        filename = _resolve_safe_upload_filename(file, UPLOAD_TARGET_FOLDER)
+        save_path = os.path.join(UPLOAD_TARGET_FOLDER, filename)
         file.save(save_path)
-        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/target/{filename}"
         target_width = float(request.form.get("width") or VUFORIA_CONFIG.target_width)
 
         vuforia_result = register_vuforia_target(

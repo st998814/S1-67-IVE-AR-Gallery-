@@ -16,6 +16,11 @@ public interface IApiClient
         Action<ApiResult<CreateTargetResponseDto>> onCompleted,
         float timeoutSeconds = 20f);
 
+    IApiRequestHandle CreateCloudTarget(
+        CreateCloudTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds = 25f);
+
     IApiRequestHandle CreateContent(
         CreateContentRequestDto request,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
