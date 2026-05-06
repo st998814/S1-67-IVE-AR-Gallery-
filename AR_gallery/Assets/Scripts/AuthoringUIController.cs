@@ -63,6 +63,11 @@ public class AuthoringUIController : MonoBehaviour
     private VisualElement rightPanelBody;
     private Label workspaceNameLabel;
     private Label modeIndicatorLabel;
+    private VisualElement topBarModeGroup;
+    private VisualElement modeMovePill;
+    private VisualElement modeRotatePill;
+    private VisualElement modeScalePill;
+    private VisualElement modeUniversalPill;
     private ListView contentHierarchyList;
     private bool isLeftPanelExpanded;
     private bool isRightPanelExpanded;
@@ -232,6 +237,11 @@ public class AuthoringUIController : MonoBehaviour
         rightPanelBody = root.Q<VisualElement>("RightPanelBody");
         workspaceNameLabel = root.Q<Label>("WorkspaceNameLabel");
         modeIndicatorLabel = root.Q<Label>("ModeIndicatorLabel");
+        topBarModeGroup = root.Q<VisualElement>("TopBarModeGroup");
+        modeMovePill = root.Q<VisualElement>("ModeMovePill");
+        modeRotatePill = root.Q<VisualElement>("ModeRotatePill");
+        modeScalePill = root.Q<VisualElement>("ModeScalePill");
+        modeUniversalPill = root.Q<VisualElement>("ModeUniversalPill");
         contentHierarchyList = root.Q<ListView>("ContentLibraryList") ?? root.Q<ListView>("ContentHierarchyList");
 
         // --- TASK 6: 获取并初始化 Loading 和 Error 元素 ---
@@ -808,27 +818,63 @@ public class AuthoringUIController : MonoBehaviour
 
     private void SyncModeIndicatorLabel()
     {
-        if (modeIndicatorLabel == null || transformGizmoController == null)
+        if (transformGizmoController == null)
             return;
 
         // Target inspector does not manipulate content gizmo mode.
         // Hide the mode label in target context.
         if (inspectorMode == InspectorMode.Target)
         {
-            if (modeIndicatorLabel.style.display != DisplayStyle.None)
+            if (modeIndicatorLabel != null && modeIndicatorLabel.style.display != DisplayStyle.None)
                 modeIndicatorLabel.style.display = DisplayStyle.None;
+            if (topBarModeGroup != null && topBarModeGroup.style.display != DisplayStyle.None)
+                topBarModeGroup.style.display = DisplayStyle.None;
+            SetModePillActive(TransformGizmoController.GizmoMode.Translate, false);
+            SetModePillActive(TransformGizmoController.GizmoMode.Rotate, false);
+            SetModePillActive(TransformGizmoController.GizmoMode.Scale, false);
+            SetModePillActive(TransformGizmoController.GizmoMode.Universal, false);
             return;
         }
 
-        if (modeIndicatorLabel.style.display != DisplayStyle.Flex)
+        if (modeIndicatorLabel != null && modeIndicatorLabel.style.display != DisplayStyle.Flex)
             modeIndicatorLabel.style.display = DisplayStyle.Flex;
+        if (topBarModeGroup != null && topBarModeGroup.style.display != DisplayStyle.Flex)
+            topBarModeGroup.style.display = DisplayStyle.Flex;
 
         TransformGizmoController.GizmoMode current = transformGizmoController.CurrentMode;
-        if (current == _lastKnownGizmoMode && !string.IsNullOrWhiteSpace(modeIndicatorLabel.text))
+        if (current == _lastKnownGizmoMode)
             return;
 
         _lastKnownGizmoMode = current;
-        modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(current);
+        if (modeIndicatorLabel != null)
+            modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(current);
+        SetModePillActive(TransformGizmoController.GizmoMode.Translate, current == TransformGizmoController.GizmoMode.Translate);
+        SetModePillActive(TransformGizmoController.GizmoMode.Rotate, current == TransformGizmoController.GizmoMode.Rotate);
+        SetModePillActive(TransformGizmoController.GizmoMode.Scale, current == TransformGizmoController.GizmoMode.Scale);
+        SetModePillActive(TransformGizmoController.GizmoMode.Universal, current == TransformGizmoController.GizmoMode.Universal);
+    }
+
+    private void SetModePillActive(TransformGizmoController.GizmoMode mode, bool active)
+    {
+        VisualElement pill = null;
+        switch (mode)
+        {
+            case TransformGizmoController.GizmoMode.Translate:
+                pill = modeMovePill;
+                break;
+            case TransformGizmoController.GizmoMode.Rotate:
+                pill = modeRotatePill;
+                break;
+            case TransformGizmoController.GizmoMode.Scale:
+                pill = modeScalePill;
+                break;
+            case TransformGizmoController.GizmoMode.Universal:
+                pill = modeUniversalPill;
+                break;
+        }
+
+        if (pill != null)
+            pill.EnableInClassList("button--active", active);
     }
 
     private static string GetModeDisplayName(TransformGizmoController.GizmoMode mode)

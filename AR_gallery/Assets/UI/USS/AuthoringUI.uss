@@ -88,3 +88,29 @@
 .input-field:focus {
     border-color: rgb(59, 130, 246);
 }
+
+#PosXInput .unity-base-field__label,
+#PosYInput .unity-base-field__label,
+#PosZInput .unity-base-field__label {
+    color: rgb(229, 231, 235);
+}
+
+#PosXInput .unity-text-input,
+#PosYInput .unity-text-input,
+#PosZInput .unity-text-input {
+    color: rgb(0, 0, 0);
+    background-color: rgb(255, 255, 255);
+}
+
+#PosXInput .unity-base-text-field__input,
+#PosYInput .unity-base-text-field__input,
+#PosZInput .unity-base-text-field__input,
+#PosXInput .unity-text-field__input,
+#PosYInput .unity-text-field__input,
+#PosZInput .unity-text-field__input,
+#PosXInput .unity-base-field__input,
+#PosYInput .unity-base-field__input,
+#PosZInput .unity-base-field__input {
+    color: rgb(0, 0, 0);
+    background-color: rgb(255, 255, 255);
+}
