@@ -1,4 +1,4 @@
-# DEV-186 Authoring UI/Layout 
+# Authoring UI/Layout 
 
 ## Scope Completed
 
