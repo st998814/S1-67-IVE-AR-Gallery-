@@ -17,6 +17,7 @@ public class AuthoringUIController : MonoBehaviour
 
     [SerializeField] private TargetSelectionManager targetSelectionManager;
     [SerializeField] private AuthoringTransformCoordinator authoringTransformCoordinator;
+    [SerializeField] private TransformGizmoController transformGizmoController;
 
     // --- NEW: Prefab Templates (Drag these in the Inspector) ---
     public GameObject picturePrefab;
@@ -44,6 +45,14 @@ public class AuthoringUIController : MonoBehaviour
     // --- NEW: Text Spawning Fields ---
     private TextField spawningTextInput;
     private Button spawnTextButton;
+    
+    // --- TARGET REFERENCE (Target inspector only) ---
+    private VisualElement targetReferenceContainer;
+    private Button browseTargetReferenceButton;
+    private Label targetReferenceStatusLabel;
+    private Image targetReferencePreviewImage;
+    private Button inspectorTargetTabButton;
+    private Button inspectorContentTabButton;
 
     private Button browseButton, saveButton;
     private Button addContentButton;
@@ -91,11 +100,31 @@ public class AuthoringUIController : MonoBehaviour
     private ISpawnerManager spawnerManager;
     private string pendingTargetImageUrl = "";
     private UploadPurpose pendingUploadPurpose = UploadPurpose.Content;
+    
+    private readonly Dictionary<string, TargetReferenceDraft> targetReferencesByTargetId = new Dictionary<string, TargetReferenceDraft>();
+    private string pendingTargetReferenceTargetId;
+    private InspectorMode inspectorMode = InspectorMode.Target;
+    private TransformGizmoController.GizmoMode _lastKnownGizmoMode = TransformGizmoController.GizmoMode.Translate;
+
+    private enum InspectorMode
+    {
+        Target,
+        Content
+    }
+
+    private sealed class TargetReferenceDraft
+    {
+        public byte[] bytes;
+        public string fileName;
+        public bool isUnsaved;
+        public Texture2D previewTexture;
+    }
 
     private enum UploadPurpose
     {
         Content,
-        TargetImage
+        TargetImage,
+        TargetReference
     }
 
     private bool IsWorkspaceReadyForAuthoring(bool showBlockedMessage)
@@ -124,6 +153,7 @@ public class AuthoringUIController : MonoBehaviour
         if (spawnTextButton != null) spawnTextButton.SetEnabled(ready);
         if (createTargetButton != null) createTargetButton.SetEnabled(ready);
         if (browseTargetImageButton != null) browseTargetImageButton.SetEnabled(ready);
+        if (browseTargetReferenceButton != null) browseTargetReferenceButton.SetEnabled(ready);
     }
 
     private sealed class ContentDraftState
@@ -184,6 +214,14 @@ public class AuthoringUIController : MonoBehaviour
         spawningTextInput = root.Q<TextField>("SpawningTextInput");
         spawnTextButton = root.Q<Button>("SpawnTextButton");
         
+        // Target Reference (right panel target inspector only)
+        targetReferenceContainer = root.Q<VisualElement>("TargetReferenceContainer");
+        browseTargetReferenceButton = root.Q<Button>("BrowseTargetReferenceButton");
+        targetReferenceStatusLabel = root.Q<Label>("TargetReferenceStatusLabel");
+        targetReferencePreviewImage = root.Q<Image>("TargetReferencePreviewImage");
+        inspectorTargetTabButton = root.Q<Button>("InspectorTargetTabButton");
+        inspectorContentTabButton = root.Q<Button>("InspectorContentTabButton");
+        
         browseButton = root.Q<Button>("BrowseButton");
         addContentButton = root.Q<Button>("AddContentButton");
         saveButton = root.Q<Button>("SaveButton");
@@ -206,7 +244,7 @@ public class AuthoringUIController : MonoBehaviour
         // ------------------------------------------------
 
         // Event Listeners
-        browseButton.clicked += OnBrowseButtonClicked;
+        if (browseButton != null) browseButton.clicked += OnBrowseButtonClicked;
         if (addContentButton != null) addContentButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
         saveButton.clicked += OnSaveButtonClicked;
@@ -214,6 +252,8 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
         if (leftPanelToggleButton != null) leftPanelToggleButton.clicked += OnLeftPanelToggleClicked;
         if (rightPanelToggleButton != null) rightPanelToggleButton.clicked += OnRightPanelToggleClicked;
+        if (inspectorTargetTabButton != null) inspectorTargetTabButton.clicked += OnInspectorTargetTabClicked;
+        if (inspectorContentTabButton != null) inspectorContentTabButton.clicked += OnInspectorContentTabClicked;
 
         if (createTargetImageUrlInput != null && string.IsNullOrWhiteSpace(createTargetImageUrlInput.value))
             createTargetImageUrlInput.value = "No target image selected";
@@ -224,7 +264,10 @@ public class AuthoringUIController : MonoBehaviour
         InitializePanelCollapsedState();
         
         // NEW: Event Listener for spawning text
-        spawnTextButton.clicked += OnSpawnTextButtonClicked;
+        if (spawnTextButton != null) spawnTextButton.clicked += OnSpawnTextButtonClicked;
+
+        // Target reference upload (non-blocking)
+        if (browseTargetReferenceButton != null) browseTargetReferenceButton.clicked += OnBrowseTargetReferenceButtonClicked;
 
         // NEW: Listen for when the user selects a file in the browser
         WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
@@ -233,6 +276,8 @@ public class AuthoringUIController : MonoBehaviour
 
         targetSelectionManager = ResolveTargetSelectionManager();
         authoringTransformCoordinator = ResolveAuthoringTransformCoordinator();
+        if (transformGizmoController == null)
+            transformGizmoController = FindFirstObjectByType<TransformGizmoController>();
         apiClient = ResolveApiClient();
         spawnerManager = BuildSpawnerManager();
         ConfigureHierarchyListView();
@@ -250,6 +295,14 @@ public class AuthoringUIController : MonoBehaviour
         RefreshWorkspaceGuardUiState();
         RefreshHierarchyListFromCoordinator();
         SyncHierarchySelectionFromCoordinator();
+
+        // Right panel inspector mode:
+        // - if a content object is selected -> content inspector
+        // - otherwise -> target inspector
+        if (authoringSpatialTarget == null)
+            ApplyInspectorModeTarget();
+        else
+            ApplyInspectorModeContent();
     }
 
     void OnDisable()
@@ -266,6 +319,9 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetButton != null) createTargetButton.clicked -= OnCreateTargetButtonClicked;
         if (leftPanelToggleButton != null) leftPanelToggleButton.clicked -= OnLeftPanelToggleClicked;
         if (rightPanelToggleButton != null) rightPanelToggleButton.clicked -= OnRightPanelToggleClicked;
+        if (browseTargetReferenceButton != null) browseTargetReferenceButton.clicked -= OnBrowseTargetReferenceButtonClicked;
+        if (inspectorTargetTabButton != null) inspectorTargetTabButton.clicked -= OnInspectorTargetTabClicked;
+        if (inspectorContentTabButton != null) inspectorContentTabButton.clicked -= OnInspectorContentTabClicked;
 
         if (imageTargetDropdown != null)
             imageTargetDropdown.UnregisterValueChangedCallback(OnImageTargetDropdownChanged);
@@ -278,6 +334,13 @@ public class AuthoringUIController : MonoBehaviour
         }
         if (contentHierarchyList != null)
             contentHierarchyList.onSelectionChange -= OnHierarchySelectionChanged;
+
+        foreach (TargetReferenceDraft draft in targetReferencesByTargetId.Values)
+        {
+            if (draft != null && draft.previewTexture != null)
+                Destroy(draft.previewTexture);
+        }
+        targetReferencesByTargetId.Clear();
     }
 
     private string ResolveWorkspaceDisplayName()
@@ -697,7 +760,93 @@ public class AuthoringUIController : MonoBehaviour
     {
         ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
     }
+
+    // Keep inspector coordinates synced when moving target/content via 3D interaction.
+    SyncSpatialInspectorRealtime();
+    SyncModeIndicatorLabel();
 }
+
+    private void SyncSpatialInspectorRealtime()
+    {
+        // Avoid fighting user typing.
+        if (IsAnySpatialFieldFocused())
+            return;
+
+        // If the panel elements are missing (right panel trimmed), do nothing.
+        if (posXInput == null || posYInput == null || posZInput == null)
+            return;
+
+        // Content mode: refresh from selected content transform.
+        if (authoringSpatialTarget != null)
+        {
+            SyncTransformToInspector(authoringSpatialTarget);
+            return;
+        }
+
+        // Target mode: refresh from active target.
+        if (targetSelectionManager == null)
+            targetSelectionManager = ResolveTargetSelectionManager();
+
+        SyncTargetToInspector();
+    }
+
+    private bool IsAnySpatialFieldFocused()
+    {
+        if (uiDocument == null || uiDocument.rootVisualElement == null)
+            return false;
+
+        var panel = uiDocument.rootVisualElement.panel;
+        var focusedElement = panel != null && panel.focusController != null ? panel.focusController.focusedElement : null;
+
+        return focusedElement == posXInput || focusedElement == posYInput || focusedElement == posZInput;
+    }
+
+    public bool IsTargetInspectorActive()
+    {
+        return inspectorMode == InspectorMode.Target;
+    }
+
+    private void SyncModeIndicatorLabel()
+    {
+        if (modeIndicatorLabel == null || transformGizmoController == null)
+            return;
+
+        // Target inspector does not manipulate content gizmo mode.
+        // Hide the mode label in target context.
+        if (inspectorMode == InspectorMode.Target)
+        {
+            if (modeIndicatorLabel.style.display != DisplayStyle.None)
+                modeIndicatorLabel.style.display = DisplayStyle.None;
+            return;
+        }
+
+        if (modeIndicatorLabel.style.display != DisplayStyle.Flex)
+            modeIndicatorLabel.style.display = DisplayStyle.Flex;
+
+        TransformGizmoController.GizmoMode current = transformGizmoController.CurrentMode;
+        if (current == _lastKnownGizmoMode && !string.IsNullOrWhiteSpace(modeIndicatorLabel.text))
+            return;
+
+        _lastKnownGizmoMode = current;
+        modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(current);
+    }
+
+    private static string GetModeDisplayName(TransformGizmoController.GizmoMode mode)
+    {
+        switch (mode)
+        {
+            case TransformGizmoController.GizmoMode.Translate:
+                return "Move";
+            case TransformGizmoController.GizmoMode.Rotate:
+                return "Rotate";
+            case TransformGizmoController.GizmoMode.Scale:
+                return "Scale";
+            case TransformGizmoController.GizmoMode.Universal:
+                return "Universal";
+            default:
+                return "Move";
+        }
+    }
     // ----------------------------------------
 
     // ==========================================
@@ -808,6 +957,48 @@ public class AuthoringUIController : MonoBehaviour
         {
             suppressTargetDropdownCallbacks = false;
         }
+
+        // Target switched: refresh right-panel target reference and target coordinates
+        // when inspector is currently in target mode.
+        if (inspectorMode == InspectorMode.Target)
+            ApplyInspectorModeTarget();
+    }
+
+    private void OnInspectorTargetTabClicked()
+    {
+        inspectorMode = InspectorMode.Target;
+        authoringTransformCoordinator?.ClearContentSelection(syncAuthoringUi: true);
+        ApplyInspectorModeTarget();
+    }
+
+    private void OnInspectorContentTabClicked()
+    {
+        inspectorMode = InspectorMode.Content;
+
+        Transform selected = authoringTransformCoordinator != null
+            ? authoringTransformCoordinator.GetSelectedContentTransform()
+            : null;
+
+        if (selected != null)
+        {
+            OnContentSelectedInScene(selected);
+            return;
+        }
+
+        IReadOnlyList<Transform> entries = authoringTransformCoordinator != null
+            ? authoringTransformCoordinator.GetActiveContentEntries()
+            : null;
+
+        if (entries != null && entries.Count > 0 && entries[0] != null)
+        {
+            authoringTransformCoordinator.SelectContentTransform(entries[0], syncAuthoringUi: true);
+            return;
+        }
+
+        // No content to switch to, keep target inspector visible.
+        inspectorMode = InspectorMode.Target;
+        ApplyInspectorModeTarget();
+        ShowError("No content found under active target.");
     }
 
     private string GetActiveTargetIdForSave()
@@ -1062,20 +1253,42 @@ public class AuthoringUIController : MonoBehaviour
 
     private void OnPositionFloatFieldChanged(ChangeEvent<float> _)
     {
-        if (suppressSpatialUiCallbacks || authoringSpatialTarget == null)
+        if (suppressSpatialUiCallbacks)
             return;
 
-        Vector3 lp = authoringSpatialTarget.localPosition;
-        lp.x = posXInput.value;
-        lp.y = posYInput.value;
-        lp.z = posZInput.value;
-        authoringSpatialTarget.localPosition = lp;
-        MarkActiveDraftDirty();
+        // Content inspector: edit selected content local position.
+        if (authoringSpatialTarget != null)
+        {
+            Vector3 lp = authoringSpatialTarget.localPosition;
+            lp.x = posXInput.value;
+            lp.y = posYInput.value;
+            lp.z = posZInput.value;
+            authoringSpatialTarget.localPosition = lp;
+            MarkActiveDraftDirty();
+            return;
+        }
+
+        // Target inspector: edit active target local position (info + optional edit).
+        if (targetSelectionManager == null)
+            targetSelectionManager = ResolveTargetSelectionManager();
+
+        if (targetSelectionManager == null || TargetMovementController.IsTargetDragActive)
+            return;
+
+        GameObject activeTarget = targetSelectionManager.GetActiveTarget();
+        if (activeTarget == null)
+            return;
+
+        Vector3 targetLp = activeTarget.transform.localPosition;
+        targetLp.x = posXInput.value;
+        targetLp.y = posYInput.value;
+        targetLp.z = posZInput.value;
+        activeTarget.transform.localPosition = targetLp;
     }
 
     private void OnScaleFloatFieldChanged(ChangeEvent<float> _)
     {
-        if (suppressSpatialUiCallbacks || authoringSpatialTarget == null)
+        if (suppressSpatialUiCallbacks || authoringSpatialTarget == null || scaleInput == null)
             return;
 
         float s = Mathf.Max(0.01f, scaleInput.value);
@@ -1096,12 +1309,161 @@ public class AuthoringUIController : MonoBehaviour
             posXInput.value = (float)System.Math.Round(lp.x, 2);
             posYInput.value = (float)System.Math.Round(lp.y, 2);
             posZInput.value = (float)System.Math.Round(lp.z, 2);
-            scaleInput.value = (float)System.Math.Round(target.localScale.x, 2);
+            if (scaleInput != null)
+                scaleInput.value = (float)System.Math.Round(target.localScale.x, 2);
         }
         finally
         {
             suppressSpatialUiCallbacks = false;
         }
+    }
+
+    private void ApplyInspectorModeContent()
+    {
+        inspectorMode = InspectorMode.Content;
+        if (targetReferenceContainer != null)
+            targetReferenceContainer.style.display = DisplayStyle.None;
+        UpdateInspectorModeTabVisualState();
+    }
+
+    private void ApplyInspectorModeTarget()
+    {
+        inspectorMode = InspectorMode.Target;
+        if (targetReferenceContainer != null)
+            targetReferenceContainer.style.display = DisplayStyle.Flex;
+
+        SyncTargetToInspector();
+        RefreshTargetReferenceUiForActiveTarget();
+        UpdateTargetReferenceStatusLabel(showUploadingText: false);
+        UpdateInspectorModeTabVisualState();
+    }
+
+    private void UpdateInspectorModeTabVisualState()
+    {
+        bool isTarget = inspectorMode == InspectorMode.Target;
+        if (inspectorTargetTabButton != null)
+            inspectorTargetTabButton.EnableInClassList("button--active", isTarget);
+        if (inspectorContentTabButton != null)
+            inspectorContentTabButton.EnableInClassList("button--active", !isTarget);
+    }
+
+    private void SyncTargetToInspector()
+    {
+        if (posXInput == null || posYInput == null || posZInput == null)
+            return;
+
+        if (targetSelectionManager == null)
+            targetSelectionManager = ResolveTargetSelectionManager();
+
+        suppressSpatialUiCallbacks = true;
+        try
+        {
+            Vector3 lp = Vector3.zero;
+            GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+            if (activeTarget != null)
+                lp = activeTarget.transform.localPosition;
+
+            posXInput.value = (float)System.Math.Round(lp.x, 2);
+            posYInput.value = (float)System.Math.Round(lp.y, 2);
+            posZInput.value = (float)System.Math.Round(lp.z, 2);
+
+            if (scaleInput != null)
+                scaleInput.value = 1;
+        }
+        finally
+        {
+            suppressSpatialUiCallbacks = false;
+        }
+    }
+
+    private void UpdateTargetReferenceStatusLabel(bool showUploadingText)
+    {
+        if (targetReferenceStatusLabel == null)
+            return;
+
+        if (showUploadingText)
+        {
+            targetReferenceStatusLabel.text = "Uploading...";
+            // Keep it neutral/primary-ish while uploading.
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(229, 231, 235, 255));
+            return;
+        }
+
+        TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
+        if (activeDraft != null && activeDraft.bytes != null && activeDraft.isUnsaved)
+        {
+            string suffix = string.IsNullOrWhiteSpace(activeDraft.fileName) ? "" : $" ({activeDraft.fileName})";
+            targetReferenceStatusLabel.text = $"Unsaved{suffix}";
+            // Tailor to the UX: red for unsaved.
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(220, 53, 69, 255));
+            return;
+        }
+
+        targetReferenceStatusLabel.text = "Not uploaded yet";
+        targetReferenceStatusLabel.style.color = new StyleColor(new Color32(107, 114, 128, 255));
+    }
+
+    private void RefreshTargetReferenceUiForActiveTarget()
+    {
+        if (targetReferencePreviewImage == null)
+            return;
+
+        TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
+        if (activeDraft == null || activeDraft.previewTexture == null)
+        {
+            targetReferencePreviewImage.image = null;
+            targetReferencePreviewImage.style.display = DisplayStyle.None;
+            return;
+        }
+
+        targetReferencePreviewImage.image = activeDraft.previewTexture;
+        targetReferencePreviewImage.style.display = DisplayStyle.Flex;
+    }
+
+    private TargetReferenceDraft GetActiveTargetReferenceDraft()
+    {
+        string targetId = GetActiveTargetIdForSave();
+        if (string.IsNullOrWhiteSpace(targetId))
+            return null;
+
+        targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft);
+        return draft;
+    }
+
+    private void SetOrReplaceTargetReferenceDraft(string targetId, byte[] bytes, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(targetId) || bytes == null || bytes.Length == 0)
+            return;
+
+        if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft existing) && existing != null && existing.previewTexture != null)
+            Destroy(existing.previewTexture);
+
+        var draft = new TargetReferenceDraft
+        {
+            bytes = bytes,
+            fileName = fileName ?? "",
+            isUnsaved = true,
+            previewTexture = CreatePreviewTexture(bytes)
+        };
+
+        targetReferencesByTargetId[targetId] = draft;
+        RefreshTargetReferenceUiForActiveTarget();
+    }
+
+    private static Texture2D CreatePreviewTexture(byte[] bytes)
+    {
+        if (bytes == null || bytes.Length == 0)
+            return null;
+
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        bool loaded = texture.LoadImage(bytes, markNonReadable: false);
+        if (!loaded)
+        {
+            Destroy(texture);
+            return null;
+        }
+
+        return texture;
     }
 
     /// <summary>场景里选中 ContentRoot 下的物体时调用，与 Gizmo / 保存逻辑对齐。</summary>
@@ -1113,6 +1475,7 @@ public class AuthoringUIController : MonoBehaviour
         authoringSpatialTarget = contentTransform;
         activeDraggedObject = contentTransform.GetComponent<DraggableObject>();
 
+        ApplyInspectorModeContent();
         SyncTransformToInspector(contentTransform);
         activeContentDraft = ResolveDraftForSelection(contentTransform, activeDraggedObject);
         if (activeContentDraft != null)
@@ -1130,18 +1493,8 @@ public class AuthoringUIController : MonoBehaviour
         authoringSpatialTarget = null;
         activeDraggedObject = null;
         activeContentDraft = null;
-        suppressSpatialUiCallbacks = true;
-        try
-        {
-            if (posXInput != null) posXInput.value = 0;
-            if (posYInput != null) posYInput.value = 0;
-            if (posZInput != null) posZInput.value = 0;
-            if (scaleInput != null) scaleInput.value = 1;
-        }
-        finally
-        {
-            suppressSpatialUiCallbacks = false;
-        }
+        if (inspectorMode == InspectorMode.Target)
+            ApplyInspectorModeTarget();
     }
 
     public bool IsPointerOverAuthoringUi(Vector2 screenPosition)
@@ -1231,6 +1584,9 @@ public class AuthoringUIController : MonoBehaviour
         if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
             return;
 
+        if (spawningTextInput == null)
+            return;
+
         spawnerManager ??= BuildSpawnerManager();
         string textToDisplay = spawningTextInput.value;
 
@@ -1276,6 +1632,24 @@ public class AuthoringUIController : MonoBehaviour
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
     }
 
+    private void OnBrowseTargetReferenceButtonClicked()
+    {
+        if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
+            return;
+
+        pendingTargetReferenceTargetId = GetActiveTargetIdForSave();
+        if (string.IsNullOrWhiteSpace(pendingTargetReferenceTargetId))
+        {
+            ShowError("No active target selected for target reference.");
+            return;
+        }
+
+        pendingUploadPurpose = UploadPurpose.TargetReference;
+        UpdateTargetReferenceStatusLabel(showUploadingText: true);
+
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg", false);
+    }
+
     // This runs automatically when an image is selected
     private void OnFilesOpened(FrostweepGames.Plugins.WebGLFileBrowser.File[] files)
     {
@@ -1286,20 +1660,55 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         var selectedFile = files[0];
+        bool isTargetReferenceUpload = pendingUploadPurpose == UploadPurpose.TargetReference;
+        if (isTargetReferenceUpload)
+        {
+            HandleTargetReferenceFileSelected(selectedFile);
+            pendingUploadPurpose = UploadPurpose.Content;
+            return;
+        }
+
         bool isTargetImageUpload = pendingUploadPurpose == UploadPurpose.TargetImage;
         if (isTargetImageUpload)
         {
             if (createTargetImageUrlInput != null)
                 createTargetImageUrlInput.value = "Uploading target image...";
+
             apiClient = ResolveApiClient();
             uploadWorkflowService.UploadSelectedFile(
                 selectedFile,
                 apiClient,
                 result => OnTargetImageUploadCompleted(result, selectedFile),
                 uploadTimeoutSeconds);
+
+            pendingUploadPurpose = UploadPurpose.Content;
+            return;
         }
-        else
-            SpawnLocalContentFromFileSelection(selectedFile);
+
+        // Default: content library local draft + optional immediate spawn.
+        SpawnLocalContentFromFileSelection(selectedFile);
+        pendingUploadPurpose = UploadPurpose.Content;
+    }
+
+    private void HandleTargetReferenceFileSelected(FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
+    {
+        if (string.IsNullOrWhiteSpace(pendingTargetReferenceTargetId))
+        {
+            UpdateTargetReferenceStatusLabel(showUploadingText: false);
+            return;
+        }
+
+        if (selectedFile == null || selectedFile.data == null || selectedFile.data.Length == 0)
+        {
+            pendingTargetReferenceTargetId = null;
+            UpdateTargetReferenceStatusLabel(showUploadingText: false);
+            return;
+        }
+
+        string fileName = selectedFile.fileInfo != null ? selectedFile.fileInfo.name : "";
+        SetOrReplaceTargetReferenceDraft(pendingTargetReferenceTargetId, selectedFile.data, fileName);
+        pendingTargetReferenceTargetId = null;
+        UpdateTargetReferenceStatusLabel(showUploadingText: false);
     }
 
 private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
@@ -1415,6 +1824,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             suppressSpatialUiCallbacks = false;
         }
 
+        ApplyInspectorModeContent();
+
         if (contentType != null && contentType.StartsWith("Text", System.StringComparison.Ordinal))
         {
             if (youtubeUrlInput != null) youtubeUrlInput.value = "";
@@ -1424,7 +1835,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         else
             ApplyUrlToMediaFields(mediaValue);
 
-        contentTypeInput.value = contentType;
+        if (contentTypeInput != null)
+            contentTypeInput.value = contentType;
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
@@ -1907,7 +2319,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             posXInput.value = (float)System.Math.Round(newPosition.x, 2);
             posYInput.value = (float)System.Math.Round(newPosition.y, 2);
             posZInput.value = (float)System.Math.Round(newPosition.z, 2);
-            scaleInput.value = (float)System.Math.Round(authoringSpatialTarget.localScale.x, 2);
+            if (scaleInput != null)
+                scaleInput.value = (float)System.Math.Round(authoringSpatialTarget.localScale.x, 2);
         }
         finally
         {

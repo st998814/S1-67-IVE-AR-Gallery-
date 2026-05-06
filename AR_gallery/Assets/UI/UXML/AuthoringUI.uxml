@@ -30,22 +30,19 @@
                 <ui:Button name="RightPanelToggle" text="&lt;" class="panel-toggle" picking-mode="Position" style="border-top-left-radius: 4px; border-bottom-left-radius: 4px;"/>
                 <ui:VisualElement name="RightPanelBody" class="panel panel--collapsed" picking-mode="Position" style="width: 320px; min-width: 320px; border-left-width: 1px;">
                     <ui:Label text="Inspector" class="text-primary" style="-unity-font-style: bold; font-size: 12px; margin-bottom: 8px;"/>
-                    <ui:TextField name="ContentTypeInput" label="Type" value="Poster" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+                    <ui:VisualElement style="flex-direction: row; column-gap: 6px; margin-bottom: 8px;">
+                        <ui:Button name="InspectorTargetTabButton" text="Target" class="button button--active" style="flex-grow: 1; height: 24px; font-size: 10px;"/>
+                        <ui:Button name="InspectorContentTabButton" text="Content" class="button" style="flex-grow: 1; height: 24px; font-size: 10px;"/>
+                    </ui:VisualElement>
                     <ui:Label text="Spatial Coordinates:" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
                     <ui:FloatField name="PosXInput" label="X Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
                     <ui:FloatField name="PosYInput" label="Y Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
                     <ui:FloatField name="PosZInput" label="Z Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
-                    <ui:FloatField name="ScaleInput" label="Scale" value="1" class="input-field" style="margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
-                    <ui:Label text="Media File:" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
-                    <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 6px;">
-                        <ui:TextField name="FilePathInput" value="No file..." readonly="true" class="input-field" style="flex-grow: 1; min-height: 24px; font-size: 10px;"/>
-                        <ui:Button name="BrowseButton" text="Browse" class="button" style="height: 24px; width: 60px; -unity-font-style: bold; font-size: 10px;"/>
-                    </ui:VisualElement>
-                    <ui:TextField name="YoutubeUrlInput" label="YouTube URL" value="" class="input-field" style="margin-top: 2px; margin-bottom: 4px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
-                    <ui:Label text="Add Text:" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
-                    <ui:VisualElement style="flex-direction: row; align-items: center; column-gap: 4px; margin-bottom: 10px;">
-                        <ui:TextField name="SpawningTextInput" value="Hello World" class="input-field" style="flex-grow: 1; min-height: 24px; font-size: 11px;"/>
-                        <ui:Button name="SpawnTextButton" text="Spawn" class="button" style="height: 24px; width: 60px; -unity-font-style: bold; font-size: 10px;"/>
+                    <ui:VisualElement name="TargetReferenceContainer" style="display: none; flex-direction: column; margin-top: 10px;">
+                        <ui:Label text="Target Reference (optional):" class="text-secondary" style="-unity-font-style: bold; margin-top: 0px; margin-bottom: 6px; font-size: 11px;"/>
+                        <ui:Button name="BrowseTargetReferenceButton" text="Upload Reference" class="button" style="height: 26px; width: 100%; -unity-font-style: bold; font-size: 11px; margin-bottom: 6px;"/>
+                        <ui:Image name="TargetReferencePreviewImage" scale-mode="ScaleToFit" style="display: none; height: 140px; margin-bottom: 6px; border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-color: rgb(31, 41, 51); border-top-left-radius: 4px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; background-color: rgba(17, 24, 39, 0.9);"/>
+                        <ui:Label name="TargetReferenceStatusLabel" text="Not uploaded yet" class="text-disabled" style="font-size: 10px;"/>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

@@ -152,6 +152,17 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
     }
 
+    /// <summary>Clears current content selection (used when switching inspector to Target mode).</summary>
+    public void ClearContentSelection(bool syncAuthoringUi = true)
+    {
+        if (objectSelectionManager == null)
+            return;
+
+        _selectedListIndex = -1;
+        _suppressAuthoringSyncFromSelection = !syncAuthoringUi;
+        objectSelectionManager.SetSelected(null);
+    }
+
     private void OnObjectSelectionChanged(Transform selected)
     {
         if (selected == null)

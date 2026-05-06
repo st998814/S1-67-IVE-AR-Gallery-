@@ -17,6 +17,7 @@ public sealed class TargetMovementController : MonoBehaviour
     [SerializeField] private Transform planeAnchor;
     [SerializeField] private Camera raycastCamera;
     [SerializeField] private TransformGizmoController gizmoController;
+    [SerializeField] private AuthoringUIController authoringUiOverride;
     [SerializeField] private LayerMask targetMask = ~0;
     [SerializeField] private float maxRayDistance = 1000f;
     [SerializeField] private bool useTargetForwardAsPlaneNormal = true;
@@ -51,6 +52,8 @@ public sealed class TargetMovementController : MonoBehaviour
             raycastCamera = Camera.main;
         if (gizmoController == null)
             gizmoController = FindFirstObjectByType<TransformGizmoController>();
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
         if (targetRoot == null)
             targetRoot = transform;
         if (contentRoot == null && targetRoot != null)
@@ -89,6 +92,17 @@ public sealed class TargetMovementController : MonoBehaviour
 #if !ENABLE_INPUT_SYSTEM
         return;
 #else
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
+
+        // If user switched to Content inspector while dragging target,
+        // immediately stop target movement this frame.
+        if (_isDraggingTarget && authoringUiOverride != null && !authoringUiOverride.IsTargetInspectorActive())
+        {
+            EndTargetDrag();
+            return;
+        }
+
         Mouse mouse = Mouse.current;
         if (mouse == null)
             return;
@@ -108,6 +122,10 @@ public sealed class TargetMovementController : MonoBehaviour
     private void TryBeginTargetDrag(Vector2 screenPosition)
     {
         if (targetRoot == null)
+            return;
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
+        if (authoringUiOverride != null && !authoringUiOverride.IsTargetInspectorActive())
             return;
         // Precedence: any RTG drag / hover or app gizmo manipulation wins over target-plane drag.
         if (RTGizmosEngine.Get != null && RTGizmosEngine.Get.DraggedGizmo != null)
