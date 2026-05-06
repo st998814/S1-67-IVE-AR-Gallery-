@@ -11,6 +11,7 @@ namespace ARGallery.Spawning
     public class SpawnerManager : ISpawnerManager
     {
         private const float DefaultForwardOffsetFromWall = 0.008f;
+        private const float MinimumSurfaceClearance = 0.06f;
 
         private readonly MonoBehaviour runner;
         private readonly GameObject picturePrefab;
@@ -181,8 +182,28 @@ namespace ARGallery.Spawning
                 instance.transform.localPosition = targetVisual.localPosition;
                 instance.transform.localRotation = targetVisual.localRotation;
                 instance.transform.localScale = targetVisual.localScale;
-                if (forwardOffsetFromWall > 0f)
-                    instance.transform.position += instance.transform.forward * forwardOffsetFromWall;
+
+                // Align spawn direction with FrontSideConstraint axis (+/- local Z).
+                float frontSign = ResolveFrontDirectionSign(contentRoot);
+                Vector3 localFront = Vector3.forward * frontSign;
+                Vector3 normal = contentRoot.TransformDirection(localFront);
+                if (normal.sqrMagnitude < 0.0001f)
+                    normal = Vector3.forward;
+                else
+                    normal.Normalize();
+                float offset = Mathf.Max(0.001f, forwardOffsetFromWall);
+
+                if (TryGetProjectedHalfDepth(targetVisual, normal, out float targetHalfDepth))
+                    offset += targetHalfDepth;
+                if (TryGetProjectedHalfDepth(instance.transform, normal, out float contentHalfDepth))
+                    offset += contentHalfDepth;
+                else
+                    offset += MinimumSurfaceClearance;
+
+                offset += MinimumSurfaceClearance;
+
+                // Place relative to target frame origin, but along ContentRoot canonical front axis.
+                instance.transform.localPosition = targetVisual.localPosition + localFront * offset;
             }
             else
             {
@@ -190,6 +211,78 @@ namespace ARGallery.Spawning
                 instance.transform.localRotation = Quaternion.identity;
                 instance.transform.localScale = Vector3.one;
             }
+        }
+
+        private float ResolveFrontDirectionSign(Transform contentRoot)
+        {
+            FrontSideConstraint constraint = null;
+
+            if (contentRoot != null)
+                constraint = contentRoot.GetComponentInParent<FrontSideConstraint>();
+
+            if (constraint == null && runner != null)
+                constraint = runner.GetComponentInParent<FrontSideConstraint>();
+
+            if (constraint == null)
+                constraint = UnityEngine.Object.FindFirstObjectByType<FrontSideConstraint>();
+
+            if (constraint == null)
+                return -1f;
+
+            return constraint.FrontDirectionSign >= 0f ? 1f : -1f;
+        }
+
+
+        private static bool TryGetProjectedHalfDepth(Transform root, Vector3 normal, out float halfDepth)
+        {
+            halfDepth = 0f;
+            if (root == null)
+                return false;
+
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(includeInactive: false);
+            if (renderers == null || renderers.Length == 0)
+                return false;
+
+            Vector3 n = normal.sqrMagnitude > 0.0001f ? normal.normalized : Vector3.forward;
+            float min = float.MaxValue;
+            float max = float.MinValue;
+            bool hasValue = false;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer r = renderers[i];
+                if (r == null || !r.enabled)
+                    continue;
+
+                Bounds b = r.bounds;
+                Vector3 e = b.extents;
+                Vector3 c = b.center;
+                Vector3[] corners =
+                {
+                    c + new Vector3(-e.x, -e.y, -e.z),
+                    c + new Vector3(-e.x, -e.y,  e.z),
+                    c + new Vector3(-e.x,  e.y, -e.z),
+                    c + new Vector3(-e.x,  e.y,  e.z),
+                    c + new Vector3( e.x, -e.y, -e.z),
+                    c + new Vector3( e.x, -e.y,  e.z),
+                    c + new Vector3( e.x,  e.y, -e.z),
+                    c + new Vector3( e.x,  e.y,  e.z)
+                };
+
+                for (int j = 0; j < corners.Length; j++)
+                {
+                    float d = Vector3.Dot(corners[j], n);
+                    if (d < min) min = d;
+                    if (d > max) max = d;
+                    hasValue = true;
+                }
+            }
+
+            if (!hasValue)
+                return false;
+
+            halfDepth = Mathf.Max(0f, (max - min) * 0.5f);
+            return true;
         }
 
         public SpawnTargetResult CreateTarget(SpawnTargetRequest request)

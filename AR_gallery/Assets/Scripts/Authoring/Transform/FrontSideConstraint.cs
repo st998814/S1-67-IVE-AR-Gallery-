@@ -13,7 +13,7 @@ public sealed class FrontSideConstraint : MonoBehaviour
     }
 
     [Tooltip("Which local-Z direction counts as front side. Use NegativeLocalZ when your target faces the opposite direction.")]
-    [SerializeField] private FrontSideAxis frontSideAxis = FrontSideAxis.PositiveLocalZ;
+    [SerializeField] private FrontSideAxis frontSideAxis = FrontSideAxis.NegativeLocalZ;
 
     [Tooltip("Base offset from the target plane along the chosen front side axis.")]
     [SerializeField] private float frontOffset = 0.5f;
@@ -34,9 +34,13 @@ public sealed class FrontSideConstraint : MonoBehaviour
 
     public float FrontOffset => frontOffset;
     public float EffectiveMinimumLocalZ => frontOffset + additionalMinimumLocalZ;
+    public float FrontDirectionSign => frontSideAxis == FrontSideAxis.PositiveLocalZ ? 1f : -1f;
 
     private void Awake()
     {
+        // Normalize to the project convention to avoid posture-dependent inversion.
+        frontSideAxis = FrontSideAxis.NegativeLocalZ;
+
         if (targetRoot == null)
         {
             GameObject go = GameObject.Find("TargetRoot");

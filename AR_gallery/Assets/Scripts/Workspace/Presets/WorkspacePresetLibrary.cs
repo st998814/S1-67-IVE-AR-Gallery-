@@ -27,9 +27,10 @@ namespace ARGallery.Workspace.Presets
                 WorkspacePosture.Wall,
                 new WorkspaceTargetPreset(new Vector3(0f, 0f, 0f)),
                 new WorkspaceCameraPreset(
-                    localPositionOffset: new Vector3(0f, 0.16f, -1.35f),
+                    // View from the upper rear side of the target.
+                    localPositionOffset: new Vector3(0f, 0.95f, -0.7f),
                     localLookAtOffset: new Vector3(0f, 0f, 0f),
-                    tiltDegrees: 8f),
+                    tiltDegrees: 18f),
                 new WorkspaceInteractionPreset(
                     lockRoll: true,
                     clampVerticalPan: false));
@@ -39,11 +40,13 @@ namespace ARGallery.Workspace.Presets
         {
             return new WorkspacePreset(
                 WorkspacePosture.Floor,
-                new WorkspaceTargetPreset(new Vector3(-90f, 0f, 0f)),
+                // Floor posture intent: target appears on floor plane from above.
+                new WorkspaceTargetPreset(new Vector3(90f, 0f, 0f)),
                 new WorkspaceCameraPreset(
-                    localPositionOffset: new Vector3(0f, 1.15f, -0.95f),
+                    // Use the same camera framing as wall posture for demo stability.
+                    localPositionOffset: new Vector3(0f, 0.95f, -0.7f),
                     localLookAtOffset: new Vector3(0f, 0f, 0f),
-                    tiltDegrees: 14f),
+                    tiltDegrees: 18f),
                 new WorkspaceInteractionPreset(
                     lockRoll: true,
                     clampVerticalPan: true));
@@ -53,11 +56,13 @@ namespace ARGallery.Workspace.Presets
         {
             return new WorkspacePreset(
                 WorkspacePosture.Ceiling,
-                new WorkspaceTargetPreset(new Vector3(90f, 0f, 0f)),
+                // Ceiling posture intent: user looks upward from under the target.
+                new WorkspaceTargetPreset(new Vector3(-90f, 0f, 0f)),
                 new WorkspaceCameraPreset(
-                    localPositionOffset: new Vector3(0f, -1.15f, -0.95f),
+                    // Use the same camera framing as wall posture for demo stability.
+                    localPositionOffset: new Vector3(0f, 0.95f, -0.7f),
                     localLookAtOffset: new Vector3(0f, 0f, 0f),
-                    tiltDegrees: -14f),
+                    tiltDegrees: 18f),
                 new WorkspaceInteractionPreset(
                     lockRoll: true,
                     clampVerticalPan: true));

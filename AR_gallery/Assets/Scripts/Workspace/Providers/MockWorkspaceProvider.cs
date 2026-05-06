@@ -71,7 +71,7 @@ namespace ARGallery.Workspace
             return new WorkspaceDraftState
             {
                 workspaceId = "ws-wall-001",
-                workspaceName = "Mock Wall Workspace",
+                workspaceName = "Target on Wall",
                 schemaVersion = "v1",
                 isDirty = false,
                 localModifiedAtUtc = "",
@@ -79,8 +79,8 @@ namespace ARGallery.Workspace
                 {
                     targetId = "target-wall-001",
                     targetName = "Wall Poster",
-                    displayLabel = "Wall Poster",
-                    targetImageUrl = "mock://targets/wall-poster.png",
+                    displayLabel = "Wall Target",
+                    targetImageUrl = "",
                     physicalWidth = 0.45f,
                     posture = WorkspacePosture.Wall,
                     publishStatus = "draft",
@@ -89,24 +89,6 @@ namespace ARGallery.Workspace
                 },
                 content = new List<ContentDraftState>
                 {
-                    new ContentDraftState
-                    {
-                        contentId = "content-wall-image-001",
-                        contentType = "image",
-                        mediaUrl = "mock://content/wall-image.png",
-                        localPosition = new UnityEngine.Vector3(0f, 0f, 0.02f),
-                        localEuler = UnityEngine.Vector3.zero,
-                        localScale = new UnityEngine.Vector3(0.25f, 0.25f, 0.25f)
-                    },
-                    new ContentDraftState
-                    {
-                        contentId = "content-wall-text-001",
-                        contentType = "text",
-                        mediaUrl = "Welcome to AR Gallery",
-                        localPosition = new UnityEngine.Vector3(0f, -0.18f, 0.02f),
-                        localEuler = UnityEngine.Vector3.zero,
-                        localScale = new UnityEngine.Vector3(0.08f, 0.08f, 0.08f)
-                    }
                 }
             };
         }
@@ -116,16 +98,16 @@ namespace ARGallery.Workspace
             return new WorkspaceDraftState
             {
                 workspaceId = "ws-floor-001",
-                workspaceName = "Mock Floor Workspace",
+                workspaceName = "Target on Floor",
                 schemaVersion = "v1",
                 isDirty = false,
                 localModifiedAtUtc = "",
                 target = new TargetDraftState
                 {
                     targetId = "target-floor-001",
-                    targetName = "Floor Marker",
-                    displayLabel = "Floor Marker",
-                    targetImageUrl = "mock://targets/floor-marker.png",
+                    targetName = "Floor Target",
+                    displayLabel = "Floor Target",
+                    targetImageUrl = "",
                     physicalWidth = 0.6f,
                     posture = WorkspacePosture.Floor,
                     publishStatus = "draft",
@@ -141,16 +123,16 @@ namespace ARGallery.Workspace
             return new WorkspaceDraftState
             {
                 workspaceId = "ws-ceiling-001",
-                workspaceName = "Mock Ceiling Workspace",
+                workspaceName = "Target on Ceiling",
                 schemaVersion = "v1",
                 isDirty = false,
                 localModifiedAtUtc = "",
                 target = new TargetDraftState
                 {
                     targetId = "target-ceiling-001",
-                    targetName = "Ceiling Marker",
-                    displayLabel = "Ceiling Marker",
-                    targetImageUrl = "mock://targets/ceiling-marker.png",
+                    targetName = "Ceiling Target",
+                    displayLabel = "Ceiling Target",
+                    targetImageUrl = "",
                     physicalWidth = 0.5f,
                     posture = WorkspacePosture.Ceiling,
                     publishStatus = "draft",
