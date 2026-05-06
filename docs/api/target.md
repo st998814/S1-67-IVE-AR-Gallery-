@@ -2,30 +2,13 @@
 
 Base path prefix: `/api`. See `common.md` for success/error conventions and shared types.
 
----
-
-## Frontend Target-Gate Semantics (Switcher -> TargetScene -> Authoring)
-
-This contract supports a frontend scene gate where target creation and cloud publish are coupled in one submit flow.
-
-Expected frontend sequence:
-
-1. `POST /api/targets` (create/register draft target)
-2. `POST /api/targets/{targetId}/publish` (attempt cloud publish immediately)
-3. Proceed to authoring scene **only** when publish succeeds (`publishStatus = published` and `cloudTargetId` is non-empty).
-
-If publish fails, frontend must stay in target scene and offer:
-
-- retry publish
-- cancel back to switcher
-
-Image quality concerns are soft warnings on frontend and do not change this API-level gate policy.
+This file documents the **currently implemented** target endpoints in `backend/app.py`.
 
 ---
 
 ## `POST /api/targets`
 
-Creates (or registers) a target. Aligns with `CreateTargetRequestDto` / `CreateTargetResponseDto` in Unity.
+Creates or updates a target record directly from JSON.
 
 ### Request
 
@@ -34,43 +17,28 @@ Creates (or registers) a target. Aligns with `CreateTargetRequestDto` / `CreateT
 | Field | Type | Required | Description |
 |--------|------|----------|-------------|
 | `targetId` | string | yes | Canonical id (e.g. `poster-a`, `target-001`). |
-| `targetName` | string | yes | Internal technical name. |
-| `displayLabel` | string | no | User-facing label; empty may fall back to `targetId` server-side. |
-| `targetImageUrl` | string | no | Reference image URL, marker, or empty. |
-| `physicalWidth` | number | yes | Physical width in meters, must be > 0. |
-| `vuforiaTargetName` | string | no | Cloud-side target name hint (backend may normalize/fill). |
-| `publishStatus` | string | no | Initial status; defaults to `draft`. |
-| `publishIdempotencyKey` | string | no | Optional idempotency hint for publish chain. |
-| `mappingVersion` | number | no | Mapping revision, default backend-defined (`1` typical). |
-| `mappingChecksum` | string | no | Mapping integrity checksum (backend may generate/override). |
+| `targetName` | string | yes | Internal/technical name. |
+| `displayLabel` | string | no | User-facing label; falls back to `targetId` when empty. |
+| `targetImageUrl` | string | no | Previously uploaded target image URL. |
+| `workspaceId` | string | no | Workspace id. Defaults to `default`. Must exist in `workspaces`. |
+| `physicalWidthM` | number | no | Physical width in meters. Defaults to `1.0`. |
 | `localPosition` | object | yes | `ApiVector3Dto` — local position. |
-| `localEuler` | object | yes | `ApiVector3Dto` — local Euler angles in **degrees**. |
-| `localScale` | object | yes | `ApiVector3Dto` — local scale. |
-| `meta` | object | no | `ApiSyncMetaDto`. |
+| `localEuler` | object | yes | `ApiVector3Dto` — local Euler angles in degrees. |
+| `localScale` | object | yes | `ApiVector3Dto` — local scale. Defaults to `{1,1,1}` when omitted. |
+| `meta` | object | no | `ApiSyncMetaDto` or arbitrary object. |
 
 ### Response `200` / `201`
 
 **Content-Type:** `application/json`
 
-Body matches `CreateTargetResponseDto`:
-
 | Field | Type | Description |
 |--------|------|-------------|
-| `targetId` | string | Canonical id (echoed or normalized). |
-| `targetName` | string | Echoed or normalized name. |
-| `displayLabel` | string | Normalized display label. |
-| `targetImageUrl` | string | Persisted target image URL. |
-| `physicalWidth` | number | Persisted physical width in meters. |
-| `vuforiaTargetName` | string | Persisted cloud-side name (empty if not yet resolved). |
-| `cloudTargetId` | string | Cloud target id when published; empty otherwise. |
-| `publishStatus` | string | `draft`, `publishing`, `published`, `failed`. |
-| `publishIdempotencyKey` | string | Current/last publish idempotency key. |
-| `lastSuccessfulPublishIdempotencyKey` | string | Key used for latest successful publish. |
-| `lastPublishError` | string | Last publish failure detail. |
-| `mappingVersion` | number | Mapping revision number. |
-| `mappingChecksum` | string | Mapping checksum string. |
-| `status` | string | e.g. `created`, `accepted`, `failed`. |
-| `createdAtUtc` | string | Server timestamp, ISO-8601 UTC. |
+| `targetId` | string | Canonical target id. |
+| `targetName` | string | Stored target name. |
+| `displayLabel` | string | Stored display label. |
+| `targetImageUrl` | string | Stored image URL. |
+| `status` | string | `created` or `accepted`. |
+| `createdAtUtc` | string | ISO-8601 UTC timestamp. |
 
 ### Example — request
 
@@ -79,21 +47,13 @@ Body matches `CreateTargetResponseDto`:
   "targetId": "poster-a",
   "targetName": "poster_main",
   "displayLabel": "Main wall poster",
-  "targetImageUrl": "https://cdn.example.com/uploads/poster_a.jpg",
-  "physicalWidth": 0.4,
-  "vuforiaTargetName": "poster-a-main",
-  "publishStatus": "draft",
-  "publishIdempotencyKey": "req-target-001",
-  "mappingVersion": 1,
-  "mappingChecksum": "",
+  "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
+  "workspaceId": "default",
+  "physicalWidthM": 0.4,
   "localPosition": { "x": 0, "y": 0, "z": 0 },
   "localEuler": { "x": 0, "y": 90, "z": 0 },
   "localScale": { "x": 1, "y": 1, "z": 1 },
-  "meta": {
-    "schemaVersion": "v1",
-    "clientRequestId": "req-target-001",
-    "createdAtUtc": "2026-04-18T12:00:00Z"
-  }
+  "meta": { "schemaVersion": "v1" }
 }
 ```
 
@@ -104,18 +64,9 @@ Body matches `CreateTargetResponseDto`:
   "targetId": "poster-a",
   "targetName": "poster_main",
   "displayLabel": "Main wall poster",
-  "targetImageUrl": "https://cdn.example.com/uploads/poster_a.jpg",
-  "physicalWidth": 0.4,
-  "vuforiaTargetName": "poster-a-main",
-  "cloudTargetId": "",
-  "publishStatus": "draft",
-  "publishIdempotencyKey": "req-target-001",
-  "lastSuccessfulPublishIdempotencyKey": "",
-  "lastPublishError": "",
-  "mappingVersion": 1,
-  "mappingChecksum": "",
+  "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
   "status": "created",
-  "createdAtUtc": "2026-04-18T12:00:01Z"
+  "createdAtUtc": "2026-05-06T10:26:13.296729Z"
 }
 ```
 
@@ -123,13 +74,7 @@ Body matches `CreateTargetResponseDto`:
 
 ## `POST /api/targets/cloud`
 
-Uploads a target image to the backend, registers it with Vuforia Cloud Target Web API, and stores the resulting target metadata in PostgreSQL.
-
-Use this endpoint when Unity needs the full flow:
-
-1. Upload target image bytes to Flask.
-2. Flask creates the Cloud Target in Vuforia.
-3. Flask stores `targetId`, `targetImageUrl`, transform data, and Vuforia status in the backend database.
+Uploads a target image, registers it in Vuforia Cloud Targets, and persists the target row.
 
 ### Request
 
@@ -137,189 +82,84 @@ Use this endpoint when Unity needs the full flow:
 
 | Part / Field | Type | Required | Description |
 |--------------|------|----------|-------------|
-| `file` | file | yes | Target image bytes, `png`, `jpg`, or `jpeg`. |
-| `targetId` | string | yes | Canonical target id used by backend and Unity. |
-| `targetName` | string | yes | Display/internal target name. |
-| `displayLabel` | string | no | User-facing label. |
-| `width` | number | no | Vuforia physical target width; backend default comes from `VUFORIA_TARGET_WIDTH`. |
-| `localPosition` | string JSON | no | Stringified `ApiVector3Dto`; defaults to zero. |
-| `localEuler` | string JSON | no | Stringified `ApiVector3Dto`; defaults to zero. |
-| `localScale` | string JSON | no | Stringified `ApiVector3Dto`; defaults to one. |
-| `meta` | string JSON | no | Stringified `ApiSyncMetaDto`. |
+| `file` | file | yes | Target image (`png`, `jpg`, `jpeg`). |
+| `targetId` | string | yes | Canonical target id. |
+| `targetName` | string | no | Defaults to `targetId` if omitted. |
+| `displayLabel` | string | no | Defaults to `targetId` if omitted. |
+| `workspaceId` | string | no | Defaults to `default`. Must exist in `workspaces`. |
+| `width` | number | no | Physical width in meters for Vuforia and DB `physical_width_m`. Defaults to `VUFORIA_TARGET_WIDTH` (`1.0` fallback). |
+| `localPosition` | string JSON | no | Stringified `ApiVector3Dto`. Defaults to zero vector. |
+| `localEuler` | string JSON | no | Stringified `ApiVector3Dto`. Defaults to zero vector. |
+| `localScale` | string JSON | no | Stringified `ApiVector3Dto`. Defaults to one vector. |
+| `meta` | string JSON | no | Stringified object; defaults to `{ "schemaVersion": "v1" }`. |
 
 ### Response `200` / `201`
 
 **Content-Type:** `application/json`
 
-Body extends `CreateTargetResponseDto` with Vuforia fields:
-
 | Field | Type | Description |
 |--------|------|-------------|
-| `targetId` | string | Backend canonical target id. |
+| `targetId` | string | Canonical target id. |
 | `targetName` | string | Stored target name. |
 | `displayLabel` | string | Stored display label. |
-| `targetImageUrl` | string | Backend URL for the uploaded target image. |
-| `status` | string | Backend lifecycle status. |
-| `createdAtUtc` | string | ISO-8601 UTC. |
-| `vuforiaTargetId` | string | Vuforia Cloud Target id. |
-| `vuforiaStatus` | string | Vuforia result/status code. |
+| `targetImageUrl` | string | Backend URL of uploaded image. |
+| `status` | string | `created` or `accepted`. |
+| `createdAtUtc` | string | ISO-8601 UTC timestamp. |
+| `vuforiaTargetId` | string | Vuforia Cloud target id. |
+| `vuforiaStatus` | string | Vuforia result code (e.g. `TargetCreated`). |
 
 ### Example — success response
 
 ```json
 {
-  "targetId": "poster-a",
-  "targetName": "Poster A",
-  "displayLabel": "Main wall poster",
-  "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
+  "targetId": "wire-verify-1778063171",
+  "targetName": "wire-verify-1778063171",
+  "displayLabel": "Wire Verify",
+  "targetImageUrl": "http://127.0.0.1:5050/uploads/verify-7de1d972.png",
   "status": "created",
-  "createdAtUtc": "2026-04-18T12:00:01Z",
-  "vuforiaTargetId": "xxxxxxxxxxxxxxxxxxxxxxxx",
+  "createdAtUtc": "2026-05-06T10:26:13.296729Z",
+  "vuforiaTargetId": "ac359e111d82418785dbf0f6a1312564",
   "vuforiaStatus": "TargetCreated"
 }
 ```
 
 ### Backend configuration
 
-The backend reads Vuforia credentials from environment variables:
+The backend accepts either variable set below for Vuforia credentials:
 
 | Variable | Description |
 |----------|-------------|
-| `VUFORIA_ACCESS_KEY` | Vuforia database access key. |
-| `VUFORIA_SECRET_KEY` | Vuforia database secret key. |
-| `VUFORIA_HOST` | Defaults to `https://vws.vuforia.com`. |
-| `VUFORIA_TARGET_WIDTH` | Default physical target width. |
+| `VUFORIA_ACCESS_KEY` or `VUFORIA_SERVER_ACCESS_KEY` | Vuforia database access key. |
+| `VUFORIA_SECRET_KEY` or `VUFORIA_SERVER_SECRET_KEY` | Vuforia database secret key. |
+| `VUFORIA_HOST` or `VUFORIA_BASE_URL` | Vuforia base URL. Defaults to `https://vws.vuforia.com`. |
+| `VUFORIA_TARGET_WIDTH` | Default width when `width` is omitted. |
 
 ---
 
 ## `GET /api/targets`
 
-Returns all targets (or the server-defined default list) for gallery / admin / sync.
-
-### Request
-
-No body. Query parameters are optional and backend-defined (e.g. pagination); if absent, document server behavior in backend readme—not duplicated here unless agreed.
+Returns all persisted targets as a raw JSON array.
 
 ### Response `200`
 
-**Content-Type:** `application/json`
+Each item currently includes:
 
-Body: **JSON array** of target summary objects (raw array, no envelope). Each element uses the same shape as `CreateTargetResponseDto`, optionally extended by the backend (e.g. `targetImageUrl`); clients should ignore unknown fields.
-
-| Field | Type | Required on item | Description |
-|--------|------|------------------|-------------|
-| `targetId` | string | yes | Canonical id. |
-| `targetName` | string | yes | Name. |
-| `displayLabel` | string | no | Label. |
-| `status` | string | no | Last-known lifecycle status if applicable. |
-| `createdAtUtc` | string | no | ISO-8601 UTC. |
-| `targetImageUrl` | string | no | If server stores it for list views. |
-
-### Example — success response
-
-```json
-[
-  {
-    "targetId": "poster-a",
-    "targetName": "Poster A",
-    "displayLabel": "Main wall poster",
-    "status": "accepted",
-    "createdAtUtc": "2026-04-18T12:00:01Z",
-    "targetImageUrl": "https://cdn.example.com/uploads/poster_a.jpg"
-  }
-]
-```
-
----
-
-## `GET /api/targets/{targetId}`
-
-Returns one target by canonical `targetId`.
-
-### Response `200`
-
-Same object shape as target create response, including lifecycle/mapping fields.
-
-### Response `404`
-
-Standard error object from `common.md` (`NOT_FOUND`).
-
----
-
-## `POST /api/targets/{targetId}/publish`
-
-Attempts Vuforia cloud publish for an existing target. This endpoint is the frontend hard-gate checkpoint.
-
-### Request
-
-**Content-Type:** `application/json` (empty body allowed)
-
-Optional fields:
-
-| Field | Type | Required | Description |
-|--------|------|----------|-------------|
-| `publishIdempotencyKey` | string | no | Client idempotency key override/hint. |
-| `meta` | object | no | `ApiSyncMetaDto`; `clientRequestId` may be used as idempotency hint. |
-
-### Response `200` / `202`
-
-Response body uses target response shape with lifecycle fields.
-
-Frontend gating rules:
-
-- Enter authoring only when `publishStatus == "published"` and `cloudTargetId` is non-empty.
-- If response is accepted but still in `publishing`, frontend remains blocked and keeps polling/retrying policy in target scene.
-
-### Response `502`
-
-Publish failed at upstream provider. Body contains standard error object and may include failure details in `details`.
-
-Frontend handling:
-
-- Stay in target scene (hard block)
-- Surface `lastPublishError` (if present via details)
-- Offer retry or cancel
-
----
-
-## `POST /api/targets/{targetId}/retry-publish`
-
-Retries a failed/incomplete publish attempt.
-
-### Behavior
-
-- Backend generates or updates idempotency key for the new publish attempt.
-- Response semantics match `/publish`.
-- Frontend stays blocked from authoring until `published`.
+| Field | Type | Description |
+|--------|------|-------------|
+| `targetId` | string | Canonical id. |
+| `targetName` | string | Name. |
+| `displayLabel` | string | Label. |
+| `targetImageUrl` | string | Stored image URL. |
+| `status` | string | Lifecycle status. |
+| `createdAtUtc` | string | ISO-8601 UTC timestamp. |
 
 ---
 
 ## `DELETE /api/targets/{targetId}`
 
-Deletes the target identified by path parameter `targetId`.
-
-### Request
-
-Path:
-
-| Parameter | Description |
-|-----------|-------------|
-| `targetId` | Canonical target id (URL-encoded if needed). |
-
-No body required.
+Deletes one target by id.
 
 ### Response `200`
-
-**Content-Type:** `application/json`
-
-Minimal confirmation DTO:
-
-| Field | Type | Description |
-|--------|------|-------------|
-| `targetId` | string | Deleted id. |
-| `status` | string | e.g. `deleted`. |
-
-### Example — success response
 
 ```json
 {
@@ -328,17 +168,30 @@ Minimal confirmation DTO:
 }
 ```
 
-**Note:** If the backend prefers `204 No Content` with an empty body, that should be treated as success at the HTTP layer; the JSON shape above is the contract when a body is returned.
+### Response `404`
+
+Standard error object from `common.md` with `NOT_FOUND`.
+
+---
+
+## Not in current implementation
+
+These routes are **not** implemented in the current backend and should not be called:
+
+- `GET /api/targets/{targetId}`
+- `POST /api/targets/{targetId}/publish`
+- `POST /api/targets/{targetId}/retry-publish`
 
 ---
 
 ## Errors
 
-Failures use the standardized error object from `common.md` and appropriate HTTP status.
+Failures use the standard error object from `common.md`.
 
 Common target-flow cases:
 
-- `400 VALIDATION_ERROR` (missing/invalid target fields)
-- `404 NOT_FOUND` (unknown `targetId`)
-- `409 CONFLICT` (publish in progress with conflicting idempotency semantics)
-- `502 SERVER_ERROR` (upstream Vuforia publish failure)
+- `400 VALIDATION_ERROR` (missing/invalid fields)
+- `404 NOT_FOUND` (unknown resource)
+- `415 VALIDATION_ERROR` (unsupported cloud target image type)
+- `500 SERVER_ERROR` (database failure)
+- `502 VUFORIA_ERROR` (upstream Vuforia failure)

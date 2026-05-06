@@ -160,6 +160,27 @@ def _target_cloud_response(row, status_override=None):
     return body
 
 
+def _workspace_id_from_payload(data: dict, default: str = "default"):
+    workspace_id = data.get("workspaceId", default)
+    if workspace_id is None:
+        workspace_id = default
+    if not isinstance(workspace_id, str):
+        return None, "workspaceId must be a string."
+    workspace_id = workspace_id.strip() or default
+    return workspace_id, None
+
+
+def _physical_width_from_payload(data: dict, default: float = 1.0):
+    raw = data.get("physicalWidthM", default)
+    if raw is None:
+        raw = default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, "physicalWidthM must be a number."
+    return value, None
+
+
 def _content_response(row, status_override=None):
     return {
         "contentId": row[0],
@@ -375,6 +396,12 @@ def create_target():
     meta, err_msg = _parse_meta(data)
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
+    workspace_id, err_msg = _workspace_id_from_payload(data)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    physical_width_m, err_msg = _physical_width_from_payload(data, default=1.0)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
 
     try:
         with get_db_connection() as conn:
@@ -385,17 +412,19 @@ def create_target():
                 cur.execute(
                     """
                     INSERT INTO targets (
-                        target_id, target_name, display_label, target_image_url,
+                        target_id, workspace_id, target_name, display_label, target_image_url, physical_width_m,
                         local_position_x, local_position_y, local_position_z,
                         local_euler_x, local_euler_y, local_euler_z,
                         local_scale_x, local_scale_y, local_scale_z,
                         meta, status
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (target_id) DO UPDATE SET
+                        workspace_id = EXCLUDED.workspace_id,
                         target_name = EXCLUDED.target_name,
                         display_label = EXCLUDED.display_label,
                         target_image_url = EXCLUDED.target_image_url,
+                        physical_width_m = EXCLUDED.physical_width_m,
                         local_position_x = EXCLUDED.local_position_x,
                         local_position_y = EXCLUDED.local_position_y,
                         local_position_z = EXCLUDED.local_position_z,
@@ -412,9 +441,11 @@ def create_target():
                     """,
                     (
                         target_id,
+                        workspace_id,
                         target_name,
                         display_label or target_id,
                         target_image_url,
+                        physical_width_m,
                         *local_position,
                         *local_euler,
                         *local_scale,
@@ -445,6 +476,7 @@ def create_cloud_target():
         return error_response("targetId is required.", "VALIDATION_ERROR", 400)
     if not target_name:
         return error_response("targetName is required.", "VALIDATION_ERROR", 400)
+    workspace_id = (request.form.get("workspaceId") or "default").strip() or "default"
 
     local_position_raw, err_msg = _parse_form_json("localPosition", {"x": 0.0, "y": 0.0, "z": 0.0})
     if err_msg:
@@ -508,18 +540,20 @@ def create_cloud_target():
                 cur.execute(
                     """
                     INSERT INTO targets (
-                        target_id, target_name, display_label, target_image_url,
+                        target_id, workspace_id, target_name, display_label, target_image_url, physical_width_m,
                         local_position_x, local_position_y, local_position_z,
                         local_euler_x, local_euler_y, local_euler_z,
                         local_scale_x, local_scale_y, local_scale_z,
                         vuforia_target_id, vuforia_status, vuforia_result,
                         meta, status
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (target_id) DO UPDATE SET
+                        workspace_id = EXCLUDED.workspace_id,
                         target_name = EXCLUDED.target_name,
                         display_label = EXCLUDED.display_label,
                         target_image_url = EXCLUDED.target_image_url,
+                        physical_width_m = EXCLUDED.physical_width_m,
                         local_position_x = EXCLUDED.local_position_x,
                         local_position_y = EXCLUDED.local_position_y,
                         local_position_z = EXCLUDED.local_position_z,
@@ -540,9 +574,11 @@ def create_cloud_target():
                     """,
                     (
                         target_id,
+                        workspace_id,
                         target_name,
                         display_label or target_id,
                         file_url,
+                        target_width,
                         *local_position,
                         *local_euler,
                         *local_scale,

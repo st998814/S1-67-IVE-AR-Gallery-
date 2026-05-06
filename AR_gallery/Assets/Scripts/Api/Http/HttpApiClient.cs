@@ -48,30 +48,6 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return handle;
     }
 
-    public IApiRequestHandle PublishTarget(
-        string targetId,
-        PublishTargetRequestDto request,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
-    {
-        var handle = new CoroutineApiRequestHandle(this);
-        Coroutine c = StartCoroutine(PublishTargetRoutine(targetId, request, isRetry: false, onCompleted, timeoutSeconds, handle));
-        handle.BindCoroutine(c);
-        return handle;
-    }
-
-    public IApiRequestHandle RetryPublishTarget(
-        string targetId,
-        PublishTargetRequestDto request,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
-    {
-        var handle = new CoroutineApiRequestHandle(this);
-        Coroutine c = StartCoroutine(PublishTargetRoutine(targetId, request, isRetry: true, onCompleted, timeoutSeconds, handle));
-        handle.BindCoroutine(c);
-        return handle;
-    }
-
     private IEnumerator UploadFileRoutine(
         UploadFileRequestDto request,
         Action<ApiResult<UploadFileResponseDto>> onCompleted,
@@ -301,66 +277,4 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return fallback;
     }
 
-    private IEnumerator PublishTargetRoutine(
-        string targetId,
-        PublishTargetRequestDto request,
-        bool isRetry,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds,
-        CoroutineApiRequestHandle handle)
-    {
-        if (string.IsNullOrWhiteSpace(targetId))
-        {
-            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.ValidationError, "targetId is required"));
-            handle.MarkDone();
-            yield break;
-        }
-
-        string path = isRetry ? $"{targetEndpoint}/{targetId.Trim()}/retry-publish" : $"{targetEndpoint}/{targetId.Trim()}/publish";
-        string url = BuildUrl(path);
-        PublishTargetRequestDto payload = request ?? new PublishTargetRequestDto();
-        string json = JsonUtility.ToJson(payload);
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-
-        using (UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
-        {
-            uwr.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            uwr.downloadHandler = new DownloadHandlerBuffer();
-            uwr.SetRequestHeader("Content-Type", "application/json");
-            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 20f : timeoutSeconds));
-            yield return uwr.SendWebRequest();
-
-            if (handle.IsCancelled)
-            {
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
-                handle.MarkDone();
-                yield break;
-            }
-
-            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
-            if (uwr.result != UnityWebRequest.Result.Success)
-            {
-                string fallback = $"{(isRetry ? "RetryPublish" : "Publish")} failed: {uwr.error} HTTP {(long)uwr.responseCode}";
-                string err = ExtractServerErrorMessage(body, fallback);
-                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
-                handle.MarkDone();
-                yield break;
-            }
-
-            CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
-            if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
-            {
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
-                    ApiErrorCodes.ServerError,
-                    "Publish succeeded but response has no targetId.",
-                    (int)uwr.responseCode));
-                handle.MarkDone();
-                yield break;
-            }
-
-            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Ok(parsed, isRetry ? "retry publish ok" : "publish ok", (int)uwr.responseCode));
-            handle.MarkDone();
-        }
-    }
 }

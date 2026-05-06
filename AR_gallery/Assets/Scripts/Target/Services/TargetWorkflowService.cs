@@ -148,6 +148,8 @@ public class TargetWorkflowService
             targetName = targetName,
             displayLabel = displayLabel,
             targetImageUrl = targetImageUrl ?? "",
+            workspaceId = "default",
+            physicalWidthM = 1.0f,
             localPosition = ReadLocalPosition(targetObject),
             localEuler = ReadLocalEuler(targetObject),
             localScale = ReadLocalScale(targetObject),

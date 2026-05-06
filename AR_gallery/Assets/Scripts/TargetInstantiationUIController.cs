@@ -20,7 +20,6 @@ namespace ARGallery.AppFlow
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
         [SerializeField] private float createTargetTimeoutSeconds = 20f;
-        [SerializeField] private float publishTimeoutSeconds = 25f;
 
         private IApiClient apiClient;
         private TargetInstantiationSceneController sceneController;
@@ -37,7 +36,6 @@ namespace ARGallery.AppFlow
         private Label statusLabel;
 
         private string lastTargetId = "";
-        private string lastPublishIdempotencyKey = "";
         private bool isBusy;
 
         private void OnEnable()
@@ -124,9 +122,10 @@ namespace ARGallery.AppFlow
                 targetName = targetName,
                 displayLabel = string.IsNullOrWhiteSpace(displayLabel) ? targetName : displayLabel,
                 targetImageUrl = targetImageUrl,
+                workspaceId = "default",
+                physicalWidthM = physicalWidth,
                 physicalWidth = physicalWidth,
                 vuforiaTargetName = vuforiaTargetName,
-                publishStatus = "draft",
                 localPosition = new ApiVector3Dto(0f, 0f, 0f),
                 localEuler = new ApiVector3Dto(0f, 0f, 0f),
                 localScale = new ApiVector3Dto(1f, 1f, 1f),
@@ -149,74 +148,11 @@ namespace ARGallery.AppFlow
                 }
 
                 lastTargetId = result.payload.targetId;
-                lastPublishIdempotencyKey = Safe(result.payload.publishIdempotencyKey);
-                StartPublish(lastTargetId, isRetry: false);
-            }, createTargetTimeoutSeconds);
-        }
-
-        private void StartPublish(string targetId, bool isRetry)
-        {
-            if (string.IsNullOrWhiteSpace(targetId))
-            {
                 isBusy = false;
                 UpdateUiState();
-                SetStatus("Publish failed: targetId is empty.");
-                return;
-            }
-
-            SetStatus(isRetry ? "Retrying publish..." : "Publishing target...");
-
-            var request = new PublishTargetRequestDto
-            {
-                publishIdempotencyKey = string.IsNullOrWhiteSpace(lastPublishIdempotencyKey) ? Guid.NewGuid().ToString("N") : lastPublishIdempotencyKey,
-                meta = new ApiSyncMetaDto
-                {
-                    schemaVersion = "v1",
-                    clientRequestId = Guid.NewGuid().ToString("N"),
-                    createdAtUtc = DateTime.UtcNow.ToString("o")
-                }
-            };
-
-            Action<ApiResult<CreateTargetResponseDto>> onCompleted = result =>
-            {
-                isBusy = false;
-                bool publishOk = result != null
-                                 && result.success
-                                 && result.payload != null
-                                 && string.Equals(Safe(result.payload.publishStatus), "published", StringComparison.OrdinalIgnoreCase)
-                                 && !string.IsNullOrWhiteSpace(result.payload.cloudTargetId);
-
-                if (publishOk)
-                {
-                    SetStatus("Publish success. Entering authoring...");
-                    sceneController?.MarkReadyAndContinue(result.payload.targetId);
-                    return;
-                }
-
-                bool publishInProgress = result != null
-                                         && result.success
-                                         && result.payload != null
-                                         && string.Equals(Safe(result.payload.publishStatus), "publishing", StringComparison.OrdinalIgnoreCase);
-
-                if (publishInProgress)
-                {
-                    SetStatus("Publish accepted and still in progress. Retry when ready or cancel to switcher.");
-                    UpdateUiState(failureState: true);
-                    return;
-                }
-
-                string publishError = result != null && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.lastPublishError)
-                    ? result.payload.lastPublishError
-                    : BuildResultMessage(result);
-
-                SetStatus($"Publish failed: {publishError}");
-                UpdateUiState(failureState: true);
-            };
-
-            if (isRetry)
-                apiClient.RetryPublishTarget(targetId, request, onCompleted, publishTimeoutSeconds);
-            else
-                apiClient.PublishTarget(targetId, request, onCompleted, publishTimeoutSeconds);
+                SetStatus("Target created. Entering authoring...");
+                sceneController?.MarkReadyAndContinue(lastTargetId);
+            }, createTargetTimeoutSeconds);
         }
 
         private void OnRetryClicked()
@@ -226,7 +162,9 @@ namespace ARGallery.AppFlow
 
             isBusy = true;
             UpdateUiState();
-            StartPublish(lastTargetId, isRetry: true);
+            SetStatus("Legacy publish retry flow removed. Submit a new target request instead.");
+            isBusy = false;
+            UpdateUiState(failureState: false);
         }
 
         private void OnCancelClicked()
@@ -241,7 +179,7 @@ namespace ARGallery.AppFlow
             if (submitButton != null)
             {
                 submitButton.SetEnabled(!isBusy);
-                submitButton.text = isBusy ? "Processing..." : "Create + Publish + Continue";
+                submitButton.text = isBusy ? "Processing..." : "Create + Continue";
             }
 
             if (retryButton != null)
