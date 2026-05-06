@@ -17,6 +17,7 @@ namespace ARGallery.AppFlow
         [SerializeField] private bool showOrientationHelper = true;
         [SerializeField] private float orientationHelperAxisLength = 0.35f;
         [SerializeField] private float orientationHelperAxisThickness = 0.01f;
+        [SerializeField] private float ceilingTargetHeightOffset = 1.2f;
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
 
@@ -144,6 +145,7 @@ namespace ARGallery.AppFlow
 
             WorkspacePresets.WorkspacePreset preset = WorkspacePresets.WorkspacePresetLibrary.GetPreset(posture);
             Transform targetRoot = targetRootObject.transform;
+            targetRoot.localPosition = ResolveTargetLocalPositionForPosture(posture);
             targetRoot.localRotation = Quaternion.Euler(preset.target.targetLocalEuler);
             WorkspacePresets.WorkspaceOrientationHelper.Apply(
                 targetRoot,
@@ -173,6 +175,14 @@ namespace ARGallery.AppFlow
             cameraController.ApplyPose(worldPosition, tiltedRotation, rememberAsResetPose: true);
 
             Debug.Log($"AuthoringWorkspaceEntry: Applied workspace preset posture='{posture}' target='{targetRootObject.name}'.");
+        }
+
+        private Vector3 ResolveTargetLocalPositionForPosture(WorkspaceDomain.WorkspacePosture posture)
+        {
+            if (posture == WorkspaceDomain.WorkspacePosture.Ceiling)
+                return new Vector3(0f, Mathf.Max(0f, ceilingTargetHeightOffset), 0f);
+
+            return Vector3.zero;
         }
 
         private static void EnsureTargetHierarchyCompatibility(Transform targetRoot)

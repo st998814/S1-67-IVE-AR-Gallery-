@@ -129,24 +129,54 @@ namespace ARGallery.AppFlow
             if (mockWorkspaces.Count > 0)
                 return;
 
-            mockWorkspaces.Add(new WorkspaceSessionContext
+            var providerWorkspaces = Workspace.WorkspaceDataServices.Provider.GetAvailableWorkspaces();
+            if (providerWorkspaces != null)
             {
-                workspaceId = "workspace-poster-a",
-                workspaceName = "Poster A",
-                targetId = "workspace-poster-a"
-            });
-            mockWorkspaces.Add(new WorkspaceSessionContext
+                for (int i = 0; i < providerWorkspaces.Count; i++)
+                {
+                    Workspace.WorkspaceDraftState ws = providerWorkspaces[i];
+                    if (ws == null || string.IsNullOrWhiteSpace(ws.workspaceId) || ws.target == null || string.IsNullOrWhiteSpace(ws.target.targetId))
+                        continue;
+
+                    mockWorkspaces.Add(new WorkspaceSessionContext
+                    {
+                        workspaceId = ws.workspaceId.Trim(),
+                        workspaceName = string.IsNullOrWhiteSpace(ws.workspaceName) ? ws.workspaceId.Trim() : ws.workspaceName.Trim(),
+                        targetId = ws.target.targetId.Trim(),
+                        isNewWorkspace = false,
+                        setupState = WorkspaceSetupState.Ready
+                    });
+                }
+            }
+
+            // Fallback safety: keep exactly 3 deterministic demo workspaces when provider is unavailable.
+            if (mockWorkspaces.Count == 0)
             {
-                workspaceId = "workspace-poster-b",
-                workspaceName = "Poster B",
-                targetId = "workspace-poster-b"
-            });
-            mockWorkspaces.Add(new WorkspaceSessionContext
-            {
-                workspaceId = "workspace-event-corner",
-                workspaceName = "Event Corner",
-                targetId = "workspace-event-corner"
-            });
+                mockWorkspaces.Add(new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-wall-001",
+                    workspaceName = "Target on Wall",
+                    targetId = "target-wall-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                });
+                mockWorkspaces.Add(new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-floor-001",
+                    workspaceName = "Target on Floor",
+                    targetId = "target-floor-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                });
+                mockWorkspaces.Add(new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-ceiling-001",
+                    workspaceName = "Target on Ceiling",
+                    targetId = "target-ceiling-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                });
+            }
         }
 
         private void RebuildCards()

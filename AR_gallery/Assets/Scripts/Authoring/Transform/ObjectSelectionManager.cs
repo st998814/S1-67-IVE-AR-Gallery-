@@ -18,8 +18,11 @@ public sealed class ObjectSelectionManager : MonoBehaviour
     [SerializeField] private float maxRayDistance = 500f;
     [SerializeField] private bool clearSelectionOnEmptyClick = true;
     [SerializeField] private bool blockWhenPointerOverUi = true;
+    [Tooltip("UI Toolkit: when set, blocks scene selection like ContentTransformController did (EventSystem alone is not enough).")]
+    [SerializeField] private AuthoringUIController authoringUiOverride;
 
     private Transform _selected;
+    private bool _loggedMissingContentRootWarning;
 
     public event Action<Transform> SelectionChanged;
     public Transform Selected => _selected;
@@ -38,6 +41,8 @@ public sealed class ObjectSelectionManager : MonoBehaviour
             raycastCamera = Camera.main;
         if (contentRoot == null)
             contentRoot = FindContentRootInScene();
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
     }
 
     private void LateUpdate()
@@ -59,7 +64,19 @@ public sealed class ObjectSelectionManager : MonoBehaviour
         if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
             return;
 
-        if (blockWhenPointerOverUi && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        if (DraggableObject.IsDraggingObjectInteractionActive)
+            return;
+
+        if (authoringUiOverride == null)
+            authoringUiOverride = FindFirstObjectByType<AuthoringUIController>();
+
+        if (authoringUiOverride != null)
+        {
+            Vector2 sp = mouse.position.ReadValue();
+            if (authoringUiOverride.IsPointerOverAuthoringUi(sp))
+                return;
+        }
+        else if (blockWhenPointerOverUi && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
         if (RTGizmosEngine.Get != null && RTGizmosEngine.Get.HoveredGizmo != null)
@@ -104,7 +121,14 @@ public sealed class ObjectSelectionManager : MonoBehaviour
             return null;
 
         if (contentRoot == null)
-            return hitTransform;
+        {
+            if (!_loggedMissingContentRootWarning)
+            {
+                _loggedMissingContentRootWarning = true;
+                Debug.LogWarning("ObjectSelectionManager: contentRoot is null; blocking scene selection until target context is configured.");
+            }
+            return null;
+        }
 
         Transform current = hitTransform;
         while (current != null)

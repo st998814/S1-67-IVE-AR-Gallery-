@@ -278,7 +278,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 99283293bb5354e3eb2889fd56a11cac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FrontSideConstraint
+  frontSideAxis: 0
   frontOffset: 0.02
+  additionalMinimumLocalZ: 0
+  resolvePhysicsOverlap: 1
+  targetBlockingCollider: {fileID: 0}
+  targetRoot: {fileID: 0}
+  contentRoot: {fileID: 0}
+  maxDepenetrateIterations: 4
 --- !u!114 &579780269
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -341,7 +348,7 @@ Transform:
   m_GameObject: {fileID: 579780267}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.23153, y: 0, z: 31.7228}
+  m_LocalPosition: {x: 0.12, y: -1.43, z: 31.7228}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -555,8 +562,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TargetMovementController
   targetRoot: {fileID: 726244050}
-  contentRoot: {fileID: 1511212289}
-  planeAnchor: {fileID: 1899808526}
+  contentRoot: {fileID: 0}
+  planeAnchor: {fileID: 0}
   raycastCamera: {fileID: 717743726}
   gizmoController: {fileID: 579780270}
   targetMask:
@@ -565,6 +572,7 @@ MonoBehaviour:
   maxRayDistance: 1000
   useTargetForwardAsPlaneNormal: 1
   fallbackPlaneNormal: {x: 0, y: 0, z: 1}
+  reparentContentRootUnderTargetIfNeeded: 1
 --- !u!1 &1030472577
 GameObject:
   m_ObjectHideFlags: 0
@@ -657,7 +665,7 @@ Transform:
   m_GameObject: {fileID: 1598747339}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.27, y: -1.39, z: 0}
+  m_LocalPosition: {x: -0.27, y: -1.39, z: -2.81}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
