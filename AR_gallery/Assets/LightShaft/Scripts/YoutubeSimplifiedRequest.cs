@@ -1252,7 +1252,7 @@ namespace LightShaft.Scripts
         IEnumerator HandHeldPlayback()
         {
 #if UNITY_ANDROID || UNITY_IOS
-        if (videoQuality == YoutubeVideoQuality.STANDARD)
+        if (videoQuality == YoutubeVideoQuality.Hd)
             Handheld.PlayFullScreenMovie(videoUrl, Color.black, FullScreenMovieControlMode.Minimal, FullScreenMovieScalingMode.AspectFit); //Use only the video with audio integrated. Working to get a url with high quality and audio included.
         else
             Handheld.PlayFullScreenMovie(audioUrl, Color.black, FullScreenMovieControlMode.Minimal, FullScreenMovieScalingMode.AspectFit); //Use only the video with audio integrated. Working to get a url with high quality and audio included.

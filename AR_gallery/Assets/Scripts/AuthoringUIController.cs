@@ -3,7 +3,9 @@ using UnityEngine.UIElements;
 using System.Collections;
 using System.Collections.Generic;
 using ARGallery.Content;
+#if UNITY_WEBGL || UNITY_EDITOR
 using FrostweepGames.Plugins.WebGLFileBrowser;
+#endif
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
 using System;
@@ -280,7 +282,9 @@ public class AuthoringUIController : MonoBehaviour
         if (browseTargetReferenceButton != null) browseTargetReferenceButton.clicked += OnBrowseTargetReferenceButtonClicked;
 
         // NEW: Listen for when the user selects a file in the browser
+        #if UNITY_WEBGL || UNITY_EDITOR
         WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
+        #endif
 
         RegisterSpatialFieldCallbacks();
 
@@ -318,7 +322,9 @@ public class AuthoringUIController : MonoBehaviour
     void OnDisable()
     {
         UnregisterSpatialFieldCallbacks();
+        #if UNITY_WEBGL || UNITY_EDITOR
         WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
+        #endif
 
         if (browseButton != null) browseButton.clicked -= OnBrowseButtonClicked;
         if (addContentButton != null) addContentButton.clicked -= OnBrowseButtonClicked;
@@ -1662,7 +1668,9 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         pendingUploadPurpose = UploadPurpose.Content;
+        #if UNITY_WEBGL || UNITY_EDITOR
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov", false);
+        #endif
     }
 
 
@@ -1675,7 +1683,9 @@ public class AuthoringUIController : MonoBehaviour
         pendingUploadPurpose = UploadPurpose.TargetImage;
         if (createTargetImageUrlInput != null)
             createTargetImageUrlInput.value = "Uploading target image...";
+        #if UNITY_WEBGL || UNITY_EDITOR
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg", false);
+        #endif
     }
 
     private void OnBrowseTargetReferenceButtonClicked()
@@ -1693,7 +1703,9 @@ public class AuthoringUIController : MonoBehaviour
         pendingUploadPurpose = UploadPurpose.TargetReference;
         UpdateTargetReferenceStatusLabel(showUploadingText: true);
 
+        #if UNITY_WEBGL || UNITY_EDITOR
         WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg", false);
+        #endif
     }
 
     // This runs automatically when an image is selected
