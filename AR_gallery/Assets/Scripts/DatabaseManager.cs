@@ -76,4 +76,50 @@ public class DatabaseManager : MonoBehaviour
     }
 
 
+    // --- NEW METHOD: Used by the Viewer App to load content ---
+    public IEnumerator FetchContentForTarget(string targetId, Action<ARContentData[]> onSuccess)
+    {
+        // Add a query parameter to your API URL to filter by targetId
+        string requestUrl = $"{apiUrl}?targetId={targetId}";
+        
+        using (UnityWebRequest request = UnityWebRequest.Get(requestUrl))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = request.downloadHandler.text;
+                
+                // Note: Unity's built in JSON utility cannot parse top-level arrays easily.
+                // We wrap it in a dummy class, or you can use JsonUtility on an array wrapper.
+                // Assuming your backend returns {"items": [{...}, {...}]}
+                string wrappedJson = "{\"items\":" + jsonResponse + "}";
+                ARContentDataArrayWrapper wrapper = JsonUtility.FromJson<ARContentDataArrayWrapper>(wrappedJson);
+                
+                if (wrapper != null && wrapper.items != null)
+                {
+                    onSuccess?.Invoke(wrapper.items);
+                }
+                else
+                {
+                    Debug.LogWarning("No items found for target: " + targetId);
+                    onSuccess?.Invoke(new ARContentData[0]);
+                }
+            }
+            else
+            {
+                Debug.LogError("Error fetching from database: " + request.error);
+                onSuccess?.Invoke(new ARContentData[0]);
+            }
+        }
+    }
+
+    // Helper wrapper to allow Unity to parse JSON arrays
+    [System.Serializable]
+    private class ARContentDataArrayWrapper
+    {
+        public ARContentData[] items;
+    }
+
+
 }
