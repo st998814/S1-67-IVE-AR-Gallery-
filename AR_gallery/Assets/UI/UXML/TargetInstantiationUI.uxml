@@ -7,6 +7,7 @@
             <ui:Label text="Required" style="color: rgb(242, 61, 21); font-size: 11px; -unity-font-style: bold; margin-bottom: 6px;" />
             <ui:TextField name="TargetNameInput" label="Target Name" style=" color: rgb(155, 196, 255);margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
             <ui:TextField name="DisplayLabelInput" label="Display Label" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
+            <ui:DropdownField name="TargetPostureDropdown" label="Target Posture" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
             <ui:Button name="BrowseTargetImageButton" text="Choose Target Image..." style="height: 30px; min-width: 170px; margin-bottom: 6px; background-color: rgb(43, 70, 130); color: rgb(235, 244, 255);" />
             <ui:Label name="SelectedTargetImageLabel" text="No target image selected." style="margin-bottom: 8px; color: rgba(196, 212, 255, 0.9); font-size: 11px;" />
             <ui:FloatField name="PhysicalWidthInput" label="Physical Width (m)" value="0.2" style=" color: rgb(155, 196, 255); margin-bottom: 12px; -unity-property-field-label-width: 170px;" />

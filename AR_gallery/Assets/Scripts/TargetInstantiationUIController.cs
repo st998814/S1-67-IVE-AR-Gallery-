@@ -12,6 +12,7 @@ namespace ARGallery.AppFlow
         private const string TargetNameInputName = "TargetNameInput";
         private const string TargetIdInputName = "TargetIdInput";
         private const string DisplayLabelInputName = "DisplayLabelInput";
+        private const string TargetPostureDropdownName = "TargetPostureDropdown";
         private const string BrowseTargetImageButtonName = "BrowseTargetImageButton";
         private const string SelectedTargetImageLabelName = "SelectedTargetImageLabel";
         private const string PhysicalWidthInputName = "PhysicalWidthInput";
@@ -29,6 +30,7 @@ namespace ARGallery.AppFlow
         private TextField targetNameInput;
         private TextField targetIdInput;
         private TextField displayLabelInput;
+        private DropdownField targetPostureDropdown;
         private Button browseTargetImageButton;
         private Label selectedTargetImageLabel;
         private FloatField physicalWidthInput;
@@ -74,6 +76,7 @@ namespace ARGallery.AppFlow
             targetNameInput = root.Q<TextField>(TargetNameInputName);
             targetIdInput = root.Q<TextField>(TargetIdInputName);
             displayLabelInput = root.Q<TextField>(DisplayLabelInputName);
+            targetPostureDropdown = root.Q<DropdownField>(TargetPostureDropdownName);
             browseTargetImageButton = root.Q<Button>(BrowseTargetImageButtonName);
             selectedTargetImageLabel = root.Q<Label>(SelectedTargetImageLabelName);
             physicalWidthInput = root.Q<FloatField>(PhysicalWidthInputName);
@@ -87,6 +90,7 @@ namespace ARGallery.AppFlow
             if (cancelButton != null) cancelButton.clicked += OnCancelClicked;
             WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
             WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
+            ConfigurePostureDropdown();
 
             ApplyInputValueTextColor();
         }
@@ -105,13 +109,15 @@ namespace ARGallery.AppFlow
             string targetName = Safe(targetNameInput != null ? targetNameInput.value : "");
             string targetId = NormalizeTargetId(targetIdInput != null ? targetIdInput.value : "", targetName);
             string displayLabel = Safe(displayLabelInput != null ? displayLabelInput.value : "");
+            string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
             float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
 
-            if (string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || physicalWidth <= 0f || !HasValidSelectedTargetImage())
+            if (string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select..." || physicalWidth <= 0f || !HasValidSelectedTargetImage())
             {
-                SetStatus("Missing required fields: target name, display label, target image file, and physical width.");
+                SetStatus("Missing required fields: target name, display label, target posture, target image file, and physical width.");
                 return;
             }
+            WorkspaceDomain.WorkspacePosture selectedPosture = ParsePosture(postureValue);
 
             if (targetIdInput != null)
                 targetIdInput.SetValueWithoutNotify(targetId);
@@ -156,7 +162,8 @@ namespace ARGallery.AppFlow
                     result.payload,
                     targetName,
                     displayLabel,
-                    physicalWidth);
+                    physicalWidth,
+                    selectedPosture);
                 isBusy = false;
                 UpdateUiState();
                 SetStatus("Target created. Entering authoring...");
@@ -288,7 +295,8 @@ namespace ARGallery.AppFlow
             CreateTargetResponseDto response,
             string fallbackTargetName,
             string fallbackDisplayLabel,
-            float fallbackPhysicalWidth)
+            float fallbackPhysicalWidth,
+            WorkspaceDomain.WorkspacePosture posture)
         {
             if (response == null || string.IsNullOrWhiteSpace(response.targetId))
                 return;
@@ -309,7 +317,7 @@ namespace ARGallery.AppFlow
                     displayLabel = string.IsNullOrWhiteSpace(response.displayLabel) ? fallbackDisplayLabel : response.displayLabel,
                     targetImageUrl = response.targetImageUrl ?? "",
                     physicalWidth = response.physicalWidthM > 0f ? response.physicalWidthM : fallbackPhysicalWidth,
-                    posture = WorkspaceDomain.WorkspacePosture.Wall,
+                    posture = posture,
                     vuforiaTargetName = string.IsNullOrWhiteSpace(response.vuforiaTargetId) ? "" : response.vuforiaTargetId
                 }
             };
@@ -368,6 +376,12 @@ namespace ARGallery.AppFlow
 
             root.Add(MakeTextField(TargetNameInputName, "Target Name (required)"));
             root.Add(MakeTextField(DisplayLabelInputName, "Display Label (required)"));
+            var postureDropdown = new DropdownField("Target Posture (required)", new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" }, 0)
+            {
+                name = TargetPostureDropdownName
+            };
+            postureDropdown.style.marginBottom = 8;
+            root.Add(postureDropdown);
             Button browseTargetImage = new Button { name = BrowseTargetImageButtonName, text = "Choose Target Image..." };
             browseTargetImage.style.marginBottom = 6;
             root.Add(browseTargetImage);
@@ -412,6 +426,7 @@ namespace ARGallery.AppFlow
             ApplyBlackTextToInput(targetNameInput);
             ApplyBlackTextToInput(targetIdInput);
             ApplyBlackTextToInput(displayLabelInput);
+            ApplyBlackTextToInput(targetPostureDropdown);
             ApplyBlackTextToInput(vuforiaTargetNameInput);
             ApplyBlackTextToInput(physicalWidthInput);
         }
@@ -423,6 +438,28 @@ namespace ARGallery.AppFlow
             VisualElement input = field.Q(className: "unity-text-input");
             if (input != null)
                 input.style.color = Color.black;
+        }
+
+        private void ConfigurePostureDropdown()
+        {
+            if (targetPostureDropdown == null)
+                return;
+            targetPostureDropdown.choices = new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" };
+            if (string.IsNullOrWhiteSpace(targetPostureDropdown.value))
+                targetPostureDropdown.SetValueWithoutNotify("Select...");
+        }
+
+        private static WorkspaceDomain.WorkspacePosture ParsePosture(string value)
+        {
+            switch (Safe(value).ToLowerInvariant())
+            {
+                case "floor":
+                    return WorkspaceDomain.WorkspacePosture.Floor;
+                case "ceiling":
+                    return WorkspaceDomain.WorkspacePosture.Ceiling;
+                default:
+                    return WorkspaceDomain.WorkspacePosture.Wall;
+            }
         }
     }
 }
