@@ -413,8 +413,8 @@ MonoBehaviour:
   <trackablesChanged>k__BackingField:
     m_PersistentCalls:
       m_Calls: []
-  m_SerializedLibrary: {fileID: 0}
-  m_MaxNumberOfMovingImages: 0
+  m_SerializedLibrary: {fileID: 11400000, guid: 1daeb79106c544d4f9789b91be7a454d, type: 2}
+  m_MaxNumberOfMovingImages: 1
   m_TrackedImagePrefab: {fileID: 0}
 --- !u!114 &1755003344
 MonoBehaviour:
@@ -441,7 +441,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1755003342}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -0.4606092, y: 0.81430185, z: 10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -459,6 +459,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1934764668}
   - component: {fileID: 1934764667}
+  - component: {fileID: 1934764669}
   m_Layer: 0
   m_Name: AppManager
   m_TagString: Untagged
@@ -494,6 +495,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1934764669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1934764666}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c899ed672d1f8904592a2eba6a458979, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARViewerManager
+  imageManager: {fileID: 1755003343}
+  dbManager: {fileID: 1934764667}
+  videoPrefab: {fileID: 5789709158885535786, guid: 43d0f67163787fc49849885478e03636, type: 3}
+  picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
 --- !u!1 &1946909051
 GameObject:
   m_ObjectHideFlags: 0

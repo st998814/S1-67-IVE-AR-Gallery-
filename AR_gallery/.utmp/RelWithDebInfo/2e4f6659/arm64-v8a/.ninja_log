@@ -1,10 +1,19 @@
 # ninja log v5
 167	4577	7998139982669606	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	e1a894e2fa7631c1
 211	4637	7998139982751373	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	3d9ef79bef95a3c4
-84	4642	7998139982833027	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	d8939b6a1abd9137
-307	4648	7998139983109063	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	4c9212f4e8b5b98f
-4	4679	7998139983770075	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	1419d17238696ec9
 252	4918	7998139986146987	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	8447b3f205600f06
+84	4642	7998139982833027	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	d8939b6a1abd9137
+4	4679	7998139983770075	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	1419d17238696ec9
+307	4648	7998139983109063	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	4c9212f4e8b5b98f
 121	4971	7998139986700057	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	fe327cdfcf18efcb
 47	5086	7998139987806289	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	57b5f00be179e2a4
 5087	5463	7998139991607339	C:/Users/10917/Desktop/AR gallery/AR_gallery/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/2e4f6659/obj/arm64-v8a/libgame.so	41727ab2a5a4d1aa
+215	3919	8001699898292769	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	e1a894e2fa7631c1
+75	3945	8001699898512402	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	3d9ef79bef95a3c4
+96	3991	8001699899024438	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	d8939b6a1abd9137
+159	4001	8001699899071021	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	4c9212f4e8b5b98f
+29	4112	8001699900181160	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	1419d17238696ec9
+275	4421	8001699903342008	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	8447b3f205600f06
+122	4478	8001699903947313	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	fe327cdfcf18efcb
+53	4625	8001699905351811	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	57b5f00be179e2a4
+4626	5054	8001699909684423	C:/Users/10917/Desktop/AR gallery/AR_gallery/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/2e4f6659/obj/arm64-v8a/libgame.so	41727ab2a5a4d1aa
