@@ -27,10 +27,11 @@ __pycache__/
 *.mdb
 *.opendb
 *.VC.db
-*.jpg
-*.png
+
 *.venv
-*.mp4
+
+.utmp/
+*.slnx
 # OS generated
 .DS_Store
 Thumbs.db
@@ -40,3 +41,48 @@ backend/server.log
 .vscode/
 .claude/
 .env
+
+
+# Android / Gradle / native build artifacts
+
+.gradle/
+
+**/.gradle/
+
+*.apk
+
+*.aab
+
+*.androidlib
+
+# CMake / Ninja generated files
+
+*.ninja
+
+.ninja_*
+
+CMakeCache.txt
+
+CMakeFiles/
+
+cmake_install.cmake
+
+compile_commands.json
+
+configure_fingerprint.bin
+
+metadata_generation_command.sh
+
+build_file_index.txt
+
+additional_project_files.txt
+
+android_gradle_build.json
+
+android_gradle_build_settings.json
+
+# Generated media / uploads only
+backend/uploads/
+uploads/
+artifacts/
+exports/
