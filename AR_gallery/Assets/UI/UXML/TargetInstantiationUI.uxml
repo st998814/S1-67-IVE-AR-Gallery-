@@ -1,24 +1,25 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:VisualElement name="TargetSetupRoot" style="flex-grow: 1; justify-content: center; align-items: center; background-color: rgb(8, 12, 26); padding-left: 28px; padding-right: 28px; padding-top: 24px; padding-bottom: 24px;">
         <ui:VisualElement name="TargetSetupCard" style="width: 760px; background-color: rgba(18, 24, 48, 0.92); border-top-left-radius: 16px; border-top-right-radius: 16px; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-top-color: rgba(133, 165, 255, 0.4); border-right-color: rgba(133, 165, 255, 0.4); border-bottom-color: rgba(133, 165, 255, 0.4); border-left-color: rgba(133, 165, 255, 0.4); padding-left: 24px; padding-right: 24px; padding-top: 20px; padding-bottom: 20px;">
-            <ui:Label text="Target Instantiation" style="font-size: 22px; -unity-font-style: bold; color: rgb(242, 247, 255); margin-bottom: 4px;" />
-            <ui:Label text="Create and publish target before entering authoring workspace." style="font-size: 12px; color: rgba(196, 212, 255, 0.85); margin-bottom: 14px;" />
+            <ui:Label text="Create the new workspace" style="font-size: 22px; -unity-font-style: bold; color: rgb(242, 247, 255); margin-bottom: 4px;" />
+            <ui:Label text="Create target before entering authoring workspace." style="font-size: 12px; color: rgba(196, 212, 255, 0.85); margin-bottom: 14px;" />
 
             <ui:Label text="Required" style="color: rgb(242, 61, 21); font-size: 11px; -unity-font-style: bold; margin-bottom: 6px;" />
             <ui:TextField name="TargetNameInput" label="Target Name" style=" color: rgb(155, 196, 255);margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
-            <ui:TextField name="TargetIdInput" label="Target ID" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
-            <ui:TextField name="TargetImageUrlInput" label="Target Image URL" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
+            <ui:TextField name="DisplayLabelInput" label="Display Label" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
+            <ui:DropdownField name="TargetPostureDropdown" label="Target Posture" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
+            <ui:Button name="BrowseTargetImageButton" text="Choose Target Image..." style="height: 30px; min-width: 170px; margin-bottom: 6px; background-color: rgb(43, 70, 130); color: rgb(235, 244, 255);" />
+            <ui:Label name="SelectedTargetImageLabel" text="No target image selected." style="margin-bottom: 8px; color: rgba(196, 212, 255, 0.9); font-size: 11px;" />
             <ui:FloatField name="PhysicalWidthInput" label="Physical Width (m)" value="0.2" style=" color: rgb(155, 196, 255); margin-bottom: 12px; -unity-property-field-label-width: 170px;" />
 
             <ui:Label text="Optional" style="color: rgb(9, 240, 94); font-size: 11px; -unity-font-style: bold; margin-bottom: 6px;" />
-            <ui:TextField name="DisplayLabelInput" label="Display Label" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
+            <ui:TextField name="TargetIdInput" label="Target ID" style=" color: rgb(155, 196, 255); margin-bottom: 8px; -unity-property-field-label-width: 170px;" />
             <ui:TextField name="VuforiaTargetNameInput" label="Vuforia Target Name" style=" color: rgb(155, 196, 255); margin-bottom: 12px; -unity-property-field-label-width: 170px;" />
 
             <ui:Label name="StatusLabel" text="Create target to continue." style="margin-top: 4px; margin-bottom: 12px; min-height: 36px; color: rgb(167, 236, 216); font-size: 12px; white-space: normal;" />
 
             <ui:VisualElement style="flex-direction: row; justify-content: flex-end; align-items: center;">
-                <ui:Button name="SubmitTargetButton" text="Create + Publish + Continue" style="height: 34px; min-width: 170px; -unity-font-style: bold; font-size: 11px; background-color: rgb(56, 126, 255); color: rgb(245, 250, 255);" />
-                <ui:Button name="RetryPublishButton" text="Retry Publish" style="height: 34px; min-width: 128px; margin-left: 8px; -unity-font-style: bold; font-size: 11px; background-color: rgb(48, 86, 166); color: rgb(232, 243, 255);" />
+                <ui:Button name="SubmitTargetButton" text="Create" style="height: 34px; min-width: 170px; -unity-font-style: bold; font-size: 11px; background-color: rgb(56, 126, 255); color: rgb(245, 250, 255);" />
                 <ui:Button name="CancelButton" text="Cancel" style="height: 34px; min-width: 98px; margin-left: 8px; -unity-font-style: bold; font-size: 11px; background-color: rgba(52, 60, 84, 0.95); color: rgb(223, 232, 248);" />
             </ui:VisualElement>
         </ui:VisualElement>

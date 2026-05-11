@@ -58,9 +58,7 @@ namespace ARGallery.Workspace
         public string targetImageUrl = "";
         public float physicalWidth = 0.2f;
         public WorkspacePosture posture = WorkspacePosture.Wall;
-        public string publishStatus = "draft";
         public string vuforiaTargetName = "";
-        public string cloudTargetId = "";
 
         public TargetDraftState Clone()
         {
@@ -72,9 +70,7 @@ namespace ARGallery.Workspace
                 targetImageUrl = targetImageUrl,
                 physicalWidth = physicalWidth,
                 posture = posture,
-                publishStatus = publishStatus,
-                vuforiaTargetName = vuforiaTargetName,
-                cloudTargetId = cloudTargetId
+                vuforiaTargetName = vuforiaTargetName
             };
         }
     }

@@ -13,6 +13,31 @@ from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.utils import secure_filename
 from vuforia_service import VuforiaConfig, VuforiaError, register_vuforia_target
 
+
+def _load_local_env_file(base_dir: str):
+    """Best-effort .env loader for local/dev runs."""
+    env_path = os.path.join(base_dir, ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip("\r").strip("'").strip('"')
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        # Keep startup resilient; explicit env vars still take precedence.
+        pass
+
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_load_local_env_file(_BASE_DIR)
+
 app = Flask(__name__)
 CORS(app)
 
@@ -20,10 +45,14 @@ SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "5050"))
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", f"http://127.0.0.1:{SERVER_PORT}")
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE_DIR, "uploads"))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+UPLOAD_TARGET_FOLDER = os.path.join(UPLOAD_FOLDER, "target")
+UPLOAD_CONTENT_FOLDER = os.path.join(UPLOAD_FOLDER, "content")
+UPLOAD_TARGET_REF_FOLDER = os.path.join(UPLOAD_FOLDER, "target_ref")
+for _d in (UPLOAD_TARGET_FOLDER, UPLOAD_CONTENT_FOLDER, UPLOAD_TARGET_REF_FOLDER):
+    os.makedirs(_d, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
 CONTENT_TYPES_REQUIRING_MEDIA = {"image", "video", "model", "model(3d)", "model3d"}
@@ -160,6 +189,27 @@ def _target_cloud_response(row, status_override=None):
     return body
 
 
+def _workspace_id_from_payload(data: dict, default: str = "default"):
+    workspace_id = data.get("workspaceId", default)
+    if workspace_id is None:
+        workspace_id = default
+    if not isinstance(workspace_id, str):
+        return None, "workspaceId must be a string."
+    workspace_id = workspace_id.strip() or default
+    return workspace_id, None
+
+
+def _physical_width_from_payload(data: dict, default: float = 1.0):
+    raw = data.get("physicalWidthM", default)
+    if raw is None:
+        raw = default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, "physicalWidthM must be a number."
+    return value, None
+
+
 def _content_response(row, status_override=None):
     return {
         "contentId": row[0],
@@ -246,7 +296,7 @@ def _guess_ext_from_magic(file_storage) -> str:
     return ""
 
 
-def _resolve_safe_upload_filename(file_storage) -> str:
+def _resolve_safe_upload_filename(file_storage, upload_dir: str) -> str:
     original = secure_filename(file_storage.filename or "")
     stem, ext = os.path.splitext(original)
     if not stem:
@@ -259,7 +309,7 @@ def _resolve_safe_upload_filename(file_storage) -> str:
     final_name = f"{stem}{ext}" if ext else stem
     candidate = final_name
     base_stem, base_ext = os.path.splitext(final_name)
-    while os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], candidate)):
+    while os.path.exists(os.path.join(upload_dir, candidate)):
         candidate = f"{base_stem}-{uuid.uuid4().hex[:8]}{base_ext}"
 
     return candidate
@@ -300,13 +350,13 @@ def upload_file():
         return error_response(f"File type .{ext} is not allowed.", "VALIDATION_ERROR", 415)
 
     try:
-        filename = _resolve_safe_upload_filename(file)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        filename = _resolve_safe_upload_filename(file, UPLOAD_CONTENT_FOLDER)
+        save_path = os.path.join(UPLOAD_CONTENT_FOLDER, filename)
         file.save(save_path)
         size_bytes = os.path.getsize(save_path)
         mime_type = getattr(file, "mimetype", "") or "application/octet-stream"
         uploaded_at = utc_now_iso()
-        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/content/{filename}"
 
         try:
             with get_db_connection() as conn:
@@ -336,7 +386,7 @@ def upload_file():
         return error_response("Failed to save file.", "SERVER_ERROR", 500, str(e))
 
 
-@app.route("/uploads/<filename>")
+@app.route("/uploads/<path:filename>")
 def serve_file(filename):
     try:
         return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
@@ -375,6 +425,12 @@ def create_target():
     meta, err_msg = _parse_meta(data)
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
+    workspace_id, err_msg = _workspace_id_from_payload(data)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
+    physical_width_m, err_msg = _physical_width_from_payload(data, default=1.0)
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
 
     try:
         with get_db_connection() as conn:
@@ -385,17 +441,19 @@ def create_target():
                 cur.execute(
                     """
                     INSERT INTO targets (
-                        target_id, target_name, display_label, target_image_url,
+                        target_id, workspace_id, target_name, display_label, target_image_url, physical_width_m,
                         local_position_x, local_position_y, local_position_z,
                         local_euler_x, local_euler_y, local_euler_z,
                         local_scale_x, local_scale_y, local_scale_z,
                         meta, status
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (target_id) DO UPDATE SET
+                        workspace_id = EXCLUDED.workspace_id,
                         target_name = EXCLUDED.target_name,
                         display_label = EXCLUDED.display_label,
                         target_image_url = EXCLUDED.target_image_url,
+                        physical_width_m = EXCLUDED.physical_width_m,
                         local_position_x = EXCLUDED.local_position_x,
                         local_position_y = EXCLUDED.local_position_y,
                         local_position_z = EXCLUDED.local_position_z,
@@ -412,9 +470,11 @@ def create_target():
                     """,
                     (
                         target_id,
+                        workspace_id,
                         target_name,
                         display_label or target_id,
                         target_image_url,
+                        physical_width_m,
                         *local_position,
                         *local_euler,
                         *local_scale,
@@ -445,6 +505,7 @@ def create_cloud_target():
         return error_response("targetId is required.", "VALIDATION_ERROR", 400)
     if not target_name:
         return error_response("targetName is required.", "VALIDATION_ERROR", 400)
+    workspace_id = (request.form.get("workspaceId") or "default").strip() or "default"
 
     local_position_raw, err_msg = _parse_form_json("localPosition", {"x": 0.0, "y": 0.0, "z": 0.0})
     if err_msg:
@@ -484,10 +545,10 @@ def create_cloud_target():
     try:
         image_bytes = file.read()
         file.stream.seek(0)
-        filename = _resolve_safe_upload_filename(file)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        filename = _resolve_safe_upload_filename(file, UPLOAD_TARGET_FOLDER)
+        save_path = os.path.join(UPLOAD_TARGET_FOLDER, filename)
         file.save(save_path)
-        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{filename}"
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/target/{filename}"
         target_width = float(request.form.get("width") or VUFORIA_CONFIG.target_width)
 
         vuforia_result = register_vuforia_target(
@@ -508,18 +569,20 @@ def create_cloud_target():
                 cur.execute(
                     """
                     INSERT INTO targets (
-                        target_id, target_name, display_label, target_image_url,
+                        target_id, workspace_id, target_name, display_label, target_image_url, physical_width_m,
                         local_position_x, local_position_y, local_position_z,
                         local_euler_x, local_euler_y, local_euler_z,
                         local_scale_x, local_scale_y, local_scale_z,
                         vuforia_target_id, vuforia_status, vuforia_result,
                         meta, status
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (target_id) DO UPDATE SET
+                        workspace_id = EXCLUDED.workspace_id,
                         target_name = EXCLUDED.target_name,
                         display_label = EXCLUDED.display_label,
                         target_image_url = EXCLUDED.target_image_url,
+                        physical_width_m = EXCLUDED.physical_width_m,
                         local_position_x = EXCLUDED.local_position_x,
                         local_position_y = EXCLUDED.local_position_y,
                         local_position_z = EXCLUDED.local_position_z,
@@ -540,9 +603,11 @@ def create_cloud_target():
                     """,
                     (
                         target_id,
+                        workspace_id,
                         target_name,
                         display_label or target_id,
                         file_url,
+                        target_width,
                         *local_position,
                         *local_euler,
                         *local_scale,

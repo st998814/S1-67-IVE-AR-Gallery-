@@ -19,6 +19,8 @@ namespace ARGallery.AppFlow
         public string workspaceId = "";
         public string workspaceName = "";
         public string targetId = "";
+        public byte[] targetImageBytes;
+        public string targetImageFileName = "";
         public bool isNewWorkspace;
         public string thumbnailKey = "";
         public WorkspaceSetupState setupState = WorkspaceSetupState.PendingTargetSetup;
@@ -30,6 +32,8 @@ namespace ARGallery.AppFlow
                 workspaceId = workspaceId,
                 workspaceName = workspaceName,
                 targetId = targetId,
+                targetImageBytes = targetImageBytes != null ? (byte[])targetImageBytes.Clone() : null,
+                targetImageFileName = targetImageFileName,
                 isNewWorkspace = isNewWorkspace,
                 thumbnailKey = thumbnailKey,
                 setupState = setupState

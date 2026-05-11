@@ -1,6 +1,8 @@
 using System;
+using FrostweepGames.Plugins.WebGLFileBrowser;
 using UnityEngine;
 using UnityEngine.UIElements;
+using WorkspaceDomain = global::ARGallery.Workspace;
 
 namespace ARGallery.AppFlow
 {
@@ -10,17 +12,17 @@ namespace ARGallery.AppFlow
         private const string TargetNameInputName = "TargetNameInput";
         private const string TargetIdInputName = "TargetIdInput";
         private const string DisplayLabelInputName = "DisplayLabelInput";
-        private const string TargetImageUrlInputName = "TargetImageUrlInput";
+        private const string TargetPostureDropdownName = "TargetPostureDropdown";
+        private const string BrowseTargetImageButtonName = "BrowseTargetImageButton";
+        private const string SelectedTargetImageLabelName = "SelectedTargetImageLabel";
         private const string PhysicalWidthInputName = "PhysicalWidthInput";
         private const string VuforiaTargetNameInputName = "VuforiaTargetNameInput";
         private const string SubmitButtonName = "SubmitTargetButton";
-        private const string RetryButtonName = "RetryPublishButton";
         private const string CancelButtonName = "CancelButton";
         private const string StatusLabelName = "StatusLabel";
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
         [SerializeField] private float createTargetTimeoutSeconds = 20f;
-        [SerializeField] private float publishTimeoutSeconds = 25f;
 
         private IApiClient apiClient;
         private TargetInstantiationSceneController sceneController;
@@ -28,22 +30,24 @@ namespace ARGallery.AppFlow
         private TextField targetNameInput;
         private TextField targetIdInput;
         private TextField displayLabelInput;
-        private TextField targetImageUrlInput;
+        private DropdownField targetPostureDropdown;
+        private Button browseTargetImageButton;
+        private Label selectedTargetImageLabel;
         private FloatField physicalWidthInput;
         private TextField vuforiaTargetNameInput;
         private Button submitButton;
-        private Button retryButton;
         private Button cancelButton;
         private Label statusLabel;
+        private File selectedTargetImageFile;
 
         private string lastTargetId = "";
-        private string lastPublishIdempotencyKey = "";
         private bool isBusy;
 
         private void OnEnable()
         {
             sceneController = FindFirstObjectByType<TargetInstantiationSceneController>();
             apiClient = ResolveApiClient();
+            EnsureFgFileBrowserPresent();
 
             UIDocument uiDocument = GetComponent<UIDocument>();
             if (uiDocument == null || uiDocument.rootVisualElement == null)
@@ -62,8 +66,9 @@ namespace ARGallery.AppFlow
         private void OnDisable()
         {
             if (submitButton != null) submitButton.clicked -= OnSubmitClicked;
-            if (retryButton != null) retryButton.clicked -= OnRetryClicked;
+            if (browseTargetImageButton != null) browseTargetImageButton.clicked -= OnBrowseTargetImageClicked;
             if (cancelButton != null) cancelButton.clicked -= OnCancelClicked;
+            WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
         }
 
         private void BindUi(VisualElement root)
@@ -71,17 +76,23 @@ namespace ARGallery.AppFlow
             targetNameInput = root.Q<TextField>(TargetNameInputName);
             targetIdInput = root.Q<TextField>(TargetIdInputName);
             displayLabelInput = root.Q<TextField>(DisplayLabelInputName);
-            targetImageUrlInput = root.Q<TextField>(TargetImageUrlInputName);
+            targetPostureDropdown = root.Q<DropdownField>(TargetPostureDropdownName);
+            browseTargetImageButton = root.Q<Button>(BrowseTargetImageButtonName);
+            selectedTargetImageLabel = root.Q<Label>(SelectedTargetImageLabelName);
             physicalWidthInput = root.Q<FloatField>(PhysicalWidthInputName);
             vuforiaTargetNameInput = root.Q<TextField>(VuforiaTargetNameInputName);
             submitButton = root.Q<Button>(SubmitButtonName);
-            retryButton = root.Q<Button>(RetryButtonName);
             cancelButton = root.Q<Button>(CancelButtonName);
             statusLabel = root.Q<Label>(StatusLabelName);
 
             if (submitButton != null) submitButton.clicked += OnSubmitClicked;
-            if (retryButton != null) retryButton.clicked += OnRetryClicked;
+            if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageClicked;
             if (cancelButton != null) cancelButton.clicked += OnCancelClicked;
+            WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
+            WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
+            ConfigurePostureDropdown();
+
+            ApplyInputValueTextColor();
         }
 
         private void OnSubmitClicked()
@@ -98,38 +109,35 @@ namespace ARGallery.AppFlow
             string targetName = Safe(targetNameInput != null ? targetNameInput.value : "");
             string targetId = NormalizeTargetId(targetIdInput != null ? targetIdInput.value : "", targetName);
             string displayLabel = Safe(displayLabelInput != null ? displayLabelInput.value : "");
-            string targetImageUrl = Safe(targetImageUrlInput != null ? targetImageUrlInput.value : "");
+            string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
             float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
-            string vuforiaTargetName = Safe(vuforiaTargetNameInput != null ? vuforiaTargetNameInput.value : "");
 
-            if (string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(targetImageUrl) || physicalWidth <= 0f)
+            if (string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select..." || physicalWidth <= 0f || !HasValidSelectedTargetImage())
             {
-                SetStatus("Missing required fields: target name, target id, target image URL, physical width.");
+                SetStatus("Missing required fields: target name, display label, target posture, target image file, and physical width.");
                 return;
             }
+            WorkspaceDomain.WorkspacePosture selectedPosture = ParsePosture(postureValue);
 
             if (targetIdInput != null)
                 targetIdInput.SetValueWithoutNotify(targetId);
 
-            if (!LooksLikeImageUrl(targetImageUrl))
-                SetStatus("Warning: image URL format looks unusual. Continue with upload gate policy.");
-
             isBusy = true;
             UpdateUiState();
-            SetStatus("Creating target...");
+            SetStatus("Creating cloud target...");
 
-            CreateTargetRequestDto request = new CreateTargetRequestDto
+            CreateCloudTargetRequestDto request = new CreateCloudTargetRequestDto
             {
                 targetId = targetId,
                 targetName = targetName,
-                displayLabel = string.IsNullOrWhiteSpace(displayLabel) ? targetName : displayLabel,
-                targetImageUrl = targetImageUrl,
-                physicalWidth = physicalWidth,
-                vuforiaTargetName = vuforiaTargetName,
-                publishStatus = "draft",
+                displayLabel = displayLabel,
+                workspaceId = "default",
+                width = physicalWidth,
                 localPosition = new ApiVector3Dto(0f, 0f, 0f),
                 localEuler = new ApiVector3Dto(0f, 0f, 0f),
                 localScale = new ApiVector3Dto(1f, 1f, 1f),
+                fileName = ResolveSelectedFileName(),
+                fileBytes = selectedTargetImageFile.data,
                 meta = new ApiSyncMetaDto
                 {
                     schemaVersion = "v1",
@@ -138,95 +146,29 @@ namespace ARGallery.AppFlow
                 }
             };
 
-            apiClient.CreateTarget(request, result =>
+            apiClient.CreateCloudTarget(request, result =>
             {
                 if (result == null || !result.success || result.payload == null || string.IsNullOrWhiteSpace(result.payload.targetId))
                 {
                     isBusy = false;
                     UpdateUiState();
-                    SetStatus($"Create target failed: {BuildResultMessage(result)}");
+                    SetStatus($"Create cloud target failed: {BuildResultMessage(result)}");
                     return;
                 }
 
                 lastTargetId = result.payload.targetId;
-                lastPublishIdempotencyKey = Safe(result.payload.publishIdempotencyKey);
-                StartPublish(lastTargetId, isRetry: false);
-            }, createTargetTimeoutSeconds);
-        }
-
-        private void StartPublish(string targetId, bool isRetry)
-        {
-            if (string.IsNullOrWhiteSpace(targetId))
-            {
+                AppFlowController.SetWorkspaceTargetImage(selectedTargetImageFile != null ? selectedTargetImageFile.data : null, ResolveSelectedFileName());
+                SaveCreatedTargetToWorkspaceDraft(
+                    result.payload,
+                    targetName,
+                    displayLabel,
+                    physicalWidth,
+                    selectedPosture);
                 isBusy = false;
                 UpdateUiState();
-                SetStatus("Publish failed: targetId is empty.");
-                return;
-            }
-
-            SetStatus(isRetry ? "Retrying publish..." : "Publishing target...");
-
-            var request = new PublishTargetRequestDto
-            {
-                publishIdempotencyKey = string.IsNullOrWhiteSpace(lastPublishIdempotencyKey) ? Guid.NewGuid().ToString("N") : lastPublishIdempotencyKey,
-                meta = new ApiSyncMetaDto
-                {
-                    schemaVersion = "v1",
-                    clientRequestId = Guid.NewGuid().ToString("N"),
-                    createdAtUtc = DateTime.UtcNow.ToString("o")
-                }
-            };
-
-            Action<ApiResult<CreateTargetResponseDto>> onCompleted = result =>
-            {
-                isBusy = false;
-                bool publishOk = result != null
-                                 && result.success
-                                 && result.payload != null
-                                 && string.Equals(Safe(result.payload.publishStatus), "published", StringComparison.OrdinalIgnoreCase)
-                                 && !string.IsNullOrWhiteSpace(result.payload.cloudTargetId);
-
-                if (publishOk)
-                {
-                    SetStatus("Publish success. Entering authoring...");
-                    sceneController?.MarkReadyAndContinue(result.payload.targetId);
-                    return;
-                }
-
-                bool publishInProgress = result != null
-                                         && result.success
-                                         && result.payload != null
-                                         && string.Equals(Safe(result.payload.publishStatus), "publishing", StringComparison.OrdinalIgnoreCase);
-
-                if (publishInProgress)
-                {
-                    SetStatus("Publish accepted and still in progress. Retry when ready or cancel to switcher.");
-                    UpdateUiState(failureState: true);
-                    return;
-                }
-
-                string publishError = result != null && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.lastPublishError)
-                    ? result.payload.lastPublishError
-                    : BuildResultMessage(result);
-
-                SetStatus($"Publish failed: {publishError}");
-                UpdateUiState(failureState: true);
-            };
-
-            if (isRetry)
-                apiClient.RetryPublishTarget(targetId, request, onCompleted, publishTimeoutSeconds);
-            else
-                apiClient.PublishTarget(targetId, request, onCompleted, publishTimeoutSeconds);
-        }
-
-        private void OnRetryClicked()
-        {
-            if (isBusy || apiClient == null || string.IsNullOrWhiteSpace(lastTargetId))
-                return;
-
-            isBusy = true;
-            UpdateUiState();
-            StartPublish(lastTargetId, isRetry: true);
+                SetStatus("Target created. Entering authoring...");
+                sceneController?.MarkReadyAndContinue(lastTargetId);
+            }, createTargetTimeoutSeconds);
         }
 
         private void OnCancelClicked()
@@ -241,11 +183,11 @@ namespace ARGallery.AppFlow
             if (submitButton != null)
             {
                 submitButton.SetEnabled(!isBusy);
-                submitButton.text = isBusy ? "Processing..." : "Create + Publish + Continue";
+                submitButton.text = isBusy ? "Processing..." : "Create + Continue";
             }
 
-            if (retryButton != null)
-                retryButton.style.display = failureState ? DisplayStyle.Flex : DisplayStyle.None;
+            if (browseTargetImageButton != null)
+                browseTargetImageButton.SetEnabled(!isBusy);
 
             if (cancelButton != null)
                 cancelButton.SetEnabled(!isBusy);
@@ -292,10 +234,95 @@ namespace ARGallery.AppFlow
             return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
         }
 
-        private static bool LooksLikeImageUrl(string url)
+        private void OnBrowseTargetImageClicked()
         {
-            string lower = Safe(url).ToLowerInvariant();
-            return lower.EndsWith(".png") || lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".webp") || lower.Contains("/uploads/");
+            if (isBusy)
+                return;
+            EnsureFgFileBrowserPresent();
+            if (GameObject.Find("[FGFileBrowser]") == null)
+            {
+                SetStatus("File browser is not available in this scene.");
+                return;
+            }
+            WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg", false);
+        }
+
+        private void OnFilesOpened(File[] files)
+        {
+            if (files == null || files.Length == 0)
+                return;
+            File selected = files[0];
+            if (selected == null || selected.data == null || selected.data.Length == 0)
+            {
+                SetStatus("Selected target image is empty.");
+                return;
+            }
+
+            selectedTargetImageFile = selected;
+            if (selectedTargetImageLabel != null)
+                selectedTargetImageLabel.text = $"Selected: {ResolveSelectedFileName()}";
+            SetStatus("Target image selected. Ready to create.");
+        }
+
+        private bool HasValidSelectedTargetImage()
+        {
+            return selectedTargetImageFile != null && selectedTargetImageFile.data != null && selectedTargetImageFile.data.Length > 0;
+        }
+
+        private string ResolveSelectedFileName()
+        {
+            if (selectedTargetImageFile?.fileInfo == null)
+                return "target.jpg";
+            if (!string.IsNullOrWhiteSpace(selectedTargetImageFile.fileInfo.fullName))
+                return System.IO.Path.GetFileName(selectedTargetImageFile.fileInfo.fullName.Trim());
+            string baseName = string.IsNullOrWhiteSpace(selectedTargetImageFile.fileInfo.name) ? "target" : selectedTargetImageFile.fileInfo.name.TrimEnd('.');
+            string ext = selectedTargetImageFile.fileInfo.extension ?? ".jpg";
+            if (!ext.StartsWith("."))
+                ext = "." + ext;
+            return baseName + ext;
+        }
+
+        private void EnsureFgFileBrowserPresent()
+        {
+            if (GameObject.Find("[FGFileBrowser]") != null)
+                return;
+            GameObject prefab = Resources.Load<GameObject>("[FGFileBrowser]");
+            if (prefab != null)
+                Instantiate(prefab);
+        }
+
+        private void SaveCreatedTargetToWorkspaceDraft(
+            CreateTargetResponseDto response,
+            string fallbackTargetName,
+            string fallbackDisplayLabel,
+            float fallbackPhysicalWidth,
+            WorkspaceDomain.WorkspacePosture posture)
+        {
+            if (response == null || string.IsNullOrWhiteSpace(response.targetId))
+                return;
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null || string.IsNullOrWhiteSpace(session.workspaceId))
+                return;
+
+            var draft = new WorkspaceDomain.WorkspaceDraftState
+            {
+                workspaceId = session.workspaceId.Trim(),
+                workspaceName = string.IsNullOrWhiteSpace(fallbackDisplayLabel) ? session.workspaceName : fallbackDisplayLabel.Trim(),
+                schemaVersion = "v1",
+                isDirty = true,
+                localModifiedAtUtc = DateTime.UtcNow.ToString("o"),
+                target = new WorkspaceDomain.TargetDraftState
+                {
+                    targetId = response.targetId,
+                    targetName = string.IsNullOrWhiteSpace(response.targetName) ? fallbackTargetName : response.targetName,
+                    displayLabel = string.IsNullOrWhiteSpace(response.displayLabel) ? fallbackDisplayLabel : response.displayLabel,
+                    targetImageUrl = response.targetImageUrl ?? "",
+                    physicalWidth = response.physicalWidthM > 0f ? response.physicalWidthM : fallbackPhysicalWidth,
+                    posture = posture,
+                    vuforiaTargetName = string.IsNullOrWhiteSpace(response.vuforiaTargetId) ? "" : response.vuforiaTargetId
+                }
+            };
+
+            WorkspaceDomain.WorkspaceDataServices.LocalStore.UpdateWorkspace(draft, markDirty: true);
         }
 
         private static string NormalizeTargetId(string targetIdInput, string fallbackName)
@@ -340,7 +367,7 @@ namespace ARGallery.AppFlow
             root.style.paddingBottom = 20;
             root.style.backgroundColor = new Color(0.06f, 0.06f, 0.08f, 1f);
 
-            Label title = new Label("Target Setup");
+            Label title = new Label("Create the new workspace");
             title.style.fontSize = 24;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = Color.white;
@@ -348,14 +375,26 @@ namespace ARGallery.AppFlow
             root.Add(title);
 
             root.Add(MakeTextField(TargetNameInputName, "Target Name (required)"));
-            root.Add(MakeTextField(TargetIdInputName, "Target ID (required)"));
-            root.Add(MakeTextField(DisplayLabelInputName, "Display Label (optional)"));
-            root.Add(MakeTextField(TargetImageUrlInputName, "Target Image URL (required)"));
+            root.Add(MakeTextField(DisplayLabelInputName, "Display Label (required)"));
+            var postureDropdown = new DropdownField("Target Posture (required)", new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" }, 0)
+            {
+                name = TargetPostureDropdownName
+            };
+            postureDropdown.style.marginBottom = 8;
+            root.Add(postureDropdown);
+            Button browseTargetImage = new Button { name = BrowseTargetImageButtonName, text = "Choose Target Image..." };
+            browseTargetImage.style.marginBottom = 6;
+            root.Add(browseTargetImage);
+            Label selectedImage = new Label("No target image selected.") { name = SelectedTargetImageLabelName };
+            selectedImage.style.color = new Color(0.8f, 0.9f, 1f, 1f);
+            selectedImage.style.marginBottom = 8;
+            root.Add(selectedImage);
 
             FloatField width = new FloatField("Physical Width (m, required)") { name = PhysicalWidthInputName, value = 0.2f };
             width.style.marginBottom = 8;
             root.Add(width);
 
+            root.Add(MakeTextField(TargetIdInputName, "Target ID (optional, auto-generated)"));
             root.Add(MakeTextField(VuforiaTargetNameInputName, "Vuforia Target Name (optional)"));
 
             Label status = new Label("Status") { name = StatusLabelName };
@@ -367,15 +406,10 @@ namespace ARGallery.AppFlow
             VisualElement row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
 
-            Button submit = new Button { name = SubmitButtonName, text = "Create + Publish + Continue" };
-            Button retry = new Button { name = RetryButtonName, text = "Retry Publish" };
+            Button submit = new Button { name = SubmitButtonName, text = "Create + Continue" };
             Button cancel = new Button { name = CancelButtonName, text = "Cancel" };
-            retry.style.marginLeft = 8;
             cancel.style.marginLeft = 8;
-
-            retry.style.display = DisplayStyle.None;
             row.Add(submit);
-            row.Add(retry);
             row.Add(cancel);
             root.Add(row);
         }
@@ -385,6 +419,47 @@ namespace ARGallery.AppFlow
             TextField tf = new TextField(label) { name = name };
             tf.style.marginBottom = 8;
             return tf;
+        }
+
+        private void ApplyInputValueTextColor()
+        {
+            ApplyBlackTextToInput(targetNameInput);
+            ApplyBlackTextToInput(targetIdInput);
+            ApplyBlackTextToInput(displayLabelInput);
+            ApplyBlackTextToInput(targetPostureDropdown);
+            ApplyBlackTextToInput(vuforiaTargetNameInput);
+            ApplyBlackTextToInput(physicalWidthInput);
+        }
+
+        private static void ApplyBlackTextToInput(VisualElement field)
+        {
+            if (field == null)
+                return;
+            VisualElement input = field.Q(className: "unity-text-input");
+            if (input != null)
+                input.style.color = Color.black;
+        }
+
+        private void ConfigurePostureDropdown()
+        {
+            if (targetPostureDropdown == null)
+                return;
+            targetPostureDropdown.choices = new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" };
+            if (string.IsNullOrWhiteSpace(targetPostureDropdown.value))
+                targetPostureDropdown.SetValueWithoutNotify("Select...");
+        }
+
+        private static WorkspaceDomain.WorkspacePosture ParsePosture(string value)
+        {
+            switch (Safe(value).ToLowerInvariant())
+            {
+                case "floor":
+                    return WorkspaceDomain.WorkspacePosture.Floor;
+                case "ceiling":
+                    return WorkspaceDomain.WorkspacePosture.Ceiling;
+                default:
+                    return WorkspaceDomain.WorkspacePosture.Wall;
+            }
         }
     }
 }

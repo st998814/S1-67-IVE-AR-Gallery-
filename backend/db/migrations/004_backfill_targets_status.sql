@@ -1,0 +1,3 @@
+ALTER TABLE targets
+    ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'accepted';
+

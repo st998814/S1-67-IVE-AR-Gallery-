@@ -83,9 +83,7 @@ namespace ARGallery.Workspace
                     targetImageUrl = "",
                     physicalWidth = 0.45f,
                     posture = WorkspacePosture.Wall,
-                    publishStatus = "draft",
-                    vuforiaTargetName = "wall_poster_target",
-                    cloudTargetId = ""
+                    vuforiaTargetName = "wall_poster_target"
                 },
                 content = new List<ContentDraftState>
                 {
@@ -110,9 +108,7 @@ namespace ARGallery.Workspace
                     targetImageUrl = "",
                     physicalWidth = 0.6f,
                     posture = WorkspacePosture.Floor,
-                    publishStatus = "draft",
-                    vuforiaTargetName = "floor_marker_target",
-                    cloudTargetId = ""
+                    vuforiaTargetName = "floor_marker_target"
                 },
                 content = new List<ContentDraftState>()
             };
@@ -135,9 +131,7 @@ namespace ARGallery.Workspace
                     targetImageUrl = "",
                     physicalWidth = 0.5f,
                     posture = WorkspacePosture.Ceiling,
-                    publishStatus = "draft",
-                    vuforiaTargetName = "ceiling_marker_target",
-                    cloudTargetId = ""
+                    vuforiaTargetName = "ceiling_marker_target"
                 },
                 content = new List<ContentDraftState>()
             };

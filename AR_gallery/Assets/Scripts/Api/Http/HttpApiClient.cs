@@ -13,6 +13,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     [SerializeField] private string baseUrl = "http://127.0.0.1:5050";
     [SerializeField] private string uploadEndpoint = "/api/upload";
     [SerializeField] private string targetEndpoint = "/api/targets";
+    [SerializeField] private string cloudTargetEndpoint = "/api/targets/cloud";
     [SerializeField] private string contentEndpoint = "/api/content";
 
     public IApiRequestHandle UploadFile(
@@ -37,6 +38,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return handle;
     }
 
+    public IApiRequestHandle CreateCloudTarget(
+        CreateCloudTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds = 25f)
+    {
+        var handle = new CoroutineApiRequestHandle(this);
+        Coroutine c = StartCoroutine(CreateCloudTargetRoutine(request, onCompleted, timeoutSeconds, handle));
+        handle.BindCoroutine(c);
+        return handle;
+    }
+
     public IApiRequestHandle CreateContent(
         CreateContentRequestDto request,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
@@ -44,30 +56,6 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     {
         var handle = new CoroutineApiRequestHandle(this);
         Coroutine c = StartCoroutine(CreateContentRoutine(request, onCompleted, timeoutSeconds, handle));
-        handle.BindCoroutine(c);
-        return handle;
-    }
-
-    public IApiRequestHandle PublishTarget(
-        string targetId,
-        PublishTargetRequestDto request,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
-    {
-        var handle = new CoroutineApiRequestHandle(this);
-        Coroutine c = StartCoroutine(PublishTargetRoutine(targetId, request, isRetry: false, onCompleted, timeoutSeconds, handle));
-        handle.BindCoroutine(c);
-        return handle;
-    }
-
-    public IApiRequestHandle RetryPublishTarget(
-        string targetId,
-        PublishTargetRequestDto request,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
-    {
-        var handle = new CoroutineApiRequestHandle(this);
-        Coroutine c = StartCoroutine(PublishTargetRoutine(targetId, request, isRetry: true, onCompleted, timeoutSeconds, handle));
         handle.BindCoroutine(c);
         return handle;
     }
@@ -270,6 +258,76 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         }
     }
 
+    private IEnumerator CreateCloudTargetRoutine(
+        CreateCloudTargetRequestDto request,
+        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
+        float timeoutSeconds,
+        CoroutineApiRequestHandle handle)
+    {
+        if (request == null || request.fileBytes == null || request.fileBytes.Length == 0)
+        {
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.ValidationError, "Cloud target image file is required."));
+            handle.MarkDone();
+            yield break;
+        }
+
+        string url = BuildUrl(cloudTargetEndpoint);
+        var form = new WWWForm();
+        string targetId = string.IsNullOrWhiteSpace(request.targetId) ? Guid.NewGuid().ToString("N") : request.targetId.Trim();
+        string targetName = string.IsNullOrWhiteSpace(request.targetName) ? targetId : request.targetName.Trim();
+        string fileName = string.IsNullOrWhiteSpace(request.fileName) ? "target.jpg" : request.fileName.Trim();
+        string mimeType = GuessImageMimeType(fileName);
+
+        form.AddField("targetId", targetId);
+        form.AddField("targetName", targetName);
+        form.AddField("displayLabel", string.IsNullOrWhiteSpace(request.displayLabel) ? targetName : request.displayLabel.Trim());
+        form.AddField("workspaceId", string.IsNullOrWhiteSpace(request.workspaceId) ? "default" : request.workspaceId.Trim());
+        form.AddField("width", Mathf.Max(0.01f, request.width).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        form.AddField("localPosition", JsonUtility.ToJson(request.localPosition ?? new ApiVector3Dto(0f, 0f, 0f)));
+        form.AddField("localEuler", JsonUtility.ToJson(request.localEuler ?? new ApiVector3Dto(0f, 0f, 0f)));
+        form.AddField("localScale", JsonUtility.ToJson(request.localScale ?? new ApiVector3Dto(1f, 1f, 1f)));
+        form.AddField("meta", JsonUtility.ToJson(request.meta ?? new ApiSyncMetaDto()));
+        form.AddBinaryData("file", request.fileBytes, fileName, mimeType);
+
+        using (UnityWebRequest uwr = UnityWebRequest.Post(url, form))
+        {
+            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 25f : timeoutSeconds));
+            yield return uwr.SendWebRequest();
+
+            if (handle.IsCancelled)
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
+                handle.MarkDone();
+                yield break;
+            }
+
+            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+            if (uwr.result != UnityWebRequest.Result.Success)
+            {
+                string fallback = $"CreateCloudTarget failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                string err = ExtractServerErrorMessage(body, fallback);
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
+            {
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
+                    ApiErrorCodes.ServerError,
+                    "CreateCloudTarget succeeded but response has no targetId.",
+                    (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Ok(parsed, "create cloud target ok", (int)uwr.responseCode));
+            handle.MarkDone();
+        }
+    }
+
     [Serializable]
     private class ApiErrorBody
     {
@@ -301,66 +359,16 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return fallback;
     }
 
-    private IEnumerator PublishTargetRoutine(
-        string targetId,
-        PublishTargetRequestDto request,
-        bool isRetry,
-        Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds,
-        CoroutineApiRequestHandle handle)
+    private static string GuessImageMimeType(string fileName)
     {
-        if (string.IsNullOrWhiteSpace(targetId))
-        {
-            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.ValidationError, "targetId is required"));
-            handle.MarkDone();
-            yield break;
-        }
-
-        string path = isRetry ? $"{targetEndpoint}/{targetId.Trim()}/retry-publish" : $"{targetEndpoint}/{targetId.Trim()}/publish";
-        string url = BuildUrl(path);
-        PublishTargetRequestDto payload = request ?? new PublishTargetRequestDto();
-        string json = JsonUtility.ToJson(payload);
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-
-        using (UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
-        {
-            uwr.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            uwr.downloadHandler = new DownloadHandlerBuffer();
-            uwr.SetRequestHeader("Content-Type", "application/json");
-            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 20f : timeoutSeconds));
-            yield return uwr.SendWebRequest();
-
-            if (handle.IsCancelled)
-            {
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
-                handle.MarkDone();
-                yield break;
-            }
-
-            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
-            if (uwr.result != UnityWebRequest.Result.Success)
-            {
-                string fallback = $"{(isRetry ? "RetryPublish" : "Publish")} failed: {uwr.error} HTTP {(long)uwr.responseCode}";
-                string err = ExtractServerErrorMessage(body, fallback);
-                string code = ExtractServerErrorCode(body, ApiErrorCodes.NetworkError);
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, (int)uwr.responseCode));
-                handle.MarkDone();
-                yield break;
-            }
-
-            CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
-            if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
-            {
-                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(
-                    ApiErrorCodes.ServerError,
-                    "Publish succeeded but response has no targetId.",
-                    (int)uwr.responseCode));
-                handle.MarkDone();
-                yield break;
-            }
-
-            onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Ok(parsed, isRetry ? "retry publish ok" : "publish ok", (int)uwr.responseCode));
-            handle.MarkDone();
-        }
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "image/jpeg";
+        string lower = fileName.ToLowerInvariant();
+        if (lower.EndsWith(".png"))
+            return "image/png";
+        if (lower.EndsWith(".jpg") || lower.EndsWith(".jpeg"))
+            return "image/jpeg";
+        return "application/octet-stream";
     }
+
 }

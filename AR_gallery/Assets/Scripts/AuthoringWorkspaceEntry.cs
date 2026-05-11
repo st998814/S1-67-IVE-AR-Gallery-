@@ -87,6 +87,7 @@ namespace ARGallery.AppFlow
             {
                 manager.SetActiveTarget(index);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
+                ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
                 if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                     AppFlowController.MarkWorkspaceReady(targetId);
                 Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' (index={index}).");
@@ -124,6 +125,7 @@ namespace ARGallery.AppFlow
             {
                 manager.SetActiveTarget(createdIndex);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
+                ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
             }
 
             // Keep app-flow context aligned with provider-loaded target in mock-first mode.
@@ -254,6 +256,16 @@ namespace ARGallery.AppFlow
             }
 
             return null;
+        }
+
+        private void ApplyWorkspaceTargetVisual(GameObject targetObject, string targetImageUrl, WorkspaceSessionContext session)
+        {
+            if (session != null && session.targetImageBytes != null && session.targetImageBytes.Length > 0)
+            {
+                if (targetWorkflowService.ApplyTargetImageBytes(targetObject, session.targetImageBytes))
+                    return;
+            }
+            targetWorkflowService.ApplyTargetImageFromUrl(this, targetObject, targetImageUrl);
         }
     }
 }

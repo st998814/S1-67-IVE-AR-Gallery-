@@ -32,23 +32,15 @@ Example error codes (non-exhaustive; backend owns the canonical list): `VALIDATI
 
 ---
 
-## Status field semantics (for frontend flow control)
+## Status field semantics
 
-Some endpoints (notably target create/publish) return both transport status and domain status fields.
+Some endpoints return both transport status and domain status fields.
 
 Use them distinctly:
 
 - HTTP status code indicates transport/request outcome.
-- Body `status` indicates endpoint-level processing outcome (`created`, `accepted`, `failed`, etc.).
-- Body lifecycle fields (for target flows), especially `publishStatus`, indicate publish state machine.
-
-For target-scene gate decisions, frontend should rely on:
-
-- `publishStatus`
-- `cloudTargetId`
-- `lastPublishError` (when available)
-
-not only on HTTP `200`.
+- Body `status` indicates endpoint-level processing state (`created`, `accepted`, `deleted`, etc.).
+- For cloud-target flow, use endpoint response fields (for example `vuforiaStatus`, `vuforiaTargetId`) plus HTTP status.
 
 ---
 

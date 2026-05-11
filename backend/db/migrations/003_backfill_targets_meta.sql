@@ -1,0 +1,3 @@
+ALTER TABLE targets
+    ADD COLUMN IF NOT EXISTS meta JSONB NOT NULL DEFAULT '{}'::jsonb;
+
