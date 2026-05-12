@@ -77,5 +77,13 @@ namespace ARGallery.Workspace
             workspace.localModifiedAtUtc = DateTime.UtcNow.ToString("o");
             cache[key] = workspace;
         }
+
+        /// <summary>Removes cached draft for this id (e.g. after deleting workspace from disk).</summary>
+        public bool TryRemoveFromCache(string workspaceId)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return false;
+            return cache.Remove(workspaceId.Trim());
+        }
     }
 }

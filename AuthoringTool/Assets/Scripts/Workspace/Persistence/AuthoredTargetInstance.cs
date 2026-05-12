@@ -18,7 +18,7 @@ namespace ARGallery.Workspace.Persistence
         public string TargetImageLocalPath = "";
         public string OriginalFileName = "";
 
-        private void Start()
+        private void Awake()
         {
             AuthoredObjectRegistry.RegisterTarget(this);
         }

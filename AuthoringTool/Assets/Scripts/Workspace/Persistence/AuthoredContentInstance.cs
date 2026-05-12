@@ -26,7 +26,7 @@ namespace ARGallery.Workspace.Persistence
         public bool UploadPending;
         public bool PersistPending;
 
-        private void Start()
+        private void Awake()
         {
             AuthoredObjectRegistry.RegisterContent(this);
         }

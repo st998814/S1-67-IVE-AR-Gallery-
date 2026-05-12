@@ -217,14 +217,20 @@ namespace ARGallery.Workspace.Persistence
             else
             {
                 byte[] bytes = TryReadAssetBytes(workspaceId, cs.assetLocalPath);
-                if (bytes == null || bytes.Length == 0)
+                if (bytes != null && bytes.Length > 0)
+                {
+                    request.localFileBytes = bytes;
+                }
+                else if (!string.IsNullOrWhiteSpace(cs.mediaUrl))
+                {
+                    request.mediaUrl = cs.mediaUrl.Trim();
+                }
+                else
                 {
                     Debug.LogWarning($"WorkspaceSceneReconstructor: missing asset for content '{cs.localContentId}' — spawning placeholder.");
                     TrySpawnMissingPlaceholder(cs);
-                    return false;
+                    return true;
                 }
-
-                request.localFileBytes = bytes;
             }
 
             SpawnContentResult result = spawner.CreateContent(request);
@@ -232,14 +238,17 @@ namespace ARGallery.Workspace.Persistence
             {
                 Debug.LogWarning($"WorkspaceSceneReconstructor: spawn failed for '{cs.localContentId}': {result.message}");
                 TrySpawnMissingPlaceholder(cs);
-                return false;
+                return true;
             }
 
             GameObject go = result.spawnedObject;
             if (spawnType == SpawnContentType.Video)
             {
                 string full = assetRepository.ResolveFullPath(workspaceId, cs.assetLocalPath);
-                ApplyVideoFileUrl(go, full);
+                if (!string.IsNullOrWhiteSpace(full) && File.Exists(full))
+                    ApplyVideoFileUrl(go, full);
+                else if (!string.IsNullOrWhiteSpace(cs.mediaUrl))
+                    ApplyVideoStreamUrl(go, cs.mediaUrl.Trim());
             }
 
             AttachAuthoredContent(go, cs);
@@ -296,6 +305,21 @@ namespace ARGallery.Workspace.Persistence
 
             vp.source = VideoSource.Url;
             vp.url = new Uri(absolutePath).AbsoluteUri;
+            vp.playOnAwake = true;
+            vp.Play();
+        }
+
+        private static void ApplyVideoStreamUrl(GameObject go, string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+
+            VideoPlayer vp = go.GetComponentInChildren<VideoPlayer>(true);
+            if (vp == null)
+                return;
+
+            vp.source = VideoSource.Url;
+            vp.url = url.Trim();
             vp.playOnAwake = true;
             vp.Play();
         }

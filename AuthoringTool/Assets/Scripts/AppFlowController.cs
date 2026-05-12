@@ -113,5 +113,14 @@ namespace ARGallery.AppFlow
                 return;
             currentWorkspace.vuforiaTargetId = vuforiaCloudTargetId ?? "";
         }
+
+        public static void SetWorkspaceName(string workspaceName)
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.workspaceName = string.IsNullOrWhiteSpace(workspaceName)
+                ? currentWorkspace.workspaceName
+                : workspaceName.Trim();
+        }
     }
 }

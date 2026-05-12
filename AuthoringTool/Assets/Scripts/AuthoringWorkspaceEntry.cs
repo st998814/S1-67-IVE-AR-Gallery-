@@ -43,7 +43,7 @@ namespace ARGallery.AppFlow
 
             string workspaceId = ResolveWorkspaceId(session);
             var snapshotRepo = new WorkspaceSnapshotRepository();
-            if (snapshotRepo.TryLoadSnapshot(workspaceId, out _))
+            if (snapshotRepo.TryLoadSnapshot(workspaceId, out WorkspaceSnapshot snapshotForRebuild))
             {
                 WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
                 if (reconstructor != null)
@@ -62,14 +62,15 @@ namespace ARGallery.AppFlow
                     if (rebuildOk)
                     {
                         WorkspaceDomain.WorkspaceDraftState draftAfterRebuild = LoadWorkspaceDraft(workspaceId);
-                        if (draftAfterRebuild == null || draftAfterRebuild.target == null
-                            || string.IsNullOrWhiteSpace(draftAfterRebuild.target.targetId))
+                        // Draft may be mock-provider fallback (wrong targetId). Snapshot + session carry the real ids.
+                        string resolvedTargetId = ResolveAuthoringTargetId(draftAfterRebuild, session, workspaceId, snapshotForRebuild);
+                        if (string.IsNullOrWhiteSpace(resolvedTargetId))
                         {
-                            Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot restored but workspace draft '{workspaceId}' has no target context.");
+                            Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot restored but could not resolve target id for workspace '{workspaceId}'.");
                             yield break;
                         }
 
-                        ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session);
+                        ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session, workspaceId, snapshotForRebuild, resolvedTargetId);
                         yield break;
                     }
 
@@ -82,13 +83,14 @@ namespace ARGallery.AppFlow
             }
 
             WorkspaceDomain.WorkspaceDraftState draft = LoadWorkspaceDraft(workspaceId);
-            if (draft == null || draft.target == null || string.IsNullOrWhiteSpace(draft.target.targetId))
+            string canonicalTargetId = ResolveAuthoringTargetId(draft, session, workspaceId, null);
+            if (draft == null || draft.target == null || string.IsNullOrWhiteSpace(canonicalTargetId))
             {
                 Debug.LogWarning($"AuthoringWorkspaceEntry: Workspace draft '{workspaceId}' is missing target context.");
                 yield break;
             }
 
-            ApplyWorkspaceContext(draft, session);
+            ApplyWorkspaceContext(draft, session, workspaceId, canonicalTargetId);
         }
 
         private WorkspaceDomain.WorkspaceDraftState LoadWorkspaceDraft(string workspaceId)
@@ -114,7 +116,62 @@ namespace ARGallery.AppFlow
             return WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
         }
 
-        private void ApplyWorkspaceContext(WorkspaceDomain.WorkspaceDraftState workspace, WorkspaceSessionContext session)
+        /// <summary>
+        /// Resolves AR target id: session (switcher) → snapshot.json → draft.
+        /// Draft alone is unreliable for UUID workspaces because <see cref="Workspace.MockWorkspaceProvider"/> falls back to the default wall workspace ids.
+        /// </summary>
+        private static string ResolveAuthoringTargetId(
+            WorkspaceDomain.WorkspaceDraftState workspace,
+            WorkspaceSessionContext session,
+            string resolvedWorkspaceId,
+            WorkspaceSnapshot snapshotOrNull)
+        {
+            if (session != null && !string.IsNullOrWhiteSpace(session.targetId))
+                return session.targetId.Trim();
+
+            if (snapshotOrNull != null)
+            {
+                string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snapshotOrNull);
+                if (!string.IsNullOrWhiteSpace(fromSnap))
+                    return fromSnap.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolvedWorkspaceId))
+            {
+                var repo = new WorkspaceSnapshotRepository();
+                if (repo.TryLoadSnapshot(resolvedWorkspaceId.Trim(), out WorkspaceSnapshot snap))
+                {
+                    string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snap);
+                    if (!string.IsNullOrWhiteSpace(fromSnap))
+                        return fromSnap.Trim();
+                }
+            }
+
+            if (workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetId))
+                return workspace.target.targetId.Trim();
+
+            return "";
+        }
+
+        private static string ResolvePrimaryTargetIdFromSnapshot(WorkspaceSnapshot snap)
+        {
+            if (snap?.targets == null || snap.targets.Length == 0)
+                return "";
+
+            TargetSnapshot ts = snap.targets[0];
+            if (ts == null)
+                return "";
+
+            if (!string.IsNullOrWhiteSpace(ts.serverTargetId))
+                return ts.serverTargetId.Trim();
+            return ts.localTargetId != null ? ts.localTargetId.Trim() : "";
+        }
+
+        private void ApplyWorkspaceContext(
+            WorkspaceDomain.WorkspaceDraftState workspace,
+            WorkspaceSessionContext session,
+            string resolvedWorkspaceId,
+            string canonicalTargetId)
         {
             TargetSelectionManager manager = FindFirstObjectByType<TargetSelectionManager>();
             if (manager == null)
@@ -123,7 +180,7 @@ namespace ARGallery.AppFlow
                 return;
             }
 
-            string targetId = workspace.target.targetId.Trim();
+            string targetId = canonicalTargetId.Trim();
             string targetName = !string.IsNullOrWhiteSpace(workspace.target.displayLabel)
                 ? workspace.target.displayLabel.Trim()
                 : (!string.IsNullOrWhiteSpace(workspace.target.targetName) ? workspace.target.targetName.Trim() : "WorkspaceTarget");
@@ -134,6 +191,7 @@ namespace ARGallery.AppFlow
                 manager.SetActiveTarget(index);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
+                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
                 if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                     AppFlowController.MarkWorkspaceReady(targetId);
                 Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' (index={index}).");
@@ -158,6 +216,7 @@ namespace ARGallery.AppFlow
                 {
                     manager.SetActiveTarget(result.duplicateIndex);
                     ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
+                    EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
                     Debug.Log($"AuthoringWorkspaceEntry: Duplicate target resolved by activating index={result.duplicateIndex}.");
                     return;
                 }
@@ -172,6 +231,7 @@ namespace ARGallery.AppFlow
                 manager.SetActiveTarget(createdIndex);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
+                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
             }
 
             // Keep app-flow context aligned with provider-loaded target in mock-first mode.
@@ -181,10 +241,30 @@ namespace ARGallery.AppFlow
             Debug.Log($"AuthoringWorkspaceEntry: Created and activated workspace target '{targetId}'.");
         }
 
+        private static void EnsureAuthoredTargetForPersistence(GameObject targetGo, string targetId, string targetDisplayName, WorkspaceSessionContext session)
+        {
+            if (targetGo == null || string.IsNullOrWhiteSpace(targetId))
+                return;
+
+            AuthoredTargetInstance auth = WorkspaceAuthoredAttach.EnsureTarget(targetGo, targetId, targetDisplayName);
+            if (auth == null || session == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(session.vuforiaTargetId))
+                auth.VuforiaTargetId = session.vuforiaTargetId.Trim();
+            if (!string.IsNullOrWhiteSpace(session.targetImageRelativePath))
+                auth.TargetImageLocalPath = session.targetImageRelativePath.Trim();
+        }
+
         /// <summary>
         /// After <see cref="WorkspaceSceneReconstructor"/> rebuilds from disk, targets/content already exist — only bind selection, posture, and visuals.
         /// </summary>
-        private void ApplyWorkspaceContextAfterSnapshotRebuild(WorkspaceDomain.WorkspaceDraftState workspace, WorkspaceSessionContext session)
+        private void ApplyWorkspaceContextAfterSnapshotRebuild(
+            WorkspaceDomain.WorkspaceDraftState workspace,
+            WorkspaceSessionContext session,
+            string resolvedWorkspaceId,
+            WorkspaceSnapshot snapshot,
+            string canonicalTargetId)
         {
             TargetSelectionManager manager = FindFirstObjectByType<TargetSelectionManager>();
             if (manager == null)
@@ -193,18 +273,30 @@ namespace ARGallery.AppFlow
                 return;
             }
 
-            string targetId = workspace.target.targetId.Trim();
+            string targetId = canonicalTargetId.Trim();
 
             int index = manager.FindTargetIndexById(targetId);
             if (index < 0)
             {
-                Debug.LogWarning($"AuthoringWorkspaceEntry: After snapshot rebuild, target id '{targetId}' was not found in TargetSelectionManager.");
+                Debug.LogWarning(
+                    $"AuthoringWorkspaceEntry: After snapshot rebuild, target id '{targetId}' was not found in TargetSelectionManager. " +
+                    $"draft.targetId={workspace?.target?.targetId ?? "(null)"} workspaceId={resolvedWorkspaceId}");
                 return;
             }
 
             manager.SetActiveTarget(index);
-            ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
-            ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
+            WorkspaceDomain.WorkspacePosture posture = workspace?.target != null
+                ? workspace.target.posture
+                : WorkspaceDomain.WorkspacePosture.Wall;
+            ApplyWorkspacePreset(manager.GetActiveTarget(), posture);
+            string imageUrl = workspace?.target != null ? workspace.target.targetImageUrl : "";
+            ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), imageUrl ?? "", session);
+            string displayName = workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.displayLabel)
+                ? workspace.target.displayLabel.Trim()
+                : workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetName)
+                    ? workspace.target.targetName.Trim()
+                    : (!string.IsNullOrWhiteSpace(snapshot?.workspaceName) ? snapshot.workspaceName.Trim() : targetId);
+            EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, displayName, session);
             if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                 AppFlowController.MarkWorkspaceReady(targetId);
 

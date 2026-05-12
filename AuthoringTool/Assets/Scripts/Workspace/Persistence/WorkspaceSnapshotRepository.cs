@@ -63,6 +63,7 @@ namespace ARGallery.Workspace.Persistence
                 File.WriteAllText(path, json);
 
                 UpsertIndexEntry(id, snapshot.workspaceName ?? id, snapshot.updatedAtUtc, thumbnailKey: "");
+                Debug.Log($"[WorkspacePersistence] TrySaveSnapshot OK | path={path} | bytes≈{System.Text.Encoding.UTF8.GetByteCount(json)}");
                 return true;
             }
             catch (Exception ex)

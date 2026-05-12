@@ -10,6 +10,7 @@ namespace ARGallery.AppFlow
     [RequireComponent(typeof(UIDocument))]
     public class TargetInstantiationUIController : MonoBehaviour
     {
+        private const string WorkspaceNameInputName = "WorkspaceNameInput";
         private const string TargetNameInputName = "TargetNameInput";
         private const string TargetIdInputName = "TargetIdInput";
         private const string DisplayLabelInputName = "DisplayLabelInput";
@@ -28,6 +29,7 @@ namespace ARGallery.AppFlow
         private IApiClient apiClient;
         private TargetInstantiationSceneController sceneController;
 
+        private TextField workspaceNameInput;
         private TextField targetNameInput;
         private TextField targetIdInput;
         private TextField displayLabelInput;
@@ -63,8 +65,18 @@ namespace ARGallery.AppFlow
             VisualElement root = uiDocument.rootVisualElement;
             EnsureFallbackUi(root);
             BindUi(root);
+            ApplyWorkspaceNameFromSession();
             UpdateUiState();
             SetStatus("Create target to continue.");
+        }
+
+        private void ApplyWorkspaceNameFromSession()
+        {
+            if (workspaceNameInput == null)
+                return;
+            if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) && session != null
+                && !string.IsNullOrWhiteSpace(session.workspaceName))
+                workspaceNameInput.SetValueWithoutNotify(session.workspaceName.Trim());
         }
 
         private void OnDisable()
@@ -77,6 +89,7 @@ namespace ARGallery.AppFlow
 
         private void BindUi(VisualElement root)
         {
+            workspaceNameInput = root.Q<TextField>(WorkspaceNameInputName);
             targetNameInput = root.Q<TextField>(TargetNameInputName);
             targetIdInput = root.Q<TextField>(TargetIdInputName);
             displayLabelInput = root.Q<TextField>(DisplayLabelInputName);
@@ -110,17 +123,20 @@ namespace ARGallery.AppFlow
                 return;
             }
 
+            string workspaceName = Safe(workspaceNameInput != null ? workspaceNameInput.value : "");
             string targetName = Safe(targetNameInput != null ? targetNameInput.value : "");
             string targetId = NormalizeTargetId(targetIdInput != null ? targetIdInput.value : "", targetName);
             string displayLabel = Safe(displayLabelInput != null ? displayLabelInput.value : "");
             string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
             float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
 
-            if (string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select..." || physicalWidth <= 0f || !HasValidSelectedTargetImage())
+            if (string.IsNullOrWhiteSpace(workspaceName) || string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select..." || physicalWidth <= 0f || !HasValidSelectedTargetImage())
             {
-                SetStatus("Missing required fields: target name, display label, target posture, target image file, and physical width.");
+                SetStatus("Missing required fields: workspace name, target name, display label, target posture, target image file, and physical width.");
                 return;
             }
+
+            AppFlowController.SetWorkspaceName(workspaceName);
             WorkspaceDomain.WorkspacePosture selectedPosture = ParsePosture(postureValue);
 
             if (targetIdInput != null)
@@ -165,6 +181,7 @@ namespace ARGallery.AppFlow
                 AppFlowController.SetWorkspaceVuforiaTargetId(result.payload.vuforiaTargetId ?? "");
                 SaveCreatedTargetToWorkspaceDraft(
                     result.payload,
+                    workspaceName,
                     targetName,
                     displayLabel,
                     physicalWidth,
@@ -193,6 +210,9 @@ namespace ARGallery.AppFlow
 
             if (browseTargetImageButton != null)
                 browseTargetImageButton.SetEnabled(!isBusy);
+
+            if (workspaceNameInput != null)
+                workspaceNameInput.SetEnabled(!isBusy);
 
             if (cancelButton != null)
                 cancelButton.SetEnabled(!isBusy);
@@ -323,6 +343,7 @@ namespace ARGallery.AppFlow
 
         private void SaveCreatedTargetToWorkspaceDraft(
             CreateTargetResponseDto response,
+            string workspaceDisplayName,
             string fallbackTargetName,
             string fallbackDisplayLabel,
             float fallbackPhysicalWidth,
@@ -333,10 +354,14 @@ namespace ARGallery.AppFlow
             if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null || string.IsNullOrWhiteSpace(session.workspaceId))
                 return;
 
+            string resolvedWorkspaceName = Safe(workspaceDisplayName);
+            if (string.IsNullOrWhiteSpace(resolvedWorkspaceName))
+                resolvedWorkspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? session.workspaceId.Trim() : session.workspaceName.Trim();
+
             var draft = new WorkspaceDomain.WorkspaceDraftState
             {
                 workspaceId = session.workspaceId.Trim(),
-                workspaceName = string.IsNullOrWhiteSpace(fallbackDisplayLabel) ? session.workspaceName : fallbackDisplayLabel.Trim(),
+                workspaceName = resolvedWorkspaceName,
                 schemaVersion = "v1",
                 isDirty = true,
                 localModifiedAtUtc = DateTime.UtcNow.ToString("o"),
@@ -354,9 +379,7 @@ namespace ARGallery.AppFlow
 
             WorkspaceDomain.WorkspaceDataServices.LocalStore.UpdateWorkspace(draft, markDirty: true);
 
-            string indexName = string.IsNullOrWhiteSpace(response.displayLabel) ? fallbackDisplayLabel : response.displayLabel.Trim();
-            if (string.IsNullOrWhiteSpace(indexName))
-                indexName = session.workspaceName;
+            string indexName = resolvedWorkspaceName;
             string thumb = string.IsNullOrWhiteSpace(session.thumbnailKey)
                 ? (session.targetImageRelativePath ?? "")
                 : session.thumbnailKey;
@@ -412,6 +435,7 @@ namespace ARGallery.AppFlow
             title.style.marginBottom = 12;
             root.Add(title);
 
+            root.Add(MakeTextField(WorkspaceNameInputName, "Workspace Name (required)"));
             root.Add(MakeTextField(TargetNameInputName, "Target Name (required)"));
             root.Add(MakeTextField(DisplayLabelInputName, "Display Label (required)"));
             var postureDropdown = new DropdownField("Target Posture (required)", new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" }, 0)
@@ -461,6 +485,7 @@ namespace ARGallery.AppFlow
 
         private void ApplyInputValueTextColor()
         {
+            ApplyBlackTextToInput(workspaceNameInput);
             ApplyBlackTextToInput(targetNameInput);
             ApplyBlackTextToInput(targetIdInput);
             ApplyBlackTextToInput(displayLabelInput);

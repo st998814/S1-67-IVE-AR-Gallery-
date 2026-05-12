@@ -377,6 +377,8 @@ public class AuthoringUIController : MonoBehaviour
         WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
         if (autoSave != null)
             autoSave.NotifyWorkspaceChanged();
+        else
+            Debug.LogWarning("[WorkspacePersistence] NotifyWorkspacePersistenceChanged: WorkspaceAutoSaveService not found.");
     }
 
     /// <summary>Used by workspace persistence (<c>WorkspaceSceneReconstructor</c>) to align spawn prefabs with authoring.</summary>
@@ -2092,7 +2094,19 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         if (SceneTransitionService.IsTransitioning)
             return;
 
+        Debug.Log("[WorkspacePersistence] BackToSwitcher: flushing snapshot before ClearWorkspaceSession.");
+        bool hadSession = AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext sessionBefore)
+            && sessionBefore != null && !string.IsNullOrWhiteSpace(sessionBefore.workspaceId);
+        Debug.Log($"[WorkspacePersistence] BackToSwitcher: hadSession={hadSession} workspaceId={(hadSession ? sessionBefore.workspaceId : "(none)")}");
+
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave == null)
+            Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceAutoSaveService not found in scene — snapshot will not flush.");
+        else
+            autoSave.FlushSnapshotToDisk();
+
         AppFlowController.ClearWorkspaceSession();
+        Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
         SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
     }
 

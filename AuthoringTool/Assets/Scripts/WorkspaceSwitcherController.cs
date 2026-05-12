@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using ARGallery.Workspace;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -19,6 +20,7 @@ namespace ARGallery.AppFlow
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
         private const string NewButtonName = "NewButton";
         private const string EditButtonName = "EditButton";
+        private const string DeleteWorkspaceButtonName = "DeleteWorkspaceButton";
 
         private readonly List<WorkspaceSessionContext> mockWorkspaces = new List<WorkspaceSessionContext>();
         private readonly List<VisualElement> cardElements = new List<VisualElement>();
@@ -44,6 +46,7 @@ namespace ARGallery.AppFlow
         private Label activeWorkspaceNameLabel;
         private Button newButton;
         private Button editButton;
+        private Button deleteWorkspaceButton;
 
         private void OnEnable()
         {
@@ -74,6 +77,7 @@ namespace ARGallery.AppFlow
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
             if (newButton != null) newButton.clicked -= OnNewButtonClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
+            if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
         }
 
         private void Update()
@@ -112,6 +116,7 @@ namespace ARGallery.AppFlow
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
             newButton = root.Q<Button>(NewButtonName);
             editButton = root.Q<Button>(EditButtonName);
+            deleteWorkspaceButton = root.Q<Button>(DeleteWorkspaceButtonName);
 
             if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || newButton == null || editButton == null)
             {
@@ -125,6 +130,8 @@ namespace ARGallery.AppFlow
             rightArrowButton.clicked += OnRightArrowClicked;
             newButton.clicked += OnNewButtonClicked;
             editButton.clicked += OnEditButtonClicked;
+            if (deleteWorkspaceButton != null)
+                deleteWorkspaceButton.clicked += OnDeleteWorkspaceClicked;
         }
 
         private void SeedMockWorkspaces()
@@ -261,6 +268,13 @@ namespace ARGallery.AppFlow
                 return false;
 
             string targetId = ResolvePrimaryTargetIdFromSnapshot(snap);
+            if (string.IsNullOrWhiteSpace(targetId))
+            {
+                WorkspaceDraftState draft = WorkspaceDataServices.LocalStore.GetWorkspaceSnapshot(workspaceId.Trim());
+                if (draft?.target != null && !string.IsNullOrWhiteSpace(draft.target.targetId))
+                    targetId = draft.target.targetId.Trim();
+            }
+
             if (string.IsNullOrWhiteSpace(targetId))
                 return false;
 
@@ -413,6 +427,29 @@ namespace ARGallery.AppFlow
             SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
         }
 
+        private void OnDeleteWorkspaceClicked()
+        {
+            if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0)
+                return;
+
+            WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)];
+            string id = selected.workspaceId?.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+                return;
+
+            if (!WorkspaceDeletion.TryDeleteWorkspaceEverywhere(id, out string err))
+            {
+                Debug.LogWarning($"WorkspaceSwitcherController: delete workspace failed: {err}");
+                return;
+            }
+
+            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (persistent folder + index row + draft cache).");
+
+            SeedMockWorkspaces();
+            RebuildCards();
+            RefreshSelectionUi(forceImmediate: true);
+        }
+
         private static void EnsureSwitcherFallbackUi(VisualElement root)
         {
             if (root.Q<Button>(LeftArrowButtonName) != null)
@@ -483,6 +520,13 @@ namespace ARGallery.AppFlow
             editBtn.style.marginLeft = 14;
             editBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
             actionRow.Add(editBtn);
+
+            var deleteBtn = new Button { name = DeleteWorkspaceButtonName, text = "DELETE" };
+            deleteBtn.style.width = 160;
+            deleteBtn.style.height = 46;
+            deleteBtn.style.marginLeft = 14;
+            deleteBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            actionRow.Add(deleteBtn);
 
             root.Add(actionRow);
         }
