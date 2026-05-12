@@ -43,17 +43,10 @@ backend/server.log
 .env
 
 
-# Android / Gradle / native build artifacts
+# Android / IOS Buildes Artifacts
 
-.gradle/
+MobileViewer/Builds/
 
-**/.gradle/
-
-*.apk
-
-*.aab
-
-*.androidlib
 
 # CMake / Ninja generated files
 
@@ -85,4 +78,5 @@ android_gradle_build_settings.json
 backend/uploads/
 uploads/
 artifacts/
-exports/
+exports/MobileViewer/Packages/com.ptc.vuforia.engine-11.4.4.tgz
+MobileViewer/Packages/com.ptc.vuforia.engine-11.4.4.tgz
