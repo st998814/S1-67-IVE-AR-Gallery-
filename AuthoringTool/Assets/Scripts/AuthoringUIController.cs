@@ -371,6 +371,15 @@ public class AuthoringUIController : MonoBehaviour
         return "Authoring";
     }
 
+    /// <summary>Used by workspace persistence (<c>WorkspaceSceneReconstructor</c>) to align spawn prefabs with authoring.</summary>
+    public GameObject ResolvePersistencePicturePrefab() => picturePrefab;
+
+    public GameObject ResolvePersistenceTextPrefab() => textPrefab;
+
+    public GameObject ResolvePersistenceVideoPrefab() => videoPrefab;
+
+    public GameObject ResolvePersistenceModelContainerPrefab() => GetModelContentContainerPrefab();
+
     private void InitializePanelCollapsedState()
     {
         isLeftPanelExpanded = false;

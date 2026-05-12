@@ -771,6 +771,9 @@ GameObject:
   - component: {fileID: 1900000013}
   - component: {fileID: 1900000014}
   - component: {fileID: 1900000015}
+  - component: {fileID: 1900000016}
+  - component: {fileID: 1900000017}
+  - component: {fileID: 1900000018}
   m_Layer: 5
   m_Name: UIDocument
   m_TagString: Untagged
@@ -857,6 +860,52 @@ MonoBehaviour:
   showOrientationHelper: 1
   orientationHelperAxisLength: 0.35
   orientationHelperAxisThickness: 0.01
+--- !u!114 &1900000016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d0e4f5a6b7c4890a1b2c3d4e5f60781, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARGallery.Workspace.Persistence.WorkspacePersistenceBootstrap
+  authoredRegistryPrefab: {fileID: 8811223344556677889, guid: 9f8e7d6c5b4a39281716151413121110, type: 3}
+  persistRegistryAcrossScenes: 0
+--- !u!114 &1900000017
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4e5f60718293a4b5c6d7e8f90123456, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARGallery.Workspace.Persistence.WorkspaceSceneReconstructor
+  authoringUi: {fileID: 1900000014}
+  targetSelectionManager: {fileID: 1480848358}
+  spawnForwardOffsetFromWall: 0.008
+  picturePrefabOverride: {fileID: 0}
+  textPrefabOverride: {fileID: 0}
+  videoPrefabOverride: {fileID: 0}
+  modelContainerPrefabOverride: {fileID: 0}
+--- !u!114 &1900000018
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5f60718293a4b5c6d7e8f9012345678, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARGallery.Workspace.Persistence.WorkspaceAutoSaveService
+  debounceSeconds: 3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
