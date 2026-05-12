@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -126,8 +129,32 @@ namespace ARGallery.AppFlow
 
         private void SeedMockWorkspaces()
         {
-            if (mockWorkspaces.Count > 0)
-                return;
+            mockWorkspaces.Clear();
+
+            var byId = new Dictionary<string, WorkspaceSessionContext>(StringComparer.OrdinalIgnoreCase);
+            var insertionOrder = new List<string>();
+            var diskOnlyPending = new List<(WorkspaceSessionContext session, string updatedAtUtc)>();
+
+            void RegisterSeed(WorkspaceSessionContext ctx)
+            {
+                string id = ctx.workspaceId.Trim();
+                if (byId.ContainsKey(id))
+                    return;
+                byId[id] = ctx.Clone();
+                insertionOrder.Add(id);
+            }
+
+            void MergeDiskMetadata(string workspaceId, WorkspaceIndexEntry entry)
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(workspaceId))
+                    return;
+                if (!byId.TryGetValue(workspaceId.Trim(), out WorkspaceSessionContext ctx) || ctx == null)
+                    return;
+                if (!string.IsNullOrWhiteSpace(entry.workspaceName))
+                    ctx.workspaceName = entry.workspaceName.Trim();
+                if (!string.IsNullOrWhiteSpace(entry.thumbnailKey))
+                    ctx.thumbnailKey = entry.thumbnailKey.Trim();
+            }
 
             var providerWorkspaces = Workspace.WorkspaceDataServices.Provider.GetAvailableWorkspaces();
             if (providerWorkspaces != null)
@@ -138,7 +165,7 @@ namespace ARGallery.AppFlow
                     if (ws == null || string.IsNullOrWhiteSpace(ws.workspaceId) || ws.target == null || string.IsNullOrWhiteSpace(ws.target.targetId))
                         continue;
 
-                    mockWorkspaces.Add(new WorkspaceSessionContext
+                    RegisterSeed(new WorkspaceSessionContext
                     {
                         workspaceId = ws.workspaceId.Trim(),
                         workspaceName = string.IsNullOrWhiteSpace(ws.workspaceName) ? ws.workspaceId.Trim() : ws.workspaceName.Trim(),
@@ -149,10 +176,32 @@ namespace ARGallery.AppFlow
                 }
             }
 
-            // Fallback safety: keep exactly 3 deterministic demo workspaces when provider is unavailable.
-            if (mockWorkspaces.Count == 0)
+            var snapshotRepo = new WorkspaceSnapshotRepository();
+            IReadOnlyList<WorkspaceIndexEntry> diskIndex = snapshotRepo.LoadAllIndexEntries();
+            for (int i = 0; i < diskIndex.Count; i++)
             {
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                WorkspaceIndexEntry entry = diskIndex[i];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.workspaceId))
+                    continue;
+
+                string wid = entry.workspaceId.Trim();
+                if (byId.ContainsKey(wid))
+                {
+                    MergeDiskMetadata(wid, entry);
+                    continue;
+                }
+
+                if (TryBuildSessionFromDiskWorkspace(wid, entry, out WorkspaceSessionContext diskSession))
+                    diskOnlyPending.Add((diskSession, entry.updatedAtUtc ?? ""));
+            }
+
+            diskOnlyPending.Sort((a, b) => CompareIndexUpdatedDesc(a.updatedAtUtc, b.updatedAtUtc));
+            for (int i = 0; i < diskOnlyPending.Count; i++)
+                RegisterSeed(diskOnlyPending[i].session);
+
+            if (insertionOrder.Count == 0)
+            {
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-wall-001",
                     workspaceName = "Target on Wall",
@@ -160,7 +209,7 @@ namespace ARGallery.AppFlow
                     isNewWorkspace = false,
                     setupState = WorkspaceSetupState.Ready
                 });
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-floor-001",
                     workspaceName = "Target on Floor",
@@ -168,7 +217,7 @@ namespace ARGallery.AppFlow
                     isNewWorkspace = false,
                     setupState = WorkspaceSetupState.Ready
                 });
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-ceiling-001",
                     workspaceName = "Target on Ceiling",
@@ -177,6 +226,74 @@ namespace ARGallery.AppFlow
                     setupState = WorkspaceSetupState.Ready
                 });
             }
+
+            for (int i = 0; i < insertionOrder.Count; i++)
+                mockWorkspaces.Add(byId[insertionOrder[i]]);
+        }
+
+        private static int CompareIndexUpdatedDesc(string a, string b)
+        {
+            DateTime ta = TryParseIndexUtc(a);
+            DateTime tb = TryParseIndexUtc(b);
+            return tb.CompareTo(ta);
+        }
+
+        private static DateTime TryParseIndexUtc(string iso)
+        {
+            if (string.IsNullOrWhiteSpace(iso))
+                return DateTime.MinValue;
+            if (DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime dt))
+                return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
+            return DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// Disk-only row in workspace-index.json: resolve target id from snapshot.json so EDIT can enter authoring.
+        /// </summary>
+        private static bool TryBuildSessionFromDiskWorkspace(string workspaceId, WorkspaceIndexEntry indexEntry, out WorkspaceSessionContext session)
+        {
+            session = null;
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return false;
+
+            var repo = new WorkspaceSnapshotRepository();
+            if (!repo.TryLoadSnapshot(workspaceId.Trim(), out WorkspaceSnapshot snap) || snap == null)
+                return false;
+
+            string targetId = ResolvePrimaryTargetIdFromSnapshot(snap);
+            if (string.IsNullOrWhiteSpace(targetId))
+                return false;
+
+            string name = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.workspaceName)
+                ? indexEntry.workspaceName.Trim()
+                : (!string.IsNullOrWhiteSpace(snap.workspaceName) ? snap.workspaceName.Trim() : workspaceId.Trim());
+
+            session = new WorkspaceSessionContext
+            {
+                workspaceId = workspaceId.Trim(),
+                workspaceName = name,
+                targetId = targetId.Trim(),
+                thumbnailKey = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.thumbnailKey)
+                    ? indexEntry.thumbnailKey.Trim()
+                    : "",
+                isNewWorkspace = false,
+                setupState = WorkspaceSetupState.Ready
+            };
+            return true;
+        }
+
+        private static string ResolvePrimaryTargetIdFromSnapshot(WorkspaceSnapshot snap)
+        {
+            if (snap?.targets == null || snap.targets.Length == 0)
+                return "";
+
+            TargetSnapshot ts = snap.targets[0];
+            if (ts == null)
+                return "";
+
+            if (!string.IsNullOrWhiteSpace(ts.serverTargetId))
+                return ts.serverTargetId.Trim();
+            return ts.localTargetId != null ? ts.localTargetId.Trim() : "";
         }
 
         private void RebuildCards()
