@@ -131,4 +131,29 @@ public class Vector3DataTests
         Assert.AreEqual(0.5f, data.y, 1e-5f);
         Assert.AreEqual(1.0f, data.z, 1e-5f);
     }
+
+    // -----------------------------------------------------------------------
+    // ToVector3 / FromVector3
+    // -----------------------------------------------------------------------
+
+    [Test]
+    public void ToVector3_ReturnsEquivalentVector()
+    {
+        var data = new Vector3Data(1f, -2f, 3.5f);
+        Vector3 v = data.ToVector3();
+        Assert.AreEqual(1f, v.x, 1e-6f);
+        Assert.AreEqual(-2f, v.y, 1e-6f);
+        Assert.AreEqual(3.5f, v.z, 1e-6f);
+    }
+
+    [Test]
+    public void FromVector3_RoundTripsWithToVector3()
+    {
+        var original = new Vector3(0.25f, 99f, -1f);
+        var data = Vector3Data.FromVector3(original);
+        Vector3 back = data.ToVector3();
+        Assert.AreEqual(original.x, back.x, 1e-6f);
+        Assert.AreEqual(original.y, back.y, 1e-6f);
+        Assert.AreEqual(original.z, back.z, 1e-6f);
+    }
 }

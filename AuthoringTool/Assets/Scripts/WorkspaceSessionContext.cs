@@ -21,6 +21,10 @@ namespace ARGallery.AppFlow
         public string targetId = "";
         public byte[] targetImageBytes;
         public string targetImageFileName = "";
+        /// <summary>Workspace-relative path under persistentDataPath, e.g. assets/targets/&lt;guid&gt;.png</summary>
+        public string targetImageRelativePath = "";
+        /// <summary>Vuforia cloud target id returned after successful registration.</summary>
+        public string vuforiaTargetId = "";
         public bool isNewWorkspace;
         public string thumbnailKey = "";
         public WorkspaceSetupState setupState = WorkspaceSetupState.PendingTargetSetup;
@@ -34,6 +38,8 @@ namespace ARGallery.AppFlow
                 targetId = targetId,
                 targetImageBytes = targetImageBytes != null ? (byte[])targetImageBytes.Clone() : null,
                 targetImageFileName = targetImageFileName,
+                targetImageRelativePath = targetImageRelativePath ?? "",
+                vuforiaTargetId = vuforiaTargetId ?? "",
                 isNewWorkspace = isNewWorkspace,
                 thumbnailKey = thumbnailKey,
                 setupState = setupState

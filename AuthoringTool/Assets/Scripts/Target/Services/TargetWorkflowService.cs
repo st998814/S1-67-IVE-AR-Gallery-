@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -66,6 +67,8 @@ public class TargetWorkflowService
         }
 
         targetSelectionManager.AddTarget(newTarget, setActive: true);
+
+        WorkspaceAuthoredAttach.EnsureTarget(newTarget, targetId, targetName);
 
         return new LocalCreateResult
         {

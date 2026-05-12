@@ -98,5 +98,29 @@ namespace ARGallery.AppFlow
             currentWorkspace.targetImageBytes = imageBytes != null ? (byte[])imageBytes.Clone() : null;
             currentWorkspace.targetImageFileName = fileName ?? "";
         }
+
+        /// <summary>Sets copied-on-disk target image path (see WorkspaceAssetRepository). Forward slashes.</summary>
+        public static void SetWorkspaceTargetImageLocalPath(string relativePathWithForwardSlashes)
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.targetImageRelativePath = relativePathWithForwardSlashes ?? "";
+        }
+
+        public static void SetWorkspaceVuforiaTargetId(string vuforiaCloudTargetId)
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.vuforiaTargetId = vuforiaCloudTargetId ?? "";
+        }
+
+        public static void SetWorkspaceName(string workspaceName)
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.workspaceName = string.IsNullOrWhiteSpace(workspaceName)
+                ? currentWorkspace.workspaceName
+                : workspaceName.Trim();
+        }
     }
 }

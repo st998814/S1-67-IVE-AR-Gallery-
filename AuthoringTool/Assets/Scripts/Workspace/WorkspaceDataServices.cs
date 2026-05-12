@@ -17,5 +17,11 @@ namespace ARGallery.Workspace
             if (nextProvider != null)
                 provider = nextProvider;
         }
+
+        /// <summary>Drops in-memory draft for <paramref name="workspaceId"/> from <see cref="LocalWorkspaceStore"/>.</summary>
+        public static bool RemoveCachedWorkspaceDraft(string workspaceId)
+        {
+            return localStore.TryRemoveFromCache(workspaceId);
+        }
     }
 }

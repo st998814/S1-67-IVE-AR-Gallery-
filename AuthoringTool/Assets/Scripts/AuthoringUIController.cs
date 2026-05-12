@@ -8,6 +8,7 @@ using FrostweepGames.Plugins.WebGLFileBrowser;
 #endif
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
+using ARGallery.Workspace.Persistence;
 using System;
 using UnityEngine.InputSystem;
 
@@ -230,7 +231,7 @@ public class AuthoringUIController : MonoBehaviour
         inspectorContentTabButton = root.Q<Button>("InspectorContentTabButton");
         
         browseButton = root.Q<Button>("BrowseButton");
-        addContentButton = root.Q<Button>("AddContentButton");
+        addContentButton = root.Q<Button>("AddContentFabButton") ?? root.Q<Button>("AddContentButton");
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
         leftPanelToggleButton = root.Q<Button>("LeftPanelToggle");
@@ -370,6 +371,24 @@ public class AuthoringUIController : MonoBehaviour
 
         return "Authoring";
     }
+
+    private static void NotifyWorkspacePersistenceChanged()
+    {
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
+        else
+            Debug.LogWarning("[WorkspacePersistence] NotifyWorkspacePersistenceChanged: WorkspaceAutoSaveService not found.");
+    }
+
+    /// <summary>Used by workspace persistence (<c>WorkspaceSceneReconstructor</c>) to align spawn prefabs with authoring.</summary>
+    public GameObject ResolvePersistencePicturePrefab() => picturePrefab;
+
+    public GameObject ResolvePersistenceTextPrefab() => textPrefab;
+
+    public GameObject ResolvePersistenceVideoPrefab() => videoPrefab;
+
+    public GameObject ResolvePersistenceModelContainerPrefab() => GetModelContentContainerPrefab();
 
     private void InitializePanelCollapsedState()
     {
@@ -727,6 +746,7 @@ public class AuthoringUIController : MonoBehaviour
 
         authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
         RefreshHierarchyListFromCoordinator();
+        NotifyWorkspacePersistenceChanged();
     }
 
     private void RegisterLocalDraftFromLibraryItem(ContentLibraryItem item, DraggableObject draggableObject)
@@ -1105,6 +1125,7 @@ public class AuthoringUIController : MonoBehaviour
                 // Duplicate target creation: still allow updating the existing target visual with the uploaded target texture.
                 GameObject existingTarget = targetSelectionManager.GetTargetAt(localResult.duplicateIndex);
                 ApplyPendingTargetImageToTarget(existingTarget);
+                NotifyWorkspacePersistenceChanged();
             }
             return;
         }
@@ -1120,7 +1141,8 @@ public class AuthoringUIController : MonoBehaviour
         string targetImageUrl = GetTargetImageUrlForCreateTarget();
 
         targetWorkflowService.ApplyTargetImageFromUrl(this, localResult.targetObject, targetImageUrl);
-        
+        NotifyWorkspacePersistenceChanged();
+
         // create target  , save to database
         spawnerManager.BeginSyncCreateTarget(
             apiClient,
@@ -1660,6 +1682,7 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        NotifyWorkspacePersistenceChanged();
     }
 
     void OnBrowseButtonClicked()
@@ -1863,6 +1886,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
         ApplyPendingTargetImageToTarget(activeTarget);
 
+        NotifyWorkspacePersistenceChanged();
         Debug.Log("Target image upload complete via IApiClient! URL: " + pendingTargetImageUrl);
     }
 
@@ -2070,7 +2094,19 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         if (SceneTransitionService.IsTransitioning)
             return;
 
+        Debug.Log("[WorkspacePersistence] BackToSwitcher: flushing snapshot before ClearWorkspaceSession.");
+        bool hadSession = AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext sessionBefore)
+            && sessionBefore != null && !string.IsNullOrWhiteSpace(sessionBefore.workspaceId);
+        Debug.Log($"[WorkspacePersistence] BackToSwitcher: hadSession={hadSession} workspaceId={(hadSession ? sessionBefore.workspaceId : "(none)")}");
+
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave == null)
+            Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceAutoSaveService not found in scene — snapshot will not flush.");
+        else
+            autoSave.FlushSnapshotToDisk();
+
         AppFlowController.ClearWorkspaceSession();
+        Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
         SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
     }
 
@@ -2362,6 +2398,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         }
 
         authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        NotifyWorkspacePersistenceChanged();
         Debug.Log("Successfully spawned YouTube stream to AR wall.");
     }
 

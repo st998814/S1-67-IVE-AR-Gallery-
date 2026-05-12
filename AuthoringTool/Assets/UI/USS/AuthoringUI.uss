@@ -1,6 +1,7 @@
 .authoring-root {
     flex-grow: 1;
     background-color: rgba(0, 0, 0, 0);
+    position: relative;
 }
 
 .top-bar {
@@ -76,6 +77,27 @@
     background-color: rgb(59, 130, 246);
     border-color: rgb(59, 130, 246);
     color: rgb(229, 231, 235);
+}
+
+.authoring-add-fab {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 28px;
+    padding: 0;
+    margin: 0;
+    background-color: rgba(18, 24, 33, 0.95);
+    border-width: 1px;
+    border-color: rgb(31, 41, 51);
+    color: rgb(229, 231, 235);
+    font-size: 28px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.authoring-add-fab:hover {
+    background-color: rgb(31, 41, 51);
 }
 
 .input-field {

@@ -1,5 +1,6 @@
 using System;
 using ARGallery.Content;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 
 namespace ARGallery.Spawning
@@ -87,6 +88,9 @@ namespace ARGallery.Spawning
                 return FailContent(integrationMessage, SpawnContentType.Text, SpawnRenderKind.Surface);
             }
 
+            string textTargetId = ResolveSpawnTargetId(request);
+            WorkspaceAuthoredAttach.EnsureContent(textResult.spawnedObject, textTargetId, SpawnContentType.Text, SpawnRenderKind.Surface, request);
+
             return new SpawnContentResult
             {
                 success = true,
@@ -138,6 +142,10 @@ namespace ARGallery.Spawning
                 return FailContent(integrationMessage, request.contentType, MapRenderKind(outcome.renderKind));
             }
 
+            string mediaTargetId = ResolveSpawnTargetId(request);
+            SpawnRenderKind rk = MapRenderKind(outcome.renderKind);
+            WorkspaceAuthoredAttach.EnsureContent(outcome.spawnedObject, mediaTargetId, request.contentType, rk, request);
+
             return new SpawnContentResult
             {
                 success = true,
@@ -147,6 +155,13 @@ namespace ARGallery.Spawning
                 contentType = request.contentType,
                 renderKind = MapRenderKind(outcome.renderKind)
             };
+        }
+
+        private string ResolveSpawnTargetId(SpawnRequest request)
+        {
+            if (request != null && !string.IsNullOrWhiteSpace(request.targetId))
+                return request.targetId.Trim();
+            return targetContextResolver != null ? targetContextResolver.ResolveTargetIdOrActive("") : "";
         }
 
         private bool TryIntegrateSpawnedContent(GameObject spawnedObject, SpawnRequest request, bool alignToTargetFrame, out string message)

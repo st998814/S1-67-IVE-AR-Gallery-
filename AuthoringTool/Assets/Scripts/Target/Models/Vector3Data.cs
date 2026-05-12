@@ -20,4 +20,14 @@ public class Vector3Data
         y = vector.y;
         z = vector.z;
     }
+
+    public Vector3 ToVector3()
+    {
+        return new Vector3(x, y, z);
+    }
+
+    public static Vector3Data FromVector3(Vector3 vector)
+    {
+        return new Vector3Data(vector);
+    }
 }

@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
+using ARGallery.Workspace;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -16,6 +20,7 @@ namespace ARGallery.AppFlow
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
         private const string NewButtonName = "NewButton";
         private const string EditButtonName = "EditButton";
+        private const string DeleteWorkspaceButtonName = "DeleteWorkspaceButton";
 
         private readonly List<WorkspaceSessionContext> mockWorkspaces = new List<WorkspaceSessionContext>();
         private readonly List<VisualElement> cardElements = new List<VisualElement>();
@@ -41,6 +46,7 @@ namespace ARGallery.AppFlow
         private Label activeWorkspaceNameLabel;
         private Button newButton;
         private Button editButton;
+        private Button deleteWorkspaceButton;
 
         private void OnEnable()
         {
@@ -71,6 +77,7 @@ namespace ARGallery.AppFlow
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
             if (newButton != null) newButton.clicked -= OnNewButtonClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
+            if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
         }
 
         private void Update()
@@ -109,6 +116,7 @@ namespace ARGallery.AppFlow
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
             newButton = root.Q<Button>(NewButtonName);
             editButton = root.Q<Button>(EditButtonName);
+            deleteWorkspaceButton = root.Q<Button>(DeleteWorkspaceButtonName);
 
             if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || newButton == null || editButton == null)
             {
@@ -122,12 +130,38 @@ namespace ARGallery.AppFlow
             rightArrowButton.clicked += OnRightArrowClicked;
             newButton.clicked += OnNewButtonClicked;
             editButton.clicked += OnEditButtonClicked;
+            if (deleteWorkspaceButton != null)
+                deleteWorkspaceButton.clicked += OnDeleteWorkspaceClicked;
         }
 
         private void SeedMockWorkspaces()
         {
-            if (mockWorkspaces.Count > 0)
-                return;
+            mockWorkspaces.Clear();
+
+            var byId = new Dictionary<string, WorkspaceSessionContext>(StringComparer.OrdinalIgnoreCase);
+            var insertionOrder = new List<string>();
+            var diskOnlyPending = new List<(WorkspaceSessionContext session, string updatedAtUtc)>();
+
+            void RegisterSeed(WorkspaceSessionContext ctx)
+            {
+                string id = ctx.workspaceId.Trim();
+                if (byId.ContainsKey(id))
+                    return;
+                byId[id] = ctx.Clone();
+                insertionOrder.Add(id);
+            }
+
+            void MergeDiskMetadata(string workspaceId, WorkspaceIndexEntry entry)
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(workspaceId))
+                    return;
+                if (!byId.TryGetValue(workspaceId.Trim(), out WorkspaceSessionContext ctx) || ctx == null)
+                    return;
+                if (!string.IsNullOrWhiteSpace(entry.workspaceName))
+                    ctx.workspaceName = entry.workspaceName.Trim();
+                if (!string.IsNullOrWhiteSpace(entry.thumbnailKey))
+                    ctx.thumbnailKey = entry.thumbnailKey.Trim();
+            }
 
             var providerWorkspaces = Workspace.WorkspaceDataServices.Provider.GetAvailableWorkspaces();
             if (providerWorkspaces != null)
@@ -138,7 +172,7 @@ namespace ARGallery.AppFlow
                     if (ws == null || string.IsNullOrWhiteSpace(ws.workspaceId) || ws.target == null || string.IsNullOrWhiteSpace(ws.target.targetId))
                         continue;
 
-                    mockWorkspaces.Add(new WorkspaceSessionContext
+                    RegisterSeed(new WorkspaceSessionContext
                     {
                         workspaceId = ws.workspaceId.Trim(),
                         workspaceName = string.IsNullOrWhiteSpace(ws.workspaceName) ? ws.workspaceId.Trim() : ws.workspaceName.Trim(),
@@ -149,10 +183,32 @@ namespace ARGallery.AppFlow
                 }
             }
 
-            // Fallback safety: keep exactly 3 deterministic demo workspaces when provider is unavailable.
-            if (mockWorkspaces.Count == 0)
+            var snapshotRepo = new WorkspaceSnapshotRepository();
+            IReadOnlyList<WorkspaceIndexEntry> diskIndex = snapshotRepo.LoadAllIndexEntries();
+            for (int i = 0; i < diskIndex.Count; i++)
             {
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                WorkspaceIndexEntry entry = diskIndex[i];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.workspaceId))
+                    continue;
+
+                string wid = entry.workspaceId.Trim();
+                if (byId.ContainsKey(wid))
+                {
+                    MergeDiskMetadata(wid, entry);
+                    continue;
+                }
+
+                if (TryBuildSessionFromDiskWorkspace(wid, entry, out WorkspaceSessionContext diskSession))
+                    diskOnlyPending.Add((diskSession, entry.updatedAtUtc ?? ""));
+            }
+
+            diskOnlyPending.Sort((a, b) => CompareIndexUpdatedDesc(a.updatedAtUtc, b.updatedAtUtc));
+            for (int i = 0; i < diskOnlyPending.Count; i++)
+                RegisterSeed(diskOnlyPending[i].session);
+
+            if (insertionOrder.Count == 0)
+            {
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-wall-001",
                     workspaceName = "Target on Wall",
@@ -160,7 +216,7 @@ namespace ARGallery.AppFlow
                     isNewWorkspace = false,
                     setupState = WorkspaceSetupState.Ready
                 });
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-floor-001",
                     workspaceName = "Target on Floor",
@@ -168,7 +224,7 @@ namespace ARGallery.AppFlow
                     isNewWorkspace = false,
                     setupState = WorkspaceSetupState.Ready
                 });
-                mockWorkspaces.Add(new WorkspaceSessionContext
+                RegisterSeed(new WorkspaceSessionContext
                 {
                     workspaceId = "ws-ceiling-001",
                     workspaceName = "Target on Ceiling",
@@ -177,6 +233,81 @@ namespace ARGallery.AppFlow
                     setupState = WorkspaceSetupState.Ready
                 });
             }
+
+            for (int i = 0; i < insertionOrder.Count; i++)
+                mockWorkspaces.Add(byId[insertionOrder[i]]);
+        }
+
+        private static int CompareIndexUpdatedDesc(string a, string b)
+        {
+            DateTime ta = TryParseIndexUtc(a);
+            DateTime tb = TryParseIndexUtc(b);
+            return tb.CompareTo(ta);
+        }
+
+        private static DateTime TryParseIndexUtc(string iso)
+        {
+            if (string.IsNullOrWhiteSpace(iso))
+                return DateTime.MinValue;
+            if (DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime dt))
+                return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
+            return DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// Disk-only row in workspace-index.json: resolve target id from snapshot.json so EDIT can enter authoring.
+        /// </summary>
+        private static bool TryBuildSessionFromDiskWorkspace(string workspaceId, WorkspaceIndexEntry indexEntry, out WorkspaceSessionContext session)
+        {
+            session = null;
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return false;
+
+            var repo = new WorkspaceSnapshotRepository();
+            if (!repo.TryLoadSnapshot(workspaceId.Trim(), out WorkspaceSnapshot snap) || snap == null)
+                return false;
+
+            string targetId = ResolvePrimaryTargetIdFromSnapshot(snap);
+            if (string.IsNullOrWhiteSpace(targetId))
+            {
+                WorkspaceDraftState draft = WorkspaceDataServices.LocalStore.GetWorkspaceSnapshot(workspaceId.Trim());
+                if (draft?.target != null && !string.IsNullOrWhiteSpace(draft.target.targetId))
+                    targetId = draft.target.targetId.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(targetId))
+                return false;
+
+            string name = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.workspaceName)
+                ? indexEntry.workspaceName.Trim()
+                : (!string.IsNullOrWhiteSpace(snap.workspaceName) ? snap.workspaceName.Trim() : workspaceId.Trim());
+
+            session = new WorkspaceSessionContext
+            {
+                workspaceId = workspaceId.Trim(),
+                workspaceName = name,
+                targetId = targetId.Trim(),
+                thumbnailKey = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.thumbnailKey)
+                    ? indexEntry.thumbnailKey.Trim()
+                    : "",
+                isNewWorkspace = false,
+                setupState = WorkspaceSetupState.Ready
+            };
+            return true;
+        }
+
+        private static string ResolvePrimaryTargetIdFromSnapshot(WorkspaceSnapshot snap)
+        {
+            if (snap?.targets == null || snap.targets.Length == 0)
+                return "";
+
+            TargetSnapshot ts = snap.targets[0];
+            if (ts == null)
+                return "";
+
+            if (!string.IsNullOrWhiteSpace(ts.serverTargetId))
+                return ts.serverTargetId.Trim();
+            return ts.localTargetId != null ? ts.localTargetId.Trim() : "";
         }
 
         private void RebuildCards()
@@ -296,6 +427,29 @@ namespace ARGallery.AppFlow
             SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
         }
 
+        private void OnDeleteWorkspaceClicked()
+        {
+            if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0)
+                return;
+
+            WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)];
+            string id = selected.workspaceId?.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+                return;
+
+            if (!WorkspaceDeletion.TryDeleteWorkspaceEverywhere(id, out string err))
+            {
+                Debug.LogWarning($"WorkspaceSwitcherController: delete workspace failed: {err}");
+                return;
+            }
+
+            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (persistent folder + index row + draft cache).");
+
+            SeedMockWorkspaces();
+            RebuildCards();
+            RefreshSelectionUi(forceImmediate: true);
+        }
+
         private static void EnsureSwitcherFallbackUi(VisualElement root)
         {
             if (root.Q<Button>(LeftArrowButtonName) != null)
@@ -366,6 +520,18 @@ namespace ARGallery.AppFlow
             editBtn.style.marginLeft = 14;
             editBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
             actionRow.Add(editBtn);
+
+            var deleteBtn = new Button { name = DeleteWorkspaceButtonName, text = "DELETE" };
+            deleteBtn.style.width = 160;
+            deleteBtn.style.height = 46;
+            deleteBtn.style.marginLeft = 14;
+            deleteBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            deleteBtn.style.backgroundColor = new Color(185f / 255f, 28f / 255f, 28f / 255f, 1f);
+            deleteBtn.style.color = Color.white;
+            deleteBtn.style.borderLeftWidth = deleteBtn.style.borderRightWidth = deleteBtn.style.borderTopWidth = deleteBtn.style.borderBottomWidth = 1;
+            var dangerBorder = new Color(248f / 255f, 113f / 255f, 113f / 255f, 1f);
+            deleteBtn.style.borderLeftColor = deleteBtn.style.borderRightColor = deleteBtn.style.borderTopColor = deleteBtn.style.borderBottomColor = dangerBorder;
+            actionRow.Add(deleteBtn);
 
             root.Add(actionRow);
         }

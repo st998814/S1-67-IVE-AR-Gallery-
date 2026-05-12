@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using System.Collections;
 using System.Collections.Generic;
 using RTG;
+using ARGallery.Workspace.Persistence;
 
 public class ContentTransformController : MonoBehaviour
 {
@@ -143,6 +144,9 @@ public class ContentTransformController : MonoBehaviour
         {
             authoringUI.SyncTransformToInspector(sel);
             _wasDraggingUniversalGizmo = false;
+            WorkspaceAutoSaveService autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
+            if (autoSave != null)
+                autoSave.NotifyWorkspaceChanged();
         }
     }
 
