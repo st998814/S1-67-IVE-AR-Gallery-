@@ -116,6 +116,14 @@ namespace ARGallery.Workspace.Persistence
             }
         }
 
+        /// <summary>Upserts one row in workspace-index.json without writing snapshot.json.</summary>
+        public void UpsertWorkspaceIndexEntry(string workspaceId, string workspaceName, string thumbnailKey = "")
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return;
+            UpsertIndexEntry(workspaceId.Trim(), workspaceName ?? workspaceId, DateTime.UtcNow.ToString("o"), thumbnailKey ?? "");
+        }
+
         private void UpsertIndexEntry(string workspaceId, string workspaceName, string updatedAtUtc, string thumbnailKey)
         {
             WorkspaceIndexFile file = LoadOrCreateIndexFile();

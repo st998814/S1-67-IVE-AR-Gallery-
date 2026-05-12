@@ -1,5 +1,6 @@
 using System;
 using FrostweepGames.Plugins.WebGLFileBrowser;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
 using WorkspaceDomain = global::ARGallery.Workspace;
@@ -39,6 +40,9 @@ namespace ARGallery.AppFlow
         private Button cancelButton;
         private Label statusLabel;
         private File selectedTargetImageFile;
+
+        private readonly WorkspaceAssetRepository workspaceAssetRepository = new WorkspaceAssetRepository();
+        private readonly WorkspaceSnapshotRepository workspaceSnapshotRepository = new WorkspaceSnapshotRepository();
 
         private string lastTargetId = "";
         private bool isBusy;
@@ -158,6 +162,7 @@ namespace ARGallery.AppFlow
 
                 lastTargetId = result.payload.targetId;
                 AppFlowController.SetWorkspaceTargetImage(selectedTargetImageFile != null ? selectedTargetImageFile.data : null, ResolveSelectedFileName());
+                AppFlowController.SetWorkspaceVuforiaTargetId(result.payload.vuforiaTargetId ?? "");
                 SaveCreatedTargetToWorkspaceDraft(
                     result.payload,
                     targetName,
@@ -261,12 +266,37 @@ namespace ARGallery.AppFlow
             selectedTargetImageFile = selected;
             if (selectedTargetImageLabel != null)
                 selectedTargetImageLabel.text = $"Selected: {ResolveSelectedFileName()}";
+            ImportSelectedTargetImageToPersistentStorage();
             SetStatus("Target image selected. Ready to create.");
         }
 
         private bool HasValidSelectedTargetImage()
         {
             return selectedTargetImageFile != null && selectedTargetImageFile.data != null && selectedTargetImageFile.data.Length > 0;
+        }
+
+        private void ImportSelectedTargetImageToPersistentStorage()
+        {
+            if (!HasValidSelectedTargetImage())
+                return;
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null || string.IsNullOrWhiteSpace(session.workspaceId))
+            {
+                Debug.LogWarning("TargetInstantiationUIController: no workspace session; skipped copying target image under persistentDataPath.");
+                return;
+            }
+
+            string fileName = ResolveSelectedFileName();
+            string sourcePath = "";
+            if (selectedTargetImageFile.fileInfo != null && !string.IsNullOrWhiteSpace(selectedTargetImageFile.fileInfo.fullName))
+                sourcePath = selectedTargetImageFile.fileInfo.fullName.Trim();
+
+            if (!workspaceAssetRepository.TryImportTargetImage(session.workspaceId.Trim(), fileName, selectedTargetImageFile.data, sourcePath, out string relativePath, out string error))
+            {
+                Debug.LogWarning($"TargetInstantiationUIController: target image import failed: {error}");
+                return;
+            }
+
+            AppFlowController.SetWorkspaceTargetImageLocalPath(relativePath);
         }
 
         private string ResolveSelectedFileName()
@@ -323,6 +353,14 @@ namespace ARGallery.AppFlow
             };
 
             WorkspaceDomain.WorkspaceDataServices.LocalStore.UpdateWorkspace(draft, markDirty: true);
+
+            string indexName = string.IsNullOrWhiteSpace(response.displayLabel) ? fallbackDisplayLabel : response.displayLabel.Trim();
+            if (string.IsNullOrWhiteSpace(indexName))
+                indexName = session.workspaceName;
+            string thumb = string.IsNullOrWhiteSpace(session.thumbnailKey)
+                ? (session.targetImageRelativePath ?? "")
+                : session.thumbnailKey;
+            workspaceSnapshotRepository.UpsertWorkspaceIndexEntry(session.workspaceId.Trim(), indexName, thumb);
         }
 
         private static string NormalizeTargetId(string targetIdInput, string fallbackName)
