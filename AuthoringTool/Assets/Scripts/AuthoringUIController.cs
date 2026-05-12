@@ -231,7 +231,7 @@ public class AuthoringUIController : MonoBehaviour
         inspectorContentTabButton = root.Q<Button>("InspectorContentTabButton");
         
         browseButton = root.Q<Button>("BrowseButton");
-        addContentButton = root.Q<Button>("AddContentButton");
+        addContentButton = root.Q<Button>("AddContentFabButton") ?? root.Q<Button>("AddContentButton");
         saveButton = root.Q<Button>("SaveButton");
         backToSwitcherButton = root.Q<Button>("BackToSwitcherButton");
         leftPanelToggleButton = root.Q<Button>("LeftPanelToggle");

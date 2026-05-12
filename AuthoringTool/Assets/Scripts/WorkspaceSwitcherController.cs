@@ -526,6 +526,11 @@ namespace ARGallery.AppFlow
             deleteBtn.style.height = 46;
             deleteBtn.style.marginLeft = 14;
             deleteBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            deleteBtn.style.backgroundColor = new Color(185f / 255f, 28f / 255f, 28f / 255f, 1f);
+            deleteBtn.style.color = Color.white;
+            deleteBtn.style.borderLeftWidth = deleteBtn.style.borderRightWidth = deleteBtn.style.borderTopWidth = deleteBtn.style.borderBottomWidth = 1;
+            var dangerBorder = new Color(248f / 255f, 113f / 255f, 113f / 255f, 1f);
+            deleteBtn.style.borderLeftColor = deleteBtn.style.borderRightColor = deleteBtn.style.borderTopColor = deleteBtn.style.borderBottomColor = dangerBorder;
             actionRow.Add(deleteBtn);
 
             root.Add(actionRow);
