@@ -1,3 +1,5 @@
+using System.Collections;
+using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using WorkspaceDomain = global::ARGallery.Workspace;
 using WorkspacePresets = global::ARGallery.Workspace.Presets;
@@ -23,6 +25,11 @@ namespace ARGallery.AppFlow
 
         private void Start()
         {
+            StartCoroutine(CoAuthoringEntry());
+        }
+
+        private IEnumerator CoAuthoringEntry()
+        {
             WorkspaceSessionContext session = null;
             bool hasSession = AppFlowController.TryGetWorkspaceSession(out session) && session != null;
 
@@ -31,15 +38,54 @@ namespace ARGallery.AppFlow
                 Debug.Log("AuthoringWorkspaceEntry: Workspace setup is pending. Authoring entry is blocked.");
                 if (!SceneTransitionService.IsTransitioning)
                     SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
-                return;
+                yield break;
             }
 
             string workspaceId = ResolveWorkspaceId(session);
+            var snapshotRepo = new WorkspaceSnapshotRepository();
+            if (snapshotRepo.TryLoadSnapshot(workspaceId, out _))
+            {
+                WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
+                if (reconstructor != null)
+                {
+                    bool completed = false;
+                    bool rebuildOk = false;
+                    reconstructor.BeginRebuildFromDisk(workspaceId, ok =>
+                    {
+                        rebuildOk = ok;
+                        completed = true;
+                    });
+
+                    while (!completed)
+                        yield return null;
+
+                    if (rebuildOk)
+                    {
+                        WorkspaceDomain.WorkspaceDraftState draftAfterRebuild = LoadWorkspaceDraft(workspaceId);
+                        if (draftAfterRebuild == null || draftAfterRebuild.target == null
+                            || string.IsNullOrWhiteSpace(draftAfterRebuild.target.targetId))
+                        {
+                            Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot restored but workspace draft '{workspaceId}' has no target context.");
+                            yield break;
+                        }
+
+                        ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session);
+                        yield break;
+                    }
+
+                    Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot rebuild reported failure for '{workspaceId}'. Falling back to draft-only entry.");
+                }
+                else
+                {
+                    Debug.LogWarning("AuthoringWorkspaceEntry: snapshot.json exists but WorkspaceSceneReconstructor is missing; using draft-only entry.");
+                }
+            }
+
             WorkspaceDomain.WorkspaceDraftState draft = LoadWorkspaceDraft(workspaceId);
             if (draft == null || draft.target == null || string.IsNullOrWhiteSpace(draft.target.targetId))
             {
                 Debug.LogWarning($"AuthoringWorkspaceEntry: Workspace draft '{workspaceId}' is missing target context.");
-                return;
+                yield break;
             }
 
             ApplyWorkspaceContext(draft, session);
@@ -133,6 +179,36 @@ namespace ARGallery.AppFlow
                 AppFlowController.MarkWorkspaceReady(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Created and activated workspace target '{targetId}'.");
+        }
+
+        /// <summary>
+        /// After <see cref="WorkspaceSceneReconstructor"/> rebuilds from disk, targets/content already exist — only bind selection, posture, and visuals.
+        /// </summary>
+        private void ApplyWorkspaceContextAfterSnapshotRebuild(WorkspaceDomain.WorkspaceDraftState workspace, WorkspaceSessionContext session)
+        {
+            TargetSelectionManager manager = FindFirstObjectByType<TargetSelectionManager>();
+            if (manager == null)
+            {
+                Debug.LogWarning("AuthoringWorkspaceEntry: TargetSelectionManager not found; cannot apply workspace target context.");
+                return;
+            }
+
+            string targetId = workspace.target.targetId.Trim();
+
+            int index = manager.FindTargetIndexById(targetId);
+            if (index < 0)
+            {
+                Debug.LogWarning($"AuthoringWorkspaceEntry: After snapshot rebuild, target id '{targetId}' was not found in TargetSelectionManager.");
+                return;
+            }
+
+            manager.SetActiveTarget(index);
+            ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
+            ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
+            if (session != null && string.IsNullOrWhiteSpace(session.targetId))
+                AppFlowController.MarkWorkspaceReady(targetId);
+
+            Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from snapshot (index={index}).");
         }
 
         private void ApplyWorkspacePreset(GameObject targetRootObject, WorkspaceDomain.WorkspacePosture posture)

@@ -8,6 +8,7 @@ using FrostweepGames.Plugins.WebGLFileBrowser;
 #endif
 using ARGallery.Spawning;
 using ARGallery.AppFlow;
+using ARGallery.Workspace.Persistence;
 using System;
 using UnityEngine.InputSystem;
 
@@ -369,6 +370,13 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         return "Authoring";
+    }
+
+    private static void NotifyWorkspacePersistenceChanged()
+    {
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
     }
 
     /// <summary>Used by workspace persistence (<c>WorkspaceSceneReconstructor</c>) to align spawn prefabs with authoring.</summary>
@@ -736,6 +744,7 @@ public class AuthoringUIController : MonoBehaviour
 
         authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
         RefreshHierarchyListFromCoordinator();
+        NotifyWorkspacePersistenceChanged();
     }
 
     private void RegisterLocalDraftFromLibraryItem(ContentLibraryItem item, DraggableObject draggableObject)
@@ -1114,6 +1123,7 @@ public class AuthoringUIController : MonoBehaviour
                 // Duplicate target creation: still allow updating the existing target visual with the uploaded target texture.
                 GameObject existingTarget = targetSelectionManager.GetTargetAt(localResult.duplicateIndex);
                 ApplyPendingTargetImageToTarget(existingTarget);
+                NotifyWorkspacePersistenceChanged();
             }
             return;
         }
@@ -1129,7 +1139,8 @@ public class AuthoringUIController : MonoBehaviour
         string targetImageUrl = GetTargetImageUrlForCreateTarget();
 
         targetWorkflowService.ApplyTargetImageFromUrl(this, localResult.targetObject, targetImageUrl);
-        
+        NotifyWorkspacePersistenceChanged();
+
         // create target  , save to database
         spawnerManager.BeginSyncCreateTarget(
             apiClient,
@@ -1669,6 +1680,7 @@ public class AuthoringUIController : MonoBehaviour
         }
 
         authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        NotifyWorkspacePersistenceChanged();
     }
 
     void OnBrowseButtonClicked()
@@ -1872,6 +1884,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
         ApplyPendingTargetImageToTarget(activeTarget);
 
+        NotifyWorkspacePersistenceChanged();
         Debug.Log("Target image upload complete via IApiClient! URL: " + pendingTargetImageUrl);
     }
 
@@ -2371,6 +2384,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         }
 
         authoringTransformCoordinator?.SelectContentTransform(localResult.spawnedObject.transform, syncAuthoringUi: false);
+        NotifyWorkspacePersistenceChanged();
         Debug.Log("Successfully spawned YouTube stream to AR wall.");
     }
 
