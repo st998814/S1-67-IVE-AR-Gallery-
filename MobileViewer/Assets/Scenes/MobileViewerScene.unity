@@ -302,10 +302,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 9001000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f5af3ee2b3d24e5fbf95d9ea51ec9db7, type: 3}
+  m_Script: {fileID: 11500000, guid: 00000000000000000000000000000000, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  simulatedDelaySeconds: 0.35
 --- !u!114 &9001003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -368,7 +367,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   vuforiaController: {fileID: 9001005}
-  contentServiceBehaviour: {fileID: 9001002}
+  contentServiceBehaviour: {fileID: 0}
   contentRenderer: {fileID: 9001003}
   statusUI: {fileID: 9001004}
   ignoreConsecutiveDuplicateTarget: 1
