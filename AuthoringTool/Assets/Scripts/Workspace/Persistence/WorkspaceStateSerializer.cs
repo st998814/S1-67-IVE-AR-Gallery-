@@ -100,6 +100,7 @@ namespace ARGallery.Workspace.Persistence
                 targetName = t.TargetName ?? "",
                 targetImageLocalPath = t.TargetImageLocalPath ?? "",
                 originalFileName = t.OriginalFileName ?? "",
+                physicalWidthM = t.PhysicalWidthM > 1e-5f ? t.PhysicalWidthM : 0.2f,
                 position = new Vector3Data(tr.localPosition),
                 rotation = new Vector3Data(tr.localEulerAngles),
                 scale = new Vector3Data(tr.localScale),
