@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ARGallery.Workspace.Persistence;
 using RTG;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
@@ -213,7 +214,11 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     private void OnGizmoContentTransformChanged(Transform contentTransform)
     {
         if (contentTransform != null && authoringUI != null)
+        {
             authoringUI.SyncTransformToInspector(contentTransform);
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(contentTransform);
+            NotifyWorkspaceAutosave();
+        }
     }
 
     private void Update()
@@ -586,6 +591,8 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         target.localPosition = pos;
         authoringUI?.SyncTransformToInspector(target);
+        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
+        NotifyWorkspaceAutosave();
     }
 
     private void HandleRotationInput(Transform target)
@@ -600,6 +607,8 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         target.localEulerAngles = rot;
         authoringUI?.SyncTransformToInspector(target);
+        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
+        NotifyWorkspaceAutosave();
     }
 
     private void HandleScaleInput(Transform target)
@@ -618,5 +627,14 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         target.localScale = scale;
         authoringUI?.SyncTransformToInspector(target);
+        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
+        NotifyWorkspaceAutosave();
+    }
+
+    private static void NotifyWorkspaceAutosave()
+    {
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
     }
 }

@@ -97,5 +97,21 @@ namespace ARGallery.Workspace.Persistence
 
             ac.AssetLocalPath = relativePath;
         }
+
+        /// <summary>
+        /// Marks authored content as needing a Layer-3 push (<see cref="WorkspaceRemoteSyncService"/>).
+        /// Call after any user-driven change to local position/rotation/scale under a target.
+        /// </summary>
+        public static void MarkContentRemoteDirty(Transform contentTransform)
+        {
+            if (contentTransform == null)
+                return;
+
+            AuthoredContentInstance ac = contentTransform.GetComponent<AuthoredContentInstance>()
+                ?? contentTransform.GetComponentInParent<AuthoredContentInstance>()
+                ?? contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+            if (ac != null)
+                ac.RemoteDirty = true;
+        }
     }
 }

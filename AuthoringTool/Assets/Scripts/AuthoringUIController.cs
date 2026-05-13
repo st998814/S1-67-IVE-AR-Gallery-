@@ -2244,12 +2244,15 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
     {
         if (activeContentDraft == null)
             activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
-        if (activeContentDraft == null)
-            return;
+        if (activeContentDraft != null)
+        {
+            activeContentDraft.isUnsaved = true;
+            activeContentDraft.persistPending = true;
+            activeContentDraft.targetId = GetActiveTargetIdForSave();
+        }
 
-        activeContentDraft.isUnsaved = true;
-        activeContentDraft.persistPending = true;
-        activeContentDraft.targetId = GetActiveTargetIdForSave();
+        if (authoringSpatialTarget != null)
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(authoringSpatialTarget);
     }
 
     private static bool LooksLikeYouTubeUrl(string u)
@@ -2686,5 +2689,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         {
             suppressSpatialUiCallbacks = false;
         }
+
+        MarkActiveDraftDirty();
+        NotifyWorkspacePersistenceChanged();
     }
 }

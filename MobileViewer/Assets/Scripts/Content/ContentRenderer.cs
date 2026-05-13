@@ -28,6 +28,8 @@ namespace MobileViewer.Content
 
         [Header("Image Content")]
         [SerializeField] private bool showImageContent = true;
+        [Tooltip("When true, localScale from the API is the quad width/height in target local meters (matches AuthoringTool + physical target). When false, legacy: scale × imagePlaneScale × targetPhysicalWidthM.")]
+        [SerializeField] private bool treatImageLocalScaleAsMeters = true;
         [SerializeField] private float imagePlaneScale = 0.3f; // fallback when backend localScale is missing
         [SerializeField] private Vector3 imageLocalOffset = new(0f, 0.08f, 0f); // fallback when backend localPosition is missing
         [SerializeField] private float imageForwardOffset = 0.01f;
@@ -436,21 +438,31 @@ namespace MobileViewer.Content
         private Vector3 ResolveImageLocalScale(ContentData contentData)
         {
             var scale = contentData.localScale;
-            if (scale == Vector3.zero)
-            {
-                scale = new Vector3(imagePlaneScale, imagePlaneScale, 1f);
-            }
-
             var widthScale = useTargetPhysicalWidthScaling && contentData.targetPhysicalWidthM > 0f
                 ? contentData.targetPhysicalWidthM
                 : 1f;
 
-            // Treat authored scale as multiplier over runtime base plane size.
+            if (scale == Vector3.zero)
+            {
+                // No authored scale: default plane = imagePlaneScale × one physical-width factor (meters).
+                var def = imagePlaneScale * widthScale;
+                return new Vector3(Mathf.Max(0.01f, def), Mathf.Max(0.01f, def), 1f);
+            }
+
+            if (treatImageLocalScaleAsMeters)
+            {
+                // Contract: localScale.x / localScale.y are quad width and height in target local meters (z unused for quad thickness).
+                return new Vector3(
+                    Mathf.Max(0.01f, scale.x),
+                    Mathf.Max(0.01f, scale.y),
+                    Mathf.Max(0.01f, scale.z <= 0f ? 1f : scale.z));
+            }
+
+            // Legacy: treat authored scale as a multiplier over a runtime base size.
             return new Vector3(
                 Mathf.Max(0.01f, scale.x * imagePlaneScale * widthScale),
                 Mathf.Max(0.01f, scale.y * imagePlaneScale * widthScale),
-                Mathf.Max(0.01f, scale.z <= 0f ? 1f : scale.z)
-            );
+                Mathf.Max(0.01f, scale.z <= 0f ? 1f : scale.z));
         }
 
         private Quaternion ResolveRuntimeLocalRotation(ContentData contentData)

@@ -72,7 +72,7 @@ Backends may support both forms simultaneously; the lookup rules should be docum
 | `mediaUrl` | string | no | URL for renderable media. Required in practice for `image`, `video`, and `model` runtime renderers. |
 | `localPosition` | object | no | Optional `ApiVector3Dto` authored local position relative to target. |
 | `localEuler` | object | no | Optional `ApiVector3Dto` authored local Euler rotation (degrees) relative to target. |
-| `localScale` | object | no | Optional `ApiVector3Dto` authored local scale relative to target. |
+| `localScale` | object | no | Optional `ApiVector3Dto` **for `image` content**: width and height of the image quad in **target local meters** (`x` = width, `y` = height, `z` typically `1`). MobileViewer applies this directly (no extra multiply by `targetPhysicalWidthM`). Omit or use zero components to let the client use its default plane size (`imagePlaneScale` × `targetPhysicalWidthM` once). **Legacy clients** may still send dimensionless multipliers; turn off “treat scale as meters” in `ContentRenderer` if needed. |
 | `targetLocalEuler` | object | no | Target authored local Euler basis (`ApiVector3Dto`) for rotation-frame correction in runtime. |
 | `targetPosture` | string | no | Inferred posture hint (`wall`, `floor`, `ceiling`) derived from target basis; runtime may apply posture-specific rotation correction. |
 | `targetPhysicalWidthM` | number | no | Physical width of the target in meters. Runtime may use this to normalize authored transforms to real-world scale. |
