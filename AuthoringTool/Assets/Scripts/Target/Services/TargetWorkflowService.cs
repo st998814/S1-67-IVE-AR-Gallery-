@@ -134,6 +134,8 @@ public class TargetWorkflowService
         string targetName,
         string displayLabel,
         string targetImageUrl,
+        string workspaceId,
+        string workspaceName,
         Action<ApiResult<CreateTargetResponseDto>> onCompleted,
         float timeoutSeconds = 20f)
     {
@@ -145,13 +147,17 @@ public class TargetWorkflowService
             return null;
         }
 
+        string wid = string.IsNullOrWhiteSpace(workspaceId) ? "default" : workspaceId.Trim();
+        string wname = workspaceName != null ? workspaceName.Trim() : "";
+
         var request = new CreateTargetRequestDto
         {
             targetId = targetId,
             targetName = targetName,
             displayLabel = displayLabel,
             targetImageUrl = targetImageUrl ?? "",
-            workspaceId = "default",
+            workspaceId = wid,
+            workspaceName = wname,
             physicalWidthM = 1.0f,
             localPosition = ReadLocalPosition(targetObject),
             localEuler = ReadLocalEuler(targetObject),

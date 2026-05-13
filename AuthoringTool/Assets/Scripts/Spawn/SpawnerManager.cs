@@ -308,7 +308,17 @@ namespace ARGallery.Spawning
 
         public IApiRequestHandle BeginSyncCreateTarget(IApiClient apiClient, SpawnTargetRequest request, GameObject targetObject, Action<ApiResult<CreateTargetResponseDto>> onCompleted = null, float timeoutSeconds = 20f)
         {
-            return targetWorkflowService.SyncCreateTarget(apiClient, targetObject, request.targetId ?? "", request.targetName ?? "", request.displayLabel ?? request.targetName, request.targetImageUrl ?? "", onCompleted, timeoutSeconds);
+            return targetWorkflowService.SyncCreateTarget(
+                apiClient,
+                targetObject,
+                request.targetId ?? "",
+                request.targetName ?? "",
+                request.displayLabel ?? request.targetName,
+                request.targetImageUrl ?? "",
+                request.workspaceId ?? "",
+                request.workspaceName ?? "",
+                onCompleted,
+                timeoutSeconds);
         }
 
         public IApiRequestHandle BeginSyncCreateContent(IApiClient apiClient, SpawnRequest request, Transform spawnedTransform, Action<ApiResult<CreateContentResponseDto>> onCompleted = null, float timeoutSeconds = 20f)

@@ -22,9 +22,12 @@ Optional parts (only if backend and client agree to support them in a later revi
 
 | Part name | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `category` | string | no | `content` (default), `target`, or `target_ref` — selects subdirectory under `uploads/` (`content/`, `target/`, `target_ref/`). |
+| `targetId` | string | no | When `category` is `target`, pass the canonical target id so the server stores **`{targetId}.{ext}`** and overwrites on re-sync (avoids a second file like `ttest-<uuid>.jpg` when `/api/targets/cloud` already wrote `ttest.jpg`). |
+| `contentId` | string | no | When `category` is `content`, pass the canonical **`contentId`** (same as `POST /api/content`) so the server stores **`{contentId}.{ext}`** and overwrites on re-sync instead of duplicate `large-47-<uuid>.jpg` files. |
 | `meta` | string (JSON) | no | Stringified `ApiSyncMetaDto` for tracing (see `common.md`). May include the full DTO shape; upload handlers should only require tracing fields and ignore unused keys. |
 
-**Unity reference:** `HttpApiClient` sends a single binary part named **`file`** with filename and MIME type derived from `UploadFileRequestDto.fileName` and `UploadFileRequestDto.mimeType`.
+**Unity reference:** `HttpApiClient` sends **`category`**, optional **`targetId`** / **`contentId`** when set on `UploadFileRequestDto`, then **`file`** (remote sync sets ids for deterministic paths).
 
 Conceptual mapping from `UploadFileRequestDto` (C#) to wire:
 
@@ -33,6 +36,9 @@ Conceptual mapping from `UploadFileRequestDto` (C#) to wire:
 | `fileBytes` | Binary content of part `file`. |
 | `fileName` | Original filename on part `file`. |
 | `mimeType` | Content-Type of part `file`. |
+| `uploadCategory` | Maps to multipart `category`: `content` \| `target` \| `target_ref` (Unity client). |
+| `targetId` | Maps to multipart `targetId` when category is `target`. |
+| `contentId` | Maps to multipart `contentId` when category is `content`. |
 | `meta` | Optional `meta` part if both sides implement it. |
 
 ---

@@ -21,6 +21,7 @@ namespace ARGallery.Workspace.Persistence
             auth.LocalTargetId = id;
             auth.ServerTargetId = id;
             auth.TargetName = string.IsNullOrWhiteSpace(targetDisplayName) ? id : targetDisplayName.Trim();
+            auth.RemoteDirty = true;
             AuthoredObjectRegistry.RegisterTarget(auth);
             return auth;
         }
@@ -57,6 +58,7 @@ namespace ARGallery.Workspace.Persistence
 
             TryPersistLocalContentAsset(ac, request);
 
+            ac.RemoteDirty = true;
             AuthoredObjectRegistry.RegisterContent(ac);
             return ac;
         }

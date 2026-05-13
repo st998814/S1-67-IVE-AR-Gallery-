@@ -146,12 +146,18 @@ namespace ARGallery.AppFlow
             UpdateUiState();
             SetStatus("Creating cloud target...");
 
+            string cloudWorkspaceId = "default";
+            if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext wsSession) && wsSession != null
+                && !string.IsNullOrWhiteSpace(wsSession.workspaceId))
+                cloudWorkspaceId = wsSession.workspaceId.Trim();
+
             CreateCloudTargetRequestDto request = new CreateCloudTargetRequestDto
             {
                 targetId = targetId,
                 targetName = targetName,
                 displayLabel = displayLabel,
-                workspaceId = "default",
+                workspaceId = cloudWorkspaceId,
+                workspaceName = workspaceName,
                 width = physicalWidth,
                 localPosition = new ApiVector3Dto(0f, 0f, 0f),
                 localEuler = new ApiVector3Dto(0f, 0f, 0f),

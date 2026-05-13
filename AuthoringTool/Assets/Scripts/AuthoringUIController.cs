@@ -83,6 +83,13 @@ public class AuthoringUIController : MonoBehaviour
     private VisualElement _errorToast;
     private Label _errorLabel;
     private Coroutine _errorToastCoroutine;
+
+    private VisualElement _syncStatusToast;
+    private Label _syncStatusTitle;
+    private Label _syncStatusMessage;
+    private Button _syncToastDismiss;
+    private Coroutine _syncToastHideRoutine;
+    private WorkspaceRemoteSyncService _boundRemoteSyncService;
     // ----------------------------
 
     // Track the object that is currently "active" in the UI (being dragged)
@@ -252,9 +259,16 @@ public class AuthoringUIController : MonoBehaviour
         _errorToast = root.Q<VisualElement>("error-toast");
         _errorLabel = root.Q<Label>("error-label");
 
+        _syncStatusToast = root.Q<VisualElement>("SyncStatusToast");
+        _syncStatusTitle = root.Q<Label>("SyncStatusTitle");
+        _syncStatusMessage = root.Q<Label>("SyncStatusMessage");
+        _syncToastDismiss = root.Q<Button>("SyncToastDismiss");
+
         HideLoading();
         HideErrorToast();
-        // ------------------------------------------------
+        HideSyncStatusToast();
+        if (_syncToastDismiss != null)
+            _syncToastDismiss.clicked += OnSyncToastDismissClicked;
 
         // Event Listeners
         if (browseButton != null) browseButton.clicked += OnBrowseButtonClicked;
@@ -318,6 +332,8 @@ public class AuthoringUIController : MonoBehaviour
             ApplyInspectorModeTarget();
         else
             ApplyInspectorModeContent();
+
+        BindRemoteSyncToastService();
     }
 
     void OnDisable()
@@ -351,6 +367,10 @@ public class AuthoringUIController : MonoBehaviour
         }
         if (contentHierarchyList != null)
             contentHierarchyList.onSelectionChange -= OnHierarchySelectionChanged;
+
+        if (_syncToastDismiss != null)
+            _syncToastDismiss.clicked -= OnSyncToastDismissClicked;
+        UnbindRemoteSyncToastService();
 
         foreach (TargetReferenceDraft draft in targetReferencesByTargetId.Values)
         {
@@ -962,6 +982,159 @@ public class AuthoringUIController : MonoBehaviour
         yield return new WaitForSeconds(delaySeconds);
         HideErrorToast();
     }
+
+    private void BindRemoteSyncToastService()
+    {
+        UnbindRemoteSyncToastService();
+
+        WorkspaceRemoteSyncService svc = ResolveRemoteSyncService();
+        if (svc == null)
+            return;
+
+        _boundRemoteSyncService = svc;
+        _boundRemoteSyncService.RemoteSyncToastChanged += OnRemoteSyncToastChanged;
+    }
+
+    private void UnbindRemoteSyncToastService()
+    {
+        CancelSyncToastHideRoutine();
+        if (_boundRemoteSyncService != null)
+        {
+            _boundRemoteSyncService.RemoteSyncToastChanged -= OnRemoteSyncToastChanged;
+            _boundRemoteSyncService = null;
+        }
+
+        HideSyncStatusToast();
+    }
+
+    private WorkspaceRemoteSyncService ResolveRemoteSyncService()
+    {
+        return remoteSyncService != null ? remoteSyncService : FindFirstObjectByType<WorkspaceRemoteSyncService>();
+    }
+
+    private void OnSyncToastDismissClicked()
+    {
+        CancelSyncToastHideRoutine();
+        HideSyncStatusToast();
+    }
+
+    private void OnRemoteSyncToastChanged(WorkspaceRemoteSyncToastKind kind, string message)
+    {
+        if (_syncStatusToast == null || _syncStatusTitle == null || _syncStatusMessage == null)
+            return;
+
+        CancelSyncToastHideRoutine();
+
+        _syncStatusTitle.text = TitleForRemoteSyncToast(kind);
+        _syncStatusMessage.text = string.IsNullOrWhiteSpace(message) ? " " : message;
+
+        ApplyRemoteSyncToastStyle(kind);
+        _syncStatusToast.RemoveFromClassList("sync-toast--hidden");
+        _syncStatusToast.style.display = DisplayStyle.Flex;
+
+        float hideDelay = RemoteSyncToastAutoHideSeconds(kind);
+        if (hideDelay > 0f)
+            _syncToastHideRoutine = StartCoroutine(HideSyncStatusToastAfterDelay(hideDelay));
+    }
+
+    private static string TitleForRemoteSyncToast(WorkspaceRemoteSyncToastKind kind)
+    {
+        switch (kind)
+        {
+            case WorkspaceRemoteSyncToastKind.Debouncing:
+                return "Sync scheduled";
+            case WorkspaceRemoteSyncToastKind.Syncing:
+                return "Syncing…";
+            case WorkspaceRemoteSyncToastKind.Synced:
+                return "Saved to server";
+            case WorkspaceRemoteSyncToastKind.Failed:
+                return "Sync failed";
+            case WorkspaceRemoteSyncToastKind.Skipped:
+                return "Sync skipped";
+            default:
+                return "Sync status";
+        }
+    }
+
+    private static float RemoteSyncToastAutoHideSeconds(WorkspaceRemoteSyncToastKind kind)
+    {
+        switch (kind)
+        {
+            case WorkspaceRemoteSyncToastKind.Debouncing:
+                return 0f;
+            case WorkspaceRemoteSyncToastKind.Syncing:
+                return 0f;
+            case WorkspaceRemoteSyncToastKind.Synced:
+                return 4.5f;
+            case WorkspaceRemoteSyncToastKind.Failed:
+                return 8f;
+            case WorkspaceRemoteSyncToastKind.Skipped:
+                return 5f;
+            default:
+                return 4f;
+        }
+    }
+
+    private void ApplyRemoteSyncToastStyle(WorkspaceRemoteSyncToastKind kind)
+    {
+        if (_syncStatusToast == null)
+            return;
+
+        _syncStatusToast.RemoveFromClassList("sync-toast--debouncing");
+        _syncStatusToast.RemoveFromClassList("sync-toast--syncing");
+        _syncStatusToast.RemoveFromClassList("sync-toast--success");
+        _syncStatusToast.RemoveFromClassList("sync-toast--failed");
+        _syncStatusToast.RemoveFromClassList("sync-toast--skipped");
+
+        switch (kind)
+        {
+            case WorkspaceRemoteSyncToastKind.Debouncing:
+                _syncStatusToast.AddToClassList("sync-toast--debouncing");
+                break;
+            case WorkspaceRemoteSyncToastKind.Syncing:
+                _syncStatusToast.AddToClassList("sync-toast--syncing");
+                break;
+            case WorkspaceRemoteSyncToastKind.Synced:
+                _syncStatusToast.AddToClassList("sync-toast--success");
+                break;
+            case WorkspaceRemoteSyncToastKind.Failed:
+                _syncStatusToast.AddToClassList("sync-toast--failed");
+                break;
+            case WorkspaceRemoteSyncToastKind.Skipped:
+                _syncStatusToast.AddToClassList("sync-toast--skipped");
+                break;
+        }
+    }
+
+    private void HideSyncStatusToast()
+    {
+        if (_syncStatusToast == null)
+            return;
+
+        _syncStatusToast.AddToClassList("sync-toast--hidden");
+        _syncStatusToast.style.display = DisplayStyle.None;
+        _syncStatusToast.RemoveFromClassList("sync-toast--debouncing");
+        _syncStatusToast.RemoveFromClassList("sync-toast--syncing");
+        _syncStatusToast.RemoveFromClassList("sync-toast--success");
+        _syncStatusToast.RemoveFromClassList("sync-toast--failed");
+        _syncStatusToast.RemoveFromClassList("sync-toast--skipped");
+    }
+
+    private void CancelSyncToastHideRoutine()
+    {
+        if (_syncToastHideRoutine != null)
+        {
+            StopCoroutine(_syncToastHideRoutine);
+            _syncToastHideRoutine = null;
+        }
+    }
+
+    private IEnumerator HideSyncStatusToastAfterDelay(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+        _syncToastHideRoutine = null;
+        HideSyncStatusToast();
+    }
     // ==========================================
 
     // dropdown manu maneger
@@ -1080,6 +1253,19 @@ public class AuthoringUIController : MonoBehaviour
         return targetSelectionManager.GetTargetId(targetSelectionManager.ActiveTargetIndex);
     }
 
+    private static void ResolveSessionWorkspaceForApi(out string workspaceId, out string workspaceName)
+    {
+        workspaceId = "default";
+        workspaceName = "";
+        if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) && session != null)
+        {
+            if (!string.IsNullOrWhiteSpace(session.workspaceId))
+                workspaceId = session.workspaceId.Trim();
+            if (!string.IsNullOrWhiteSpace(session.workspaceName))
+                workspaceName = session.workspaceName.Trim();
+        }
+    }
+
     /// <summary>Create and register a new runtime target from UI inputs.</summary>
     private void OnCreateTargetButtonClicked()
     {
@@ -1105,12 +1291,16 @@ public class AuthoringUIController : MonoBehaviour
         if (createTargetIdInput != null)
             createTargetIdInput.SetValueWithoutNotify(normalizedTargetId);
 
+        ResolveSessionWorkspaceForApi(out string wsId, out string wsName);
+
         var localResult = spawnerManager.CreateTarget(new SpawnTargetRequest
         {
             targetName = normalizedName,
             targetId = normalizedTargetId,
             displayLabel = displayLabel,
-            targetImageUrl = GetTargetImageUrlForCreateTarget()
+            targetImageUrl = GetTargetImageUrlForCreateTarget(),
+            workspaceId = wsId,
+            workspaceName = wsName
         });
 
         if (!localResult.success)
@@ -1151,7 +1341,9 @@ public class AuthoringUIController : MonoBehaviour
                 targetName = normalizedName,
                 targetId = normalizedTargetId,
                 displayLabel = displayLabel,
-                targetImageUrl = targetImageUrl
+                targetImageUrl = targetImageUrl,
+                workspaceId = wsId,
+                workspaceName = wsName
             },
             localResult.targetObject,
             OnCreateTargetSyncCompleted,
@@ -1251,9 +1443,27 @@ public class AuthoringUIController : MonoBehaviour
 
     private void OnCreateTargetSyncCompleted(ApiResult<CreateTargetResponseDto> result)
     {
-        if (result != null && result.success)
+        if (result != null && result.success && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.targetId))
         {
-            Debug.Log($"CreateTarget sync success: {result.payload?.targetId}");
+            string tid = result.payload.targetId.Trim();
+            AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
+            if (registry != null)
+            {
+                foreach (AuthoredTargetInstance t in registry.GetTargetsOrdered())
+                {
+                    if (t == null)
+                        continue;
+                    if (string.Equals(t.ServerTargetId, tid, StringComparison.Ordinal)
+                        || string.Equals(t.LocalTargetId, tid, StringComparison.Ordinal))
+                    {
+                        t.RemoteDirty = false;
+                        t.LastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
+                        break;
+                    }
+                }
+            }
+
+            Debug.Log($"CreateTarget sync success: {tid}");
             return;
         }
 
@@ -1591,6 +1801,7 @@ public class AuthoringUIController : MonoBehaviour
 
     [Tooltip("相对墙面沿法线微移，减轻与 TargetVisual 灰框 Z-fighting")]
     [SerializeField] private float spawnForwardOffsetFromWall = 0.008f;
+    [SerializeField] private WorkspaceRemoteSyncService remoteSyncService;
 
     /// <param name="alignToTargetFrame">图片应对齐场景中 TargetVisual 海报框的位置与缩放；文字一般保持 ContentRoot 原点。</param>
     private void ParentNewContentToActiveTarget(GameObject instance, bool alignToTargetFrame)
@@ -2105,7 +2316,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         else
             autoSave.FlushSnapshotToDisk();
 
-        FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
+        ResolveRemoteSyncService()?.SyncNow();
 
         AppFlowController.ClearWorkspaceSession();
         Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
@@ -2123,7 +2334,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             saveButton.text = "Nothing to save";
             saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(1600);
             isSaveInProgress = false;
-            FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
+            ResolveRemoteSyncService()?.SyncNow();
             yield break;
         }
 
@@ -2186,7 +2397,6 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         isSaveInProgress = false;
         RefreshHierarchyListFromCoordinator();
-        FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
     }
 
     private void MarkLibraryItemSavedByTransform(Transform transform, bool saved)
@@ -2321,6 +2531,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             result =>
             {
                 success = result != null && result.success;
+                if (success)
+                    MarkContentSyncedAfterManualSave(draft);
                 if (!success)
                 {
                     string code = result != null ? result.errorCode : ApiErrorCodes.Unknown;
@@ -2337,6 +2549,23 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             yield return null;
 
         onCompleted?.Invoke(success);
+    }
+
+    private static void MarkContentSyncedAfterManualSave(ContentDraftState draft)
+    {
+        if (draft?.contentTransform == null)
+            return;
+
+        AuthoredContentInstance ac = draft.contentTransform.GetComponent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInParent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+        if (ac == null)
+            return;
+
+        ac.RemoteDirty = false;
+        ac.LastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
+        if (!string.IsNullOrWhiteSpace(draft.mediaUrl))
+            ac.MediaUrl = draft.mediaUrl.Trim();
     }
 
     /// <summary>

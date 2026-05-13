@@ -75,6 +75,14 @@ public class HttpApiClient : MonoBehaviour, IApiClient
 
         string url = BuildUrl(uploadEndpoint);
         var form = new WWWForm();
+        string cat = string.IsNullOrWhiteSpace(request.uploadCategory) ? "content" : request.uploadCategory.Trim().ToLowerInvariant();
+        if (cat != "content" && cat != "target" && cat != "target_ref")
+            cat = "content";
+        form.AddField("category", cat);
+        if (cat == "target" && !string.IsNullOrWhiteSpace(request.targetId))
+            form.AddField("targetId", request.targetId.Trim());
+        if (cat == "content" && !string.IsNullOrWhiteSpace(request.contentId))
+            form.AddField("contentId", request.contentId.Trim());
         string fileName = string.IsNullOrWhiteSpace(request.fileName) ? "upload.bin" : request.fileName;
         form.AddBinaryData("file", request.fileBytes, fileName, string.IsNullOrWhiteSpace(request.mimeType) ? "application/octet-stream" : request.mimeType);
 
@@ -94,6 +102,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
             {
                 string err = $"Upload failed: {uwr.error} HTTP {(long)uwr.responseCode}";
                 onCompleted?.Invoke(ApiResult<UploadFileResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            if (IsNonSuccessHttpStatus(uwr, out int httpStatus))
+            {
+                string errorBody = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"Upload failed: HTTP {httpStatus}";
+                string errMsg = ExtractServerErrorMessage(errorBody, fallback);
+                string errCode = ExtractServerErrorCode(errorBody, ApiErrorCodes.ServerError);
+                onCompleted?.Invoke(ApiResult<UploadFileResponseDto>.Fail(errCode, errMsg, httpStatus));
                 handle.MarkDone();
                 yield break;
             }
@@ -174,6 +193,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
                 yield break;
             }
 
+            if (IsNonSuccessHttpStatus(uwr, out int httpStatus))
+            {
+                string errorBody = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"CreateTarget failed: HTTP {httpStatus}";
+                string err = ExtractServerErrorMessage(errorBody, fallback);
+                string code = ExtractServerErrorCode(errorBody, ApiErrorCodes.ServerError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, httpStatus));
+                handle.MarkDone();
+                yield break;
+            }
+
             string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
             CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
             if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
@@ -241,6 +271,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
                 yield break;
             }
 
+            if (IsNonSuccessHttpStatus(uwr, out int httpStatus))
+            {
+                string errorBody = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"CreateContent failed: HTTP {httpStatus}";
+                string err = ExtractServerErrorMessage(errorBody, fallback);
+                string code = ExtractServerErrorCode(errorBody, ApiErrorCodes.ServerError);
+                onCompleted?.Invoke(ApiResult<CreateContentResponseDto>.Fail(code, err, httpStatus));
+                handle.MarkDone();
+                yield break;
+            }
+
             string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
             CreateContentResponseDto parsed = JsonUtility.FromJson<CreateContentResponseDto>(body);
             if (parsed == null || string.IsNullOrWhiteSpace(parsed.contentId))
@@ -282,6 +323,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         form.AddField("targetName", targetName);
         form.AddField("displayLabel", string.IsNullOrWhiteSpace(request.displayLabel) ? targetName : request.displayLabel.Trim());
         form.AddField("workspaceId", string.IsNullOrWhiteSpace(request.workspaceId) ? "default" : request.workspaceId.Trim());
+        form.AddField("workspaceName", request.workspaceName != null ? request.workspaceName.Trim() : "");
         form.AddField("width", Mathf.Max(0.01f, request.width).ToString(System.Globalization.CultureInfo.InvariantCulture));
         form.AddField("localPosition", JsonUtility.ToJson(request.localPosition ?? new ApiVector3Dto(0f, 0f, 0f)));
         form.AddField("localEuler", JsonUtility.ToJson(request.localEuler ?? new ApiVector3Dto(0f, 0f, 0f)));
@@ -312,6 +354,16 @@ public class HttpApiClient : MonoBehaviour, IApiClient
                 yield break;
             }
 
+            if (IsNonSuccessHttpStatus(uwr, out int httpStatus))
+            {
+                string fallback = $"CreateCloudTarget failed: HTTP {httpStatus}";
+                string err = ExtractServerErrorMessage(body, fallback);
+                string code = ExtractServerErrorCode(body, ApiErrorCodes.ServerError);
+                onCompleted?.Invoke(ApiResult<CreateTargetResponseDto>.Fail(code, err, httpStatus));
+                handle.MarkDone();
+                yield break;
+            }
+
             CreateTargetResponseDto parsed = JsonUtility.FromJson<CreateTargetResponseDto>(body);
             if (parsed == null || string.IsNullOrWhiteSpace(parsed.targetId))
             {
@@ -334,6 +386,17 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         public string message;
         public string errorCode;
         public string details;
+    }
+
+    /// <summary>
+    /// <see cref="UnityWebRequest.Result.Success"/> does not always imply HTTP 2xx on every platform;
+    /// reject non-2xx so error JSON is not mis-parsed as a success DTO.
+    /// </summary>
+    private static bool IsNonSuccessHttpStatus(UnityWebRequest uwr, out int statusCode)
+    {
+        statusCode = uwr != null ? (int)uwr.responseCode : 0;
+        long code = statusCode;
+        return code < 200 || code > 299;
     }
 
     private static ApiErrorBody ParseErrorBody(string body)

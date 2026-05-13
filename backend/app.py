@@ -202,6 +202,21 @@ def _workspace_id_from_payload(data: dict, default: str = "default"):
     return workspace_id, None
 
 
+def _ensure_workspace_row(cur, workspace_id: str, workspace_name: str | None = None) -> str:
+    """Insert workspace if missing so targets.workspace_id FK succeeds for non-default workspaces."""
+    wid = (workspace_id or "default").strip() or "default"
+    wname = (workspace_name or wid).strip() or wid
+    cur.execute(
+        """
+        INSERT INTO workspaces (workspace_id, workspace_name, state, schema_version, legacy_source)
+        VALUES (%s, %s, 'ready'::workspace_state, 1, FALSE)
+        ON CONFLICT (workspace_id) DO NOTHING;
+        """,
+        (wid, wname),
+    )
+    return wid
+
+
 def _physical_width_from_payload(data: dict, default: float = 1.0):
     raw = data.get("physicalWidthM", default)
     if raw is None:
@@ -299,6 +314,27 @@ def _guess_ext_from_magic(file_storage) -> str:
     return ""
 
 
+def _disk_filename_for_target_image(target_id: str, source_filename: str) -> str:
+    """Stable on-disk name for a target image so cloud upload and /api/upload do not duplicate bytes under different stems."""
+    ext = os.path.splitext(source_filename or "")[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        ext = ".jpg"
+    stem = secure_filename((target_id or "").strip()) or "target"
+    return f"{stem}{ext}"
+
+
+def _disk_filename_for_content_asset(content_id: str, source_filename: str) -> str:
+    """Stable on-disk name per contentId so re-sync overwrites instead of large-47-<uuid>.jpg."""
+    ext = os.path.splitext(source_filename or "")[1].lower()
+    if not ext:
+        ext = ".bin"
+    ext_key = ext.lstrip(".")
+    if ext_key not in ALLOWED_EXTENSIONS:
+        ext = ".bin"
+    stem = secure_filename((content_id or "").strip()) or "content"
+    return f"{stem}{ext}"
+
+
 def _resolve_safe_upload_filename(file_storage, upload_dir: str) -> str:
     original = secure_filename(file_storage.filename or "")
     stem, ext = os.path.splitext(original)
@@ -316,6 +352,30 @@ def _resolve_safe_upload_filename(file_storage, upload_dir: str) -> str:
         candidate = f"{base_stem}-{uuid.uuid4().hex[:8]}{base_ext}"
 
     return candidate
+
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    """Which Postgres database this process uses, plus row counts (sanity check vs TablePlus)."""
+    body = {"ok": True, "publicBaseUrl": PUBLIC_BASE_URL, "configuredDbName": DB_NAME}
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT current_database();")
+                body["postgresDatabase"] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM workspaces;")
+                body["workspaces"] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM targets;")
+                body["targets"] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM contents;")
+                body["contents"] = cur.fetchone()[0]
+        return jsonify(body), 200
+    except Exception as e:
+        logger.warning("Health check database probe failed: %s", e)
+        body["ok"] = False
+        body["postgresDatabase"] = None
+        body["error"] = str(e)
+        return jsonify(body), 503
 
 
 @app.errorhandler(404)
@@ -353,17 +413,38 @@ def upload_file():
         return error_response(f"File type .{ext} is not allowed.", "VALIDATION_ERROR", 415)
 
     try:
-        filename = _resolve_safe_upload_filename(file, UPLOAD_CONTENT_FOLDER)
-        save_path = os.path.join(UPLOAD_CONTENT_FOLDER, filename)
+        raw_cat = (request.form.get("category") or request.form.get("uploadCategory") or "content").strip().lower()
+        if raw_cat in ("target", "target_image", "targets"):
+            upload_dir, url_segment = UPLOAD_TARGET_FOLDER, "target"
+        elif raw_cat in ("target_ref", "targetref", "reference"):
+            upload_dir, url_segment = UPLOAD_TARGET_REF_FOLDER, "target_ref"
+        else:
+            upload_dir, url_segment = UPLOAD_CONTENT_FOLDER, "content"
+
+        target_id_hint = (request.form.get("targetId") or "").strip()
+        content_id_hint = (request.form.get("contentId") or "").strip()
+        # Deterministic names when client passes ids (sync): overwrite same path instead of UUID suffix collision names.
+        if url_segment == "target" and target_id_hint:
+            filename = _disk_filename_for_target_image(target_id_hint, file.filename)
+        elif url_segment == "content" and content_id_hint:
+            filename = _disk_filename_for_content_asset(content_id_hint, file.filename)
+        else:
+            filename = _resolve_safe_upload_filename(file, upload_dir)
+
+        save_path = os.path.join(upload_dir, filename)
         file.save(save_path)
         size_bytes = os.path.getsize(save_path)
         mime_type = getattr(file, "mimetype", "") or "application/octet-stream"
         uploaded_at = utc_now_iso()
-        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/content/{filename}"
+        file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/{url_segment}/{filename}"
 
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    if url_segment == "target" and target_id_hint:
+                        cur.execute("DELETE FROM uploads WHERE stored_file_name = %s;", (filename,))
+                    if url_segment == "content" and content_id_hint:
+                        cur.execute("DELETE FROM uploads WHERE stored_file_name = %s;", (filename,))
                     cur.execute(
                         """
                         INSERT INTO uploads (file_name, stored_file_name, mime_type, size_bytes, url)
@@ -374,7 +455,7 @@ def upload_file():
         except psycopg2.Error:
             logger.warning("Upload saved but metadata insert failed:\n%s", traceback.format_exc())
 
-        logger.info("File uploaded: %s (mimetype=%s)", filename, mime_type)
+        logger.info("File uploaded [%s]: %s (mimetype=%s)", url_segment, filename, mime_type)
         return jsonify(
             {
                 "url": file_url,
@@ -431,6 +512,9 @@ def create_target():
     workspace_id, err_msg = _workspace_id_from_payload(data)
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
+    workspace_name_hint, err_msg = _clean_text(data, "workspaceName")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
     physical_width_m, err_msg = _physical_width_from_payload(data, default=1.0)
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
@@ -438,6 +522,7 @@ def create_target():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                _ensure_workspace_row(cur, workspace_id, workspace_name_hint or None)
                 cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
                 existed = cur.fetchone() is not None
                 status = "accepted" if existed else "created"
@@ -509,6 +594,7 @@ def create_cloud_target():
     if not target_name:
         return error_response("targetName is required.", "VALIDATION_ERROR", 400)
     workspace_id = (request.form.get("workspaceId") or "default").strip() or "default"
+    workspace_name_form = (request.form.get("workspaceName") or "").strip()
 
     local_position_raw, err_msg = _parse_form_json("localPosition", {"x": 0.0, "y": 0.0, "z": 0.0})
     if err_msg:
@@ -547,10 +633,10 @@ def create_cloud_target():
 
     try:
         image_bytes = file.read()
-        file.stream.seek(0)
-        filename = _resolve_safe_upload_filename(file, UPLOAD_TARGET_FOLDER)
+        filename = _disk_filename_for_target_image(target_id, file.filename)
         save_path = os.path.join(UPLOAD_TARGET_FOLDER, filename)
-        file.save(save_path)
+        with open(save_path, "wb") as out:
+            out.write(image_bytes)
         file_url = f"{PUBLIC_BASE_URL.rstrip('/')}/uploads/target/{filename}"
         target_width = float(request.form.get("width") or VUFORIA_CONFIG.target_width)
 
@@ -566,6 +652,7 @@ def create_cloud_target():
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                _ensure_workspace_row(cur, workspace_id, workspace_name_form or None)
                 cur.execute("SELECT 1 FROM targets WHERE target_id = %s;", (target_id,))
                 existed = cur.fetchone() is not None
                 status = "accepted" if existed else "created"

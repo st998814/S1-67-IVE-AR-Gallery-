@@ -6,6 +6,16 @@ using UnityEngine;
 
 namespace ARGallery.Workspace.Persistence
 {
+    /// <summary>Bootstrap-style UI phases for <see cref="WorkspaceRemoteSyncService.RemoteSyncToastChanged"/>.</summary>
+    public enum WorkspaceRemoteSyncToastKind
+    {
+        Debouncing,
+        Syncing,
+        Synced,
+        Failed,
+        Skipped
+    }
+
     /// <summary>
     /// Layer 3: debounced backend sync after successful local snapshot saves (<see cref="WorkspaceAutoSaveService.SnapshotSaved"/>).
     /// Single-flight with <see cref="SyncNow"/> for immediate flush. Does not modify backend repo layout.
@@ -13,6 +23,9 @@ namespace ARGallery.Workspace.Persistence
     public sealed class WorkspaceRemoteSyncService : MonoBehaviour
     {
         private const string LogPrefix = "[WorkspaceRemoteSync] ";
+
+        /// <summary>Fired on the Unity main thread when remote sync status changes (for UXML toast / alerts).</summary>
+        public event Action<WorkspaceRemoteSyncToastKind, string> RemoteSyncToastChanged;
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
         [SerializeField] [Min(5f)] private float remoteSyncDebounceSeconds = 20f;
@@ -33,6 +46,11 @@ namespace ARGallery.Workspace.Persistence
         private bool _lastStepOk;
 
         private float EffectiveDebounceSeconds => Mathf.Max(5f, remoteSyncDebounceSeconds);
+
+        private void RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind kind, string message)
+        {
+            RemoteSyncToastChanged?.Invoke(kind, message ?? "");
+        }
 
         private void OnEnable()
         {
@@ -80,6 +98,9 @@ namespace ARGallery.Workspace.Persistence
             if (_debounceCoroutine != null)
                 StopCoroutine(_debounceCoroutine);
             _debounceCoroutine = StartCoroutine(DebounceThenStartSyncRoutine());
+            int sec = Mathf.RoundToInt(EffectiveDebounceSeconds);
+            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Debouncing,
+                $"Backend sync will start in about {sec} second{(sec == 1 ? "" : "s")}.");
         }
 
         private IEnumerator DebounceThenStartSyncRoutine()
@@ -135,6 +156,7 @@ namespace ARGallery.Workspace.Persistence
         private IEnumerator SyncCoroutineWrapper()
         {
             _syncInProgress = true;
+            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Syncing, "Uploading targets and content to the server…");
             bool runAgain = false;
             try
             {
@@ -168,6 +190,7 @@ namespace ARGallery.Workspace.Persistence
                 || string.IsNullOrWhiteSpace(session.workspaceId))
             {
                 Debug.LogWarning($"{LogPrefix}Sync skipped: no workspace session.");
+                RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Skipped, "Cloud sync skipped: no workspace session.");
                 yield break;
             }
 
@@ -185,7 +208,7 @@ namespace ARGallery.Workspace.Persistence
             {
                 if (target == null)
                     continue;
-                yield return StartCoroutine(SyncTargetToBackend(api, workspaceId, target));
+                yield return StartCoroutine(SyncTargetToBackend(api, workspaceId, workspaceName, target));
                 if (!_lastStepOk)
                 {
                     PersistRemoteStateFailed($"Target sync failed for '{target.LocalTargetId}'.");
@@ -209,12 +232,18 @@ namespace ARGallery.Workspace.Persistence
             Debug.Log($"{LogPrefix}Remote sync completed for workspace '{workspaceId}'.");
         }
 
-        private IEnumerator SyncTargetToBackend(IApiClient api, string workspaceId, AuthoredTargetInstance target)
+        private IEnumerator SyncTargetToBackend(IApiClient api, string workspaceId, string workspaceName, AuthoredTargetInstance target)
         {
             _lastStepOk = false;
             string targetId = string.IsNullOrWhiteSpace(target.LocalTargetId) ? target.ServerTargetId : target.LocalTargetId;
             string targetName = string.IsNullOrWhiteSpace(target.TargetName) ? targetId : target.TargetName.Trim();
             string displayLabel = targetName;
+
+            if (!target.RemoteDirty && !string.IsNullOrWhiteSpace(target.LastRemoteSyncedAtUtc))
+            {
+                _lastStepOk = true;
+                yield break;
+            }
 
             string imageUrl = "";
             if (!string.IsNullOrWhiteSpace(target.TargetImageLocalPath))
@@ -236,7 +265,8 @@ namespace ARGallery.Workspace.Persistence
                     string uploadName = string.IsNullOrWhiteSpace(target.OriginalFileName)
                         ? Path.GetFileName(full)
                         : target.OriginalFileName.Trim();
-                    yield return StartCoroutine(UploadBytesAndWait(api, bytes, uploadName, GuessMimeTypeFromName(uploadName)));
+                    string stableUploadName = StableTargetDiskFileName(targetId, uploadName);
+                    yield return StartCoroutine(UploadBytesAndWait(api, bytes, stableUploadName, GuessMimeTypeFromName(stableUploadName), "target", targetId));
                     if (string.IsNullOrWhiteSpace(_lastUploadUrl))
                     {
                         Debug.LogWarning($"{LogPrefix}Target image upload failed for '{targetId}'.");
@@ -255,6 +285,8 @@ namespace ARGallery.Workspace.Persistence
                 targetName,
                 displayLabel,
                 imageUrl,
+                workspaceId,
+                workspaceName,
                 result => apiOk = result != null && result.success,
                 apiTimeoutSeconds);
 
@@ -287,6 +319,12 @@ namespace ARGallery.Workspace.Persistence
                 if (string.IsNullOrWhiteSpace(c.LocalContentId))
                     c.LocalContentId = Guid.NewGuid().ToString("N");
                 c.ServerContentId = c.LocalContentId;
+            }
+
+            if (!c.RemoteDirty && !string.IsNullOrWhiteSpace(c.LastRemoteSyncedAtUtc))
+            {
+                _lastStepOk = true;
+                yield break;
             }
 
             string targetId = c.TargetId ?? "";
@@ -329,7 +367,7 @@ namespace ARGallery.Workspace.Persistence
                         string uploadName = string.IsNullOrWhiteSpace(c.OriginalFileName)
                             ? Path.GetFileName(full)
                             : c.OriginalFileName.Trim();
-                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, uploadName, GuessMimeTypeFromName(uploadName)));
+                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, uploadName, GuessMimeTypeFromName(uploadName), "content", null, c.ServerContentId));
                         if (string.IsNullOrWhiteSpace(_lastUploadUrl))
                         {
                             Debug.LogWarning($"{LogPrefix}Content upload failed for '{c.LocalContentId}'.");
@@ -404,17 +442,21 @@ namespace ARGallery.Workspace.Persistence
             _lastStepOk = apiOk;
         }
 
-        private IEnumerator UploadBytesAndWait(IApiClient api, byte[] bytes, string fileName, string mimeType)
+        private IEnumerator UploadBytesAndWait(IApiClient api, byte[] bytes, string fileName, string mimeType, string uploadCategory = "content", string stableTargetId = null, string stableContentId = null)
         {
             _lastUploadUrl = null;
             if (bytes == null || bytes.Length == 0)
                 yield break;
 
+            string cat = string.IsNullOrWhiteSpace(uploadCategory) ? "content" : uploadCategory.Trim().ToLowerInvariant();
             var request = new UploadFileRequestDto
             {
                 fileName = string.IsNullOrWhiteSpace(fileName) ? "upload.bin" : fileName.Trim(),
                 mimeType = string.IsNullOrWhiteSpace(mimeType) ? "application/octet-stream" : mimeType,
                 fileBytes = bytes,
+                uploadCategory = cat,
+                targetId = cat == "target" && !string.IsNullOrWhiteSpace(stableTargetId) ? stableTargetId.Trim() : "",
+                contentId = cat == "content" && !string.IsNullOrWhiteSpace(stableContentId) ? stableContentId.Trim() : "",
                 meta = new ApiSyncMetaDto
                 {
                     schemaVersion = "v1",
@@ -456,11 +498,15 @@ namespace ARGallery.Workspace.Persistence
 
             if (!_snapshotRepo.TrySaveSnapshot(snap, out string err))
                 Debug.LogWarning($"{LogPrefix}Post-sync snapshot save failed: {err}");
+
+            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Synced, "Workspace synchronized with the server.");
         }
 
         private void PersistRemoteStateFailed(string message)
         {
-            Debug.LogWarning($"{LogPrefix}{message}");
+            string m = string.IsNullOrWhiteSpace(message) ? "Remote sync failed." : message.Trim();
+            Debug.LogWarning($"{LogPrefix}{m}");
+            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Failed, m);
 
             if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
                 || string.IsNullOrWhiteSpace(session.workspaceId))
@@ -477,7 +523,7 @@ namespace ARGallery.Workspace.Persistence
             _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
             WorkspaceSnapshot snap = WorkspaceStateSerializer.BuildSnapshot(workspaceId, workspaceName, registry, existing);
             snap.remoteDirty = true;
-            snap.lastRemoteSyncError = message ?? "";
+            snap.lastRemoteSyncError = m;
             snap.remoteSyncStatus = RemoteSyncStatus.Failed;
 
             if (!_snapshotRepo.TrySaveSnapshot(snap, out string err))
@@ -491,6 +537,28 @@ namespace ARGallery.Workspace.Persistence
 
             Debug.LogWarning($"{LogPrefix}apiClientBehaviour must implement IApiClient.");
             return null;
+        }
+
+        private static string StableTargetDiskFileName(string targetId, string originalNameForExt)
+        {
+            string ext = Path.GetExtension(string.IsNullOrWhiteSpace(originalNameForExt) ? "" : originalNameForExt);
+            ext = string.IsNullOrEmpty(ext) ? ".jpg" : ext.ToLowerInvariant();
+            if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".gif" && ext != ".webp")
+                ext = ".jpg";
+
+            string id = string.IsNullOrWhiteSpace(targetId) ? "target" : targetId.Trim();
+            char[] chArr = id.ToCharArray();
+            for (int i = 0; i < chArr.Length; i++)
+            {
+                char c = chArr[i];
+                if (char.IsWhiteSpace(c) || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+                    chArr[i] = '_';
+            }
+
+            string safe = new string(chArr).Trim('_');
+            if (string.IsNullOrEmpty(safe))
+                safe = "target";
+            return $"{safe}{ext}";
         }
 
         private static string GuessMimeTypeFromName(string fileName)

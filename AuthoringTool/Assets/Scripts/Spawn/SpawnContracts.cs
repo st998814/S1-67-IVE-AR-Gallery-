@@ -78,6 +78,9 @@ namespace ARGallery.Spawning
         public string targetId = "";
         public string displayLabel = "";
         public string targetImageUrl = "";
+        /// <summary>Must match backend workspaces.workspace_id (session workspace GUID).</summary>
+        public string workspaceId = "";
+        public string workspaceName = "";
     }
 
     /// <summary>
