@@ -172,6 +172,8 @@ namespace ARGallery.Workspace.Persistence
             authored.TargetName = ts.targetName ?? "";
             authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
             authored.OriginalFileName = ts.originalFileName ?? "";
+            authored.RemoteDirty = ts.remoteDirty;
+            authored.LastRemoteSyncedAtUtc = ts.lastRemoteSyncedAtUtc ?? "";
 
             return true;
         }
@@ -292,6 +294,8 @@ namespace ARGallery.Workspace.Persistence
             ac.IsUnsaved = cs.isUnsaved;
             ac.UploadPending = cs.uploadPending;
             ac.PersistPending = cs.persistPending;
+            ac.RemoteDirty = cs.remoteDirty;
+            ac.LastRemoteSyncedAtUtc = cs.lastRemoteSyncedAtUtc ?? "";
         }
 
         private static void ApplyVideoFileUrl(GameObject go, string absolutePath)

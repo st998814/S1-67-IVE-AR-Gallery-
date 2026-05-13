@@ -15,6 +15,14 @@ namespace ARGallery.Workspace.Persistence
         public string workspaceName = "";
         public string createdAtUtc = "";
         public string updatedAtUtc = "";
+        /// <summary>Layer 3: true when local changes need a backend flush.</summary>
+        public bool remoteDirty;
+        /// <summary>ISO-8601 UTC of last successful remote sync for this workspace snapshot.</summary>
+        public string lastRemoteSyncedAtUtc = "";
+        /// <summary>Last Layer 3 failure message; empty when clean.</summary>
+        public string lastRemoteSyncError = "";
+        /// <summary>One of <see cref="RemoteSyncStatus"/> constants.</summary>
+        public string remoteSyncStatus = RemoteSyncStatus.LocalOnly;
         public TargetSnapshot[] targets = Array.Empty<TargetSnapshot>();
         public ContentSnapshot[] contents = Array.Empty<ContentSnapshot>();
     }
@@ -32,6 +40,10 @@ namespace ARGallery.Workspace.Persistence
         public Vector3Data position = new Vector3Data(0f, 0f, 0f);
         public Vector3Data rotation = new Vector3Data(0f, 0f, 0f);
         public Vector3Data scale = new Vector3Data(1f, 1f, 1f);
+        /// <summary>Layer 3: target row needs or awaits backend upsert.</summary>
+        public bool remoteDirty;
+        /// <summary>ISO-8601 UTC of last successful remote sync for this target snapshot row.</summary>
+        public string lastRemoteSyncedAtUtc = "";
     }
 
     /// <summary>Serialized content kinds; align with spawn pipeline naming.</summary>
@@ -57,6 +69,10 @@ namespace ARGallery.Workspace.Persistence
         public bool isUnsaved;
         public bool uploadPending;
         public bool persistPending;
+        /// <summary>Layer 3: content row needs or awaits backend upsert.</summary>
+        public bool remoteDirty;
+        /// <summary>ISO-8601 UTC of last successful remote sync for this content snapshot row.</summary>
+        public string lastRemoteSyncedAtUtc = "";
     }
 
     /// <summary>Wrapper for workspace-index.json (JsonUtility requires named root object).</summary>

@@ -18,6 +18,11 @@ namespace ARGallery.Workspace.Persistence
         public string TargetImageLocalPath = "";
         public string OriginalFileName = "";
 
+        /// <summary>Layer 3: persists with <see cref="TargetSnapshot.remoteDirty"/>.</summary>
+        public bool RemoteDirty;
+        /// <summary>ISO-8601 UTC; aligns with <see cref="TargetSnapshot.lastRemoteSyncedAtUtc"/>.</summary>
+        public string LastRemoteSyncedAtUtc = "";
+
         private void Awake()
         {
             AuthoredObjectRegistry.RegisterTarget(this);

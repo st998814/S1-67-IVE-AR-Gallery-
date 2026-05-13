@@ -30,6 +30,8 @@ namespace ARGallery.Workspace.Persistence
                     : utcNow
             };
 
+            MergeWorkspaceRemoteFieldsFromExisting(snapshot, existingForTimestamps);
+
             if (registry == null)
             {
                 snapshot.targets = Array.Empty<TargetSnapshot>();
@@ -40,6 +42,22 @@ namespace ARGallery.Workspace.Persistence
             snapshot.targets = BuildTargetSnapshots(registry);
             snapshot.contents = BuildContentSnapshots(registry);
             return snapshot;
+        }
+
+        /// <summary>
+        /// Preserves Layer 3 workspace-level fields across local rebuilds so autosave does not wipe sync metadata.
+        /// </summary>
+        private static void MergeWorkspaceRemoteFieldsFromExisting(WorkspaceSnapshot snapshot, WorkspaceSnapshot existing)
+        {
+            if (snapshot == null || existing == null)
+                return;
+
+            snapshot.remoteDirty = existing.remoteDirty;
+            snapshot.lastRemoteSyncedAtUtc = existing.lastRemoteSyncedAtUtc ?? "";
+            snapshot.lastRemoteSyncError = existing.lastRemoteSyncError ?? "";
+            snapshot.remoteSyncStatus = string.IsNullOrWhiteSpace(existing.remoteSyncStatus)
+                ? RemoteSyncStatus.LocalOnly
+                : existing.remoteSyncStatus;
         }
 
         private static TargetSnapshot[] BuildTargetSnapshots(AuthoredObjectRegistry registry)
@@ -84,7 +102,9 @@ namespace ARGallery.Workspace.Persistence
                 originalFileName = t.OriginalFileName ?? "",
                 position = new Vector3Data(tr.localPosition),
                 rotation = new Vector3Data(tr.localEulerAngles),
-                scale = new Vector3Data(tr.localScale)
+                scale = new Vector3Data(tr.localScale),
+                remoteDirty = t.RemoteDirty,
+                lastRemoteSyncedAtUtc = t.LastRemoteSyncedAtUtc ?? ""
             };
         }
 
@@ -113,7 +133,9 @@ namespace ARGallery.Workspace.Persistence
                 scale = new Vector3Data(tr.localScale),
                 isUnsaved = c.IsUnsaved,
                 uploadPending = c.UploadPending,
-                persistPending = c.PersistPending
+                persistPending = c.PersistPending,
+                remoteDirty = c.RemoteDirty,
+                lastRemoteSyncedAtUtc = c.LastRemoteSyncedAtUtc ?? ""
             };
         }
 
