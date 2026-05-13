@@ -1,3 +1,6 @@
+/* =========================================
+   1. 基础布局与面板样式 (保持你原有的优秀结构)
+   ========================================= */
 .authoring-root {
     flex-grow: 1;
     background-color: rgba(0, 0, 0, 0);
@@ -18,17 +21,9 @@
     border-bottom-color: rgb(31, 41, 51);
 }
 
-.text-primary {
-    color: rgb(229, 231, 235);
-}
-
-.text-secondary {
-    color: rgb(156, 163, 175);
-}
-
-.text-disabled {
-    color: rgb(107, 114, 128);
-}
+.text-primary { color: rgb(229, 231, 235); }
+.text-secondary { color: rgb(156, 163, 175); }
+.text-disabled { color: rgb(107, 114, 128); }
 
 .workspace-layout {
     flex-grow: 1;
@@ -42,13 +37,8 @@
     padding: 10px;
 }
 
-.panel--collapsed {
-    display: none;
-}
-
-.panel--expanded {
-    display: flex;
-}
+.panel--collapsed { display: none; }
+.panel--expanded { display: flex; }
 
 .panel-toggle {
     width: 24px;
@@ -68,11 +58,7 @@
     color: rgb(229, 231, 235);
     border-radius: 4px;
 }
-
-.button:hover {
-    background-color: rgb(55, 65, 81);
-}
-
+.button:hover { background-color: rgb(55, 65, 81); }
 .button--active {
     background-color: rgb(59, 130, 246);
     border-color: rgb(59, 130, 246);
@@ -95,10 +81,7 @@
     -unity-font-style: bold;
     -unity-text-align: middle-center;
 }
-
-.authoring-add-fab:hover {
-    background-color: rgb(31, 41, 51);
-}
+.authoring-add-fab:hover { background-color: rgb(31, 41, 51); }
 
 .input-field {
     background-color: rgb(17, 24, 39);
@@ -106,48 +89,33 @@
     border-color: rgb(55, 65, 81);
     color: rgb(229, 231, 235);
 }
+.input-field:focus { border-color: rgb(59, 130, 246); }
 
-.input-field:focus {
-    border-color: rgb(59, 130, 246);
-}
+#PosXInput .unity-base-field__label, #PosYInput .unity-base-field__label, #PosZInput .unity-base-field__label { color: rgb(229, 231, 235); }
+#PosXInput .unity-text-input, #PosYInput .unity-text-input, #PosZInput .unity-text-input { color: rgb(0, 0, 0); background-color: rgb(255, 255, 255); }
+#PosXInput .unity-base-text-field__input, #PosYInput .unity-base-text-field__input, #PosZInput .unity-base-text-field__input,
+#PosXInput .unity-text-field__input, #PosYInput .unity-text-field__input, #PosZInput .unity-text-field__input,
+#PosXInput .unity-base-field__input, #PosYInput .unity-base-field__input, #PosZInput .unity-base-field__input { color: rgb(0, 0, 0); background-color: rgb(255, 255, 255); }
 
-#PosXInput .unity-base-field__label,
-#PosYInput .unity-base-field__label,
-#PosZInput .unity-base-field__label {
-    color: rgb(229, 231, 235);
-}
 
-#PosXInput .unity-text-input,
-#PosYInput .unity-text-input,
-#PosZInput .unity-text-input {
-    color: rgb(0, 0, 0);
-    background-color: rgb(255, 255, 255);
-}
+/* =========================================
+   2. Bootstrap 5 风格悬浮弹窗 (核心升级区)
+   ========================================= */
 
-#PosXInput .unity-base-text-field__input,
-#PosYInput .unity-base-text-field__input,
-#PosZInput .unity-base-text-field__input,
-#PosXInput .unity-text-field__input,
-#PosYInput .unity-text-field__input,
-#PosZInput .unity-text-field__input,
-#PosXInput .unity-base-field__input,
-#PosYInput .unity-base-field__input,
-#PosZInput .unity-base-field__input {
-    color: rgb(0, 0, 0);
-    background-color: rgb(255, 255, 255);
-}
-
-/* Bootstrap 5–inspired remote sync alerts (https://getbootstrap.com/docs/5.3/components/alerts/) */
 .sync-toast {
+    /* 核心修改：绝对定位，脱离正常排版流，悬浮并居中 */
+    position: absolute;
+    top: 60px;
+    align-self: center; 
+    
     border-radius: 6px;
     border-width: 1px;
     padding: 10px 10px 10px 12px;
     flex-direction: column;
+    min-width: 250px;
 }
 
-.sync-toast--hidden {
-    display: none;
-}
+.sync-toast--hidden { display: none; }
 
 .sync-toast__dismiss {
     background-color: transparent;
@@ -155,57 +123,55 @@
     color: rgb(33, 37, 41);
     border-radius: 4px;
 }
+.sync-toast__dismiss:hover { background-color: rgba(0, 0, 0, 0.08); }
 
-.sync-toast__dismiss:hover {
-    background-color: rgba(0, 0, 0, 0.08);
+/* 各种状态的精准配色 */
+.sync-toast--debouncing { background-color: rgb(207, 244, 252); border-color: rgb(6, 182, 212); }
+.sync-toast--debouncing .sync-toast__title, .sync-toast--debouncing .sync-toast__message { color: rgb(5, 81, 96); }
+
+.sync-toast--syncing { background-color: rgb(207, 226, 255); border-color: rgb(13, 110, 253); }
+.sync-toast--syncing .sync-toast__title, .sync-toast--syncing .sync-toast__message { color: rgb(8, 66, 152); }
+
+.sync-toast--success { background-color: rgb(209, 231, 221); border-color: rgb(25, 135, 84); }
+.sync-toast--success .sync-toast__title, .sync-toast--success .sync-toast__message { color: rgb(15, 81, 50); }
+
+.sync-toast--failed { background-color: rgb(248, 215, 218); border-color: rgb(220, 53, 69); }
+.sync-toast--failed .sync-toast__title, .sync-toast--failed .sync-toast__message { color: rgb(132, 32, 41); }
+
+.sync-toast--skipped { background-color: rgb(255, 243, 205); border-color: rgb(255, 193, 7); }
+.sync-toast--skipped .sync-toast__title, .sync-toast--skipped .sync-toast__message { color: rgb(102, 77, 3); }
+/* 全局半透明黑色遮罩，挡住背后的操作 */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6); /* 60% 透明度的纯黑 */
+    justify-content: center;
+    align-items: center;
 }
 
-.sync-toast--debouncing {
-    background-color: rgb(207, 244, 252);
-    border-color: rgb(6, 182, 212);
+/* 隐藏状态 */
+.loading-overlay--hidden {
+    display: none;
 }
 
-.sync-toast--debouncing .sync-toast__title,
-.sync-toast--debouncing .sync-toast__message {
-    color: rgb(5, 81, 96);
+/* Bootstrap 风格的深色居中加载卡片 */
+.loading-card {
+    background-color: rgb(33, 37, 41); /* Bootstrap Dark 色值 */
+    border-radius: 8px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    padding-left: 32px;
+    padding-right: 32px;
+    align-items: center;
+    border-width: 1px;
+    border-color: rgb(73, 80, 87);
 }
 
-.sync-toast--syncing {
-    background-color: rgb(207, 226, 255);
-    border-color: rgb(13, 110, 253);
-}
-
-.sync-toast--syncing .sync-toast__title,
-.sync-toast--syncing .sync-toast__message {
-    color: rgb(8, 66, 152);
-}
-
-.sync-toast--success {
-    background-color: rgb(209, 231, 221);
-    border-color: rgb(25, 135, 84);
-}
-
-.sync-toast--success .sync-toast__title,
-.sync-toast--success .sync-toast__message {
-    color: rgb(15, 81, 50);
-}
-
-.sync-toast--failed {
-    background-color: rgb(248, 215, 218);
-    border-color: rgb(220, 53, 69);
-}
-
-.sync-toast--failed .sync-toast__title,
-.sync-toast--failed .sync-toast__message {
-    color: rgb(132, 32, 41);
-}
-
-.sync-toast--skipped {
-    background-color: rgb(255, 243, 205);
-    border-color: rgb(255, 193, 7);
-}
-
-.sync-toast--skipped .sync-toast__title,
-.sync-toast--skipped .sync-toast__message {
-    color: rgb(102, 77, 3);
+.loading-text {
+    color: rgb(248, 249, 250); /* Bootstrap Light 字体色 */
+    font-size: 16px;
+    -unity-font-style: bold;
 }
