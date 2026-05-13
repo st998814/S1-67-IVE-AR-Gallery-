@@ -37,7 +37,8 @@ namespace ARGallery.Workspace.Persistence
             }
         }
 
-        public bool TrySaveSnapshot(WorkspaceSnapshot snapshot, out string errorMessage)
+        /// <param name="logSuccess">When false, skips the verbose TrySaveSnapshot OK log (e.g. post–remote-sync metadata write).</param>
+        public bool TrySaveSnapshot(WorkspaceSnapshot snapshot, out string errorMessage, bool logSuccess = true)
         {
             errorMessage = null;
             if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.workspaceId))
@@ -63,7 +64,8 @@ namespace ARGallery.Workspace.Persistence
                 File.WriteAllText(path, json);
 
                 UpsertIndexEntry(id, snapshot.workspaceName ?? id, snapshot.updatedAtUtc, thumbnailKey: "");
-                Debug.Log($"[WorkspacePersistence] TrySaveSnapshot OK | path={path} | bytes≈{System.Text.Encoding.UTF8.GetByteCount(json)}");
+                if (logSuccess)
+                    Debug.Log($"[WorkspacePersistence] TrySaveSnapshot OK | path={path} | bytes≈{System.Text.Encoding.UTF8.GetByteCount(json)}");
                 return true;
             }
             catch (Exception ex)

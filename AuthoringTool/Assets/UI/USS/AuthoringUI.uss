@@ -2,6 +2,7 @@
     flex-grow: 1;
     background-color: rgba(0, 0, 0, 0);
     position: relative;
+    overflow: visible;
 }
 
 .top-bar {
@@ -187,6 +188,25 @@
 
 .sync-toast--success .sync-toast__title,
 .sync-toast--success .sync-toast__message {
+    color: rgb(15, 81, 50);
+}
+
+/* Full-width strip under top bar: single-line success banner */
+.sync-toast--success-banner {
+    flex-direction: column;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.sync-toast--success-banner .sync-toast__row {
+    align-items: center;
+}
+
+.sync-toast--success-banner .sync-toast__message {
+    -unity-text-align: middle-left;
+}
+
+.sync-toast--success-banner .sync-toast__dismiss {
     color: rgb(15, 81, 50);
 }
 

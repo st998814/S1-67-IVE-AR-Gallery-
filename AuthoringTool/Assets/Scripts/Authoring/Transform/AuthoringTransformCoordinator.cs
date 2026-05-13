@@ -581,13 +581,17 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             return;
 
         Vector3 pos = target.localPosition;
+        bool anyKey = false;
 
-        if (Keyboard.current.aKey.isPressed) pos.x -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.dKey.isPressed) pos.x += moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.wKey.isPressed) pos.y += moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.sKey.isPressed) pos.y -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.qKey.isPressed) pos.z -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.eKey.isPressed) pos.z += moveStep * Time.deltaTime * 10f;
+        if (Keyboard.current.aKey.isPressed) { pos.x -= moveStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.dKey.isPressed) { pos.x += moveStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.wKey.isPressed) { pos.y += moveStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.sKey.isPressed) { pos.y -= moveStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.qKey.isPressed) { pos.z -= moveStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.eKey.isPressed) { pos.z += moveStep * Time.deltaTime * 10f; anyKey = true; }
+
+        if (!anyKey)
+            return;
 
         target.localPosition = pos;
         authoringUI?.SyncTransformToInspector(target);
@@ -601,9 +605,13 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             return;
 
         Vector3 rot = target.localEulerAngles;
+        bool anyKey = false;
 
-        if (Keyboard.current.zKey.isPressed) rot.y -= rotateStep * Time.deltaTime * 10f;
-        if (Keyboard.current.xKey.isPressed) rot.y += rotateStep * Time.deltaTime * 10f;
+        if (Keyboard.current.zKey.isPressed) { rot.y -= rotateStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.xKey.isPressed) { rot.y += rotateStep * Time.deltaTime * 10f; anyKey = true; }
+
+        if (!anyKey)
+            return;
 
         target.localEulerAngles = rot;
         authoringUI?.SyncTransformToInspector(target);
@@ -617,9 +625,13 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             return;
 
         Vector3 scale = target.localScale;
+        bool anyKey = false;
 
-        if (Keyboard.current.cKey.isPressed) scale += Vector3.one * scaleStep * Time.deltaTime * 10f;
-        if (Keyboard.current.vKey.isPressed) scale -= Vector3.one * scaleStep * Time.deltaTime * 10f;
+        if (Keyboard.current.cKey.isPressed) { scale += Vector3.one * scaleStep * Time.deltaTime * 10f; anyKey = true; }
+        if (Keyboard.current.vKey.isPressed) { scale -= Vector3.one * scaleStep * Time.deltaTime * 10f; anyKey = true; }
+
+        if (!anyKey)
+            return;
 
         scale.x = Mathf.Max(0.1f, scale.x);
         scale.y = Mathf.Max(0.1f, scale.y);
