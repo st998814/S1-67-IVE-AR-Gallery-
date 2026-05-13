@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using ARGallery.Workspace;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UIElements;
 
 namespace ARGallery.AppFlow
@@ -47,6 +49,12 @@ namespace ARGallery.AppFlow
         private Button newButton;
         private Button editButton;
         private Button deleteWorkspaceButton;
+
+        [SerializeField]
+        [Tooltip("Backend base URL for DELETE /api/workspaces/{id} before removing local snapshot. Leave empty to only delete on-disk workspace data.")]
+        private string backendApiBaseUrl = "http://127.0.0.1:5050";
+
+        private bool workspaceDeleteBusy;
 
         private void OnEnable()
         {
@@ -429,7 +437,7 @@ namespace ARGallery.AppFlow
 
         private void OnDeleteWorkspaceClicked()
         {
-            if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0)
+            if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0 || workspaceDeleteBusy)
                 return;
 
             WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)];
@@ -437,17 +445,54 @@ namespace ARGallery.AppFlow
             if (string.IsNullOrWhiteSpace(id))
                 return;
 
-            if (!WorkspaceDeletion.TryDeleteWorkspaceEverywhere(id, out string err))
+            StartCoroutine(DeleteWorkspaceCoroutine(id));
+        }
+
+        private IEnumerator DeleteWorkspaceCoroutine(string workspaceId)
+        {
+            workspaceDeleteBusy = true;
+            string id = workspaceId.Trim();
+
+            if (string.Equals(id, "default", StringComparison.OrdinalIgnoreCase))
             {
-                Debug.LogWarning($"WorkspaceSwitcherController: delete workspace failed: {err}");
-                return;
+                Debug.LogWarning("WorkspaceSwitcherController: cannot delete reserved workspace 'default'.");
+                workspaceDeleteBusy = false;
+                yield break;
             }
 
-            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (persistent folder + index row + draft cache).");
+            if (!string.IsNullOrWhiteSpace(backendApiBaseUrl))
+            {
+                string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(id)}";
+                using (var uwr = new UnityWebRequest(url, "DELETE"))
+                {
+                    uwr.downloadHandler = new DownloadHandlerBuffer();
+                    uwr.timeout = 25;
+                    yield return uwr.SendWebRequest();
+
+                    long code = uwr.responseCode;
+                    bool accepted = code == 404 || (code >= 200 && code < 300);
+                    if (!accepted)
+                    {
+                        Debug.LogWarning($"WorkspaceSwitcherController: backend workspace delete failed ({code}): {uwr.error}");
+                        workspaceDeleteBusy = false;
+                        yield break;
+                    }
+                }
+            }
+
+            if (!WorkspaceDeletion.TryDeleteWorkspaceEverywhere(id, out string err))
+            {
+                Debug.LogWarning($"WorkspaceSwitcherController: local workspace delete failed: {err}");
+                workspaceDeleteBusy = false;
+                yield break;
+            }
+
+            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (server data if configured + snapshot folder + index + draft cache).");
 
             SeedMockWorkspaces();
             RebuildCards();
             RefreshSelectionUi(forceImmediate: true);
+            workspaceDeleteBusy = false;
         }
 
         private static void EnsureSwitcherFallbackUi(VisualElement root)

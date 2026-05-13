@@ -5,8 +5,8 @@ using WorkspaceServices = ARGallery.Workspace;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Deletes a workspace from both persistence layers: on-disk snapshot/assets/index and in-memory <see cref="Workspace.LocalWorkspaceStore"/> draft cache.
-    /// Does not remove mock-provider seed definitions (those are code); deleting a seeded id only clears disk/cache/session when present.
+    /// Deletes local persistence: workspace folder (including <c>snapshot.json</c> and assets), index row, and in-memory draft cache.
+    /// Call <c>DELETE /api/workspaces/&lt;id&gt;</c> first when using the backend so Postgres rows and upload files stay in sync.
     /// </summary>
     public static class WorkspaceDeletion
     {

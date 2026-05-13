@@ -335,6 +335,25 @@ def _disk_filename_for_content_asset(content_id: str, source_filename: str) -> s
     return f"{stem}{ext}"
 
 
+def _safe_upload_abs_path_from_public_url(url: str) -> str | None:
+    """Map PUBLIC_BASE_URL + /uploads/... to a path under UPLOAD_FOLDER; None if external or unsafe."""
+    if not url or not isinstance(url, str):
+        return None
+    base = PUBLIC_BASE_URL.rstrip("/")
+    u = url.strip()
+    if not u.startswith(base):
+        return None
+    tail = u[len(base) :].lstrip("/")
+    if not tail.startswith("uploads/"):
+        return None
+    rel = tail[len("uploads/") :]
+    abs_root = os.path.abspath(UPLOAD_FOLDER)
+    candidate = os.path.abspath(os.path.join(UPLOAD_FOLDER, rel))
+    if not candidate.startswith(abs_root + os.sep) and candidate != abs_root:
+        return None
+    return candidate
+
+
 def _resolve_safe_upload_filename(file_storage, upload_dir: str) -> str:
     original = secure_filename(file_storage.filename or "")
     stem, ext = os.path.splitext(original)
@@ -1055,6 +1074,83 @@ def delete_content(content_id):
     except psycopg2.Error as e:
         logger.error("Database error in delete_content (pgcode=%s): %s", getattr(e, "pgcode", None), e)
         return error_response("Database error while deleting content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/workspaces/<path:workspace_id>", methods=["DELETE"])
+def delete_workspace(workspace_id):
+    wid = (workspace_id or "").strip()
+    if not wid:
+        return error_response("workspaceId is required.", "VALIDATION_ERROR", 400)
+    if wid == "default":
+        return error_response("Cannot delete the reserved workspace 'default'.", "VALIDATION_ERROR", 403)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM workspaces WHERE workspace_id = %s;", (wid,))
+                if cur.fetchone() is None:
+                    return error_response(f"Workspace '{wid}' was not found.", "NOT_FOUND", 404)
+
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM contents c
+                    INNER JOIN targets t ON c.target_id = t.target_id
+                    WHERE t.workspace_id = %s;
+                    """,
+                    (wid,),
+                )
+                deleted_contents = int(cur.fetchone()[0])
+
+                cur.execute("SELECT target_image_url FROM targets WHERE workspace_id = %s;", (wid,))
+                target_urls = [row[0] for row in cur.fetchall() if row and row[0]]
+
+                cur.execute(
+                    """
+                    SELECT c.media_url FROM contents c
+                    INNER JOIN targets t ON c.target_id = t.target_id
+                    WHERE t.workspace_id = %s;
+                    """,
+                    (wid,),
+                )
+                content_urls = [row[0] for row in cur.fetchall() if row and row[0]]
+
+                all_urls = list(dict.fromkeys([u for u in target_urls + content_urls if u]))
+
+                for url in all_urls:
+                    path = _safe_upload_abs_path_from_public_url(url)
+                    if path and os.path.isfile(path):
+                        try:
+                            os.remove(path)
+                        except OSError as e:
+                            logger.warning("Workspace delete: could not remove file %s: %s", path, e)
+
+                for url in all_urls:
+                    cur.execute("DELETE FROM uploads WHERE url = %s;", (url,))
+
+                cur.execute("DELETE FROM targets WHERE workspace_id = %s;", (wid,))
+                deleted_targets = cur.rowcount
+
+                cur.execute("DELETE FROM workspaces WHERE workspace_id = %s;", (wid,))
+                if cur.rowcount == 0:
+                    logger.warning("Workspace row missing after target deletes for workspace_id=%s", wid)
+
+                logger.info(
+                    "Deleted workspace '%s' (targets=%s, contents=%s, upload_urls=%s)",
+                    wid,
+                    deleted_targets,
+                    deleted_contents,
+                    len(all_urls),
+                )
+                return jsonify(
+                    {
+                        "workspaceId": wid,
+                        "deletedTargets": deleted_targets,
+                        "deletedContents": deleted_contents,
+                    }
+                ), 200
+    except psycopg2.Error as e:
+        logger.error("Database error in delete_workspace (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while deleting workspace.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
 
 
 if __name__ == "__main__":
