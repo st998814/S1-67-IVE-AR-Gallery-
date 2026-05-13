@@ -25,7 +25,7 @@ Creates or updates a target record directly from JSON.
 | `localPosition` | object | yes | `ApiVector3Dto` — local position. |
 | `localEuler` | object | yes | `ApiVector3Dto` — local Euler angles in degrees. |
 | `localScale` | object | yes | `ApiVector3Dto` — local scale. Defaults to `{1,1,1}` when omitted. |
-| `meta` | object | no | `ApiSyncMetaDto` or arbitrary object. |
+| `meta` | object | no | `ApiSyncMetaDto` (see `common.md`). Typically tracing fields only; content-specific keys such as `title` or `localContentId` may appear if a client reuses the same DTO — backends should tolerate and ignore unknown keys. |
 
 ### Response `200` / `201`
 

@@ -38,7 +38,11 @@ public class ContentWorkflowService
         string targetId,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
         float timeoutSeconds = 20f,
-        string contentIdOverride = null)
+        string contentIdOverride = null,
+        string metaTitle = null,
+        string metaDescription = null,
+        string metaTextBody = null,
+        string metaLocalContentId = null)
     {
         if (apiClient == null)
         {
@@ -77,12 +81,7 @@ public class ContentWorkflowService
             localScale = new ApiVector3Dto(localScale.x, localScale.y, localScale.z),
             renderKind = renderKind,
             assetFormat = assetFormat,
-            meta = new ApiSyncMetaDto
-            {
-                schemaVersion = "v1",
-                clientRequestId = Guid.NewGuid().ToString("N"),
-                createdAtUtc = DateTime.UtcNow.ToString("o")
-            }
+            meta = BuildContentPostMeta(metaTitle, metaDescription, metaTextBody, metaLocalContentId)
         };
 
         return apiClient.CreateContent(request, onCompleted, timeoutSeconds);
@@ -274,5 +273,23 @@ public class ContentWorkflowService
         if (lower.Contains("image") || lower.Contains("poster") || lower.Contains("picture"))
             return "image";
         return lower;
+    }
+
+    private static ApiSyncMetaDto BuildContentPostMeta(
+        string metaTitle,
+        string metaDescription,
+        string metaTextBody,
+        string metaLocalContentId)
+    {
+        return new ApiSyncMetaDto
+        {
+            schemaVersion = "v1",
+            clientRequestId = Guid.NewGuid().ToString("N"),
+            createdAtUtc = DateTime.UtcNow.ToString("o"),
+            title = string.IsNullOrWhiteSpace(metaTitle) ? "" : metaTitle.Trim(),
+            description = string.IsNullOrWhiteSpace(metaDescription) ? "" : metaDescription.Trim(),
+            textBody = string.IsNullOrWhiteSpace(metaTextBody) ? "" : metaTextBody.Trim(),
+            localContentId = string.IsNullOrWhiteSpace(metaLocalContentId) ? "" : metaLocalContentId.Trim()
+        };
     }
 }

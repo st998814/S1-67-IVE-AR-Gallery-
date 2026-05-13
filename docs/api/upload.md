@@ -22,7 +22,7 @@ Optional parts (only if backend and client agree to support them in a later revi
 
 | Part name | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `meta` | string (JSON) | no | Stringified `ApiSyncMetaDto` for tracing; not required for v1 minimum interop. |
+| `meta` | string (JSON) | no | Stringified `ApiSyncMetaDto` for tracing (see `common.md`). May include the full DTO shape; upload handlers should only require tracing fields and ignore unused keys. |
 
 **Unity reference:** `HttpApiClient` sends a single binary part named **`file`** with filename and MIME type derived from `UploadFileRequestDto.fileName` and `UploadFileRequestDto.mimeType`.
 

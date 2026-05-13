@@ -369,7 +369,11 @@ namespace ARGallery.Content
             string targetId,
             Action<ApiResult<CreateContentResponseDto>> onCompleted,
             float timeoutSeconds = 20f,
-            string contentIdOverride = null)
+            string contentIdOverride = null,
+            string metaTitle = null,
+            string metaDescription = null,
+            string metaTextBody = null,
+            string metaLocalContentId = null)
         {
             return workflow.SyncCreateContent(
                 apiClient,
@@ -381,7 +385,11 @@ namespace ARGallery.Content
                 targetId,
                 onCompleted,
                 timeoutSeconds,
-                contentIdOverride);
+                contentIdOverride,
+                metaTitle,
+                metaDescription,
+                metaTextBody,
+                metaLocalContentId);
         }
     }
 }

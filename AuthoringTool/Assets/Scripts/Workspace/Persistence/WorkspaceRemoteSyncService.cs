@@ -380,7 +380,11 @@ namespace ARGallery.Workspace.Persistence
                 targetId,
                 result => apiOk = result != null && result.success,
                 apiTimeoutSeconds,
-                c.ServerContentId);
+                c.ServerContentId,
+                c.Title,
+                c.Description,
+                c.TextBody,
+                c.LocalContentId);
 
             yield return WaitForRequest(handle);
             if (handle != null && handle.IsCancelled)
