@@ -368,7 +368,8 @@ namespace ARGallery.Content
             string mediaUrl,
             string targetId,
             Action<ApiResult<CreateContentResponseDto>> onCompleted,
-            float timeoutSeconds = 20f)
+            float timeoutSeconds = 20f,
+            string contentIdOverride = null)
         {
             return workflow.SyncCreateContent(
                 apiClient,
@@ -379,7 +380,8 @@ namespace ARGallery.Content
                 mediaUrl,
                 targetId,
                 onCompleted,
-                timeoutSeconds);
+                timeoutSeconds,
+                contentIdOverride);
         }
     }
 }

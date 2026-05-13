@@ -2306,6 +2306,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             yield break;
         }
 
+        EnsureStableServerContentIdForDraft(draft);
         SpawnRequest syncRequest = BuildSyncRequestFromDraft(draft);
         bool done = false;
         bool success = false;
@@ -2334,10 +2335,30 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         onCompleted?.Invoke(success);
     }
 
+    /// <summary>
+    /// Ensures <see cref="AuthoredContentInstance.ServerContentId"/> is set so repeated Save / Layer 3 POST use the same content id (backend upsert).
+    /// </summary>
+    private static void EnsureStableServerContentIdForDraft(ContentDraftState draft)
+    {
+        if (draft?.contentTransform == null)
+            return;
+
+        AuthoredContentInstance ac = draft.contentTransform.GetComponent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInParent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+        if (ac == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(ac.LocalContentId))
+            ac.LocalContentId = Guid.NewGuid().ToString("N");
+        if (string.IsNullOrWhiteSpace(ac.ServerContentId))
+            ac.ServerContentId = ac.LocalContentId;
+    }
+
     private SpawnRequest BuildSyncRequestFromDraft(ContentDraftState draft)
     {
         Vector3 localScale = draft.contentTransform != null ? draft.contentTransform.localScale : Vector3.one;
-        return new SpawnRequest
+        var req = new SpawnRequest
         {
             contentType = draft.contentType,
             targetId = draft.targetId ?? "",
@@ -2351,6 +2372,17 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                 localScale = localScale
             }
         };
+
+        if (draft.contentTransform != null)
+        {
+            AuthoredContentInstance ac = draft.contentTransform.GetComponent<AuthoredContentInstance>()
+                ?? draft.contentTransform.GetComponentInParent<AuthoredContentInstance>()
+                ?? draft.contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+            if (ac != null && !string.IsNullOrWhiteSpace(ac.ServerContentId))
+                req.contentIdOverride = ac.ServerContentId.Trim();
+        }
+
+        return req;
     }
 
     private string ResolveDraftTargetId(ContentDraftState draft)

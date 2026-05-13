@@ -315,7 +315,36 @@ namespace ARGallery.Spawning
         {
             string contentType = ToApiContentType(request.contentType);
             string mediaUrl = request.contentType == SpawnContentType.Text ? request.textPayload : request.mediaUrl;
-            return contentCoordinator.SyncCreateContent(apiClient, contentType, spawnedTransform.localPosition, spawnedTransform.localEulerAngles, spawnedTransform.localScale, mediaUrl, request.targetId, onCompleted, timeoutSeconds);
+            string contentIdOverride = ResolveContentIdOverrideForSync(request, spawnedTransform);
+            return contentCoordinator.SyncCreateContent(
+                apiClient,
+                contentType,
+                spawnedTransform.localPosition,
+                spawnedTransform.localEulerAngles,
+                spawnedTransform.localScale,
+                mediaUrl,
+                request.targetId,
+                onCompleted,
+                timeoutSeconds,
+                contentIdOverride);
+        }
+
+        /// <summary>Stable POST contentId: explicit request override, else <see cref="AuthoredContentInstance.ServerContentId"/>, else null (workflow mints).</summary>
+        private static string ResolveContentIdOverrideForSync(SpawnRequest request, Transform spawnedTransform)
+        {
+            if (request != null && !string.IsNullOrWhiteSpace(request.contentIdOverride))
+                return request.contentIdOverride.Trim();
+
+            if (spawnedTransform == null)
+                return null;
+
+            AuthoredContentInstance ac = spawnedTransform.GetComponent<AuthoredContentInstance>()
+                ?? spawnedTransform.GetComponentInParent<AuthoredContentInstance>()
+                ?? spawnedTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+            if (ac != null && !string.IsNullOrWhiteSpace(ac.ServerContentId))
+                return ac.ServerContentId.Trim();
+
+            return null;
         }
 
         private static string ToApiContentType(SpawnContentType type)

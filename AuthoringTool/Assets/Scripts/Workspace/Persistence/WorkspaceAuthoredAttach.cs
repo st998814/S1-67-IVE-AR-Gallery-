@@ -38,6 +38,8 @@ namespace ARGallery.Workspace.Persistence
             AuthoredContentInstance ac = spawnedRoot.GetComponent<AuthoredContentInstance>() ?? spawnedRoot.AddComponent<AuthoredContentInstance>();
             if (string.IsNullOrWhiteSpace(ac.LocalContentId))
                 ac.LocalContentId = Guid.NewGuid().ToString("N");
+            if (string.IsNullOrWhiteSpace(ac.ServerContentId))
+                ac.ServerContentId = ac.LocalContentId;
 
             ac.TargetId = resolvedTargetId.Trim();
             ac.ContentType = WorkspaceStateSerializer.ToSnapshotContentTypeLabel(contentType);

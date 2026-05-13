@@ -37,7 +37,8 @@ public class ContentWorkflowService
         string mediaUrl,
         string targetId,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
+        float timeoutSeconds = 20f,
+        string contentIdOverride = null)
     {
         if (apiClient == null)
         {
@@ -61,9 +62,13 @@ public class ContentWorkflowService
         string renderKind = MapRenderKind(normalizedType);
         string assetFormat = MapAssetFormat(normalizedType, mediaUrl);
 
+        string contentId = string.IsNullOrWhiteSpace(contentIdOverride)
+            ? Guid.NewGuid().ToString("N")
+            : contentIdOverride.Trim();
+
         var request = new CreateContentRequestDto
         {
-            contentId = Guid.NewGuid().ToString("N"),
+            contentId = contentId,
             targetId = targetId ?? "",
             contentType = normalizedType,
             mediaUrl = mediaUrl ?? "",
