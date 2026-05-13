@@ -61,4 +61,13 @@
     <ui:VisualElement name="error-toast" style="flex-grow: 1; position: absolute; top: 50px; align-self: center; background-color: rgb(220, 53, 69); border-top-left-radius: 8px; border-top-right-radius: 8px; border-right-width: 0; border-bottom-right-radius: 8px; border-bottom-left-radius: 8px; width: 300px; height: 100px;">
         <ui:Label name="error-label" text="Error" parse-escape-sequences="true" style="padding-top: 8px; padding-right: 8px; padding-bottom: 8px; padding-left: 8px; align-self: center; -unity-font-style: bold; -unity-text-outline-color: rgb(229, 229, 229); color: rgb(229, 229, 229); display: flex;"/>
     </ui:VisualElement>
+    <ui:VisualElement name="SyncStatusToast" class="sync-toast sync-toast--hidden" picking-mode="Ignore" style="position: absolute; top: 48px; right: 12px; width: 300px; max-width: 90%;">
+        <ui:VisualElement class="sync-toast__row" picking-mode="Ignore" style="flex-direction: row; justify-content: space-between; align-items: flex-start;">
+            <ui:VisualElement class="sync-toast__textCol" picking-mode="Ignore" style="flex-grow: 1; flex-direction: column; row-gap: 2px; padding-right: 4px;">
+                <ui:Label name="SyncStatusTitle" class="sync-toast__title" text="" picking-mode="Ignore" style="font-size: 12px; -unity-font-style: bold; white-space: normal;"/>
+                <ui:Label name="SyncStatusMessage" class="sync-toast__message" text="" picking-mode="Ignore" style="font-size: 11px; white-space: normal;"/>
+            </ui:VisualElement>
+            <ui:Button name="SyncToastDismiss" text="×" class="sync-toast__dismiss" picking-mode="Position" style="width: 26px; min-width: 26px; height: 26px; min-height: 26px; margin-left: 4px; padding: 0; -unity-font-style: bold; font-size: 16px;"/>
+        </ui:VisualElement>
+    </ui:VisualElement>
 </ui:UXML>

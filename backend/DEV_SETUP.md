@@ -13,6 +13,11 @@ make logs
 
 This starts PostgreSQL, builds the Flask backend image, runs `python scripts/migrate.py up`, and exposes the API at `http://127.0.0.1:5050`.
 
+### Same data you see in TablePlus and on disk
+
+- **Postgres:** The `db` service is published to the host as **`localhost:${DOCKER_DB_PUBLISH:-5432}`** (default **5432**). In TablePlus, use that **host** and **port**, database **`ive_ar_gallery`**, user/password matching `docker-compose.yml`. That is the same instance the `backend` container reaches as hostname **`db`** on port **5432** inside the compose network. If you run another PostgreSQL on the host already bound to 5432, set in repo root `.env`: `DOCKER_DB_PUBLISH=5433` and connect TablePlus to **`localhost:5433`** instead.
+- **Uploads:** Files are stored under **`backend/uploads/`** on your machine (bind-mounted to `/app/uploads` in the container). You should see `content/`, `target/`, etc. there after uploads—not only inside a Docker volume.
+
 To enable Vuforia Cloud Target registration, create a local `.env` from `.env.example` at the repo root and fill:
 
 ```bash
@@ -32,6 +37,8 @@ make down
 ```
 
 ## Option B: local Flask with Docker PostgreSQL
+
+When the DB container publishes a non-default host port (`DOCKER_DB_PUBLISH` in repo root `.env`), set **`DB_PORT`** in that same `.env` to the same value so `make migrate` from the host reaches Postgres.
 
 From repo root:
 

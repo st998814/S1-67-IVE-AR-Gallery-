@@ -61,6 +61,12 @@ namespace ARGallery.Spawning
         /// Optional route hint. If empty, manager derives from content type.
         /// </summary>
         public string renderKind = "";
+
+        /// <summary>
+        /// When set, <see cref="ISpawnerManager.BeginSyncCreateContent"/> uses this as POST <c>contentId</c> for stable upserts.
+        /// If empty, resolved from <see cref="ARGallery.Workspace.Persistence.AuthoredContentInstance.ServerContentId"/> on the spawned transform, then a new GUID.
+        /// </summary>
+        public string contentIdOverride = "";
     }
 
     /// <summary>
@@ -72,6 +78,9 @@ namespace ARGallery.Spawning
         public string targetId = "";
         public string displayLabel = "";
         public string targetImageUrl = "";
+        /// <summary>Must match backend workspaces.workspace_id (session workspace GUID).</summary>
+        public string workspaceId = "";
+        public string workspaceName = "";
     }
 
     /// <summary>

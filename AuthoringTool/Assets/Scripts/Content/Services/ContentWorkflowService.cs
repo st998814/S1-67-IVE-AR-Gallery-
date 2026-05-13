@@ -37,7 +37,12 @@ public class ContentWorkflowService
         string mediaUrl,
         string targetId,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
+        float timeoutSeconds = 20f,
+        string contentIdOverride = null,
+        string metaTitle = null,
+        string metaDescription = null,
+        string metaTextBody = null,
+        string metaLocalContentId = null)
     {
         if (apiClient == null)
         {
@@ -61,9 +66,13 @@ public class ContentWorkflowService
         string renderKind = MapRenderKind(normalizedType);
         string assetFormat = MapAssetFormat(normalizedType, mediaUrl);
 
+        string contentId = string.IsNullOrWhiteSpace(contentIdOverride)
+            ? Guid.NewGuid().ToString("N")
+            : contentIdOverride.Trim();
+
         var request = new CreateContentRequestDto
         {
-            contentId = Guid.NewGuid().ToString("N"),
+            contentId = contentId,
             targetId = targetId ?? "",
             contentType = normalizedType,
             mediaUrl = mediaUrl ?? "",
@@ -72,12 +81,7 @@ public class ContentWorkflowService
             localScale = new ApiVector3Dto(localScale.x, localScale.y, localScale.z),
             renderKind = renderKind,
             assetFormat = assetFormat,
-            meta = new ApiSyncMetaDto
-            {
-                schemaVersion = "v1",
-                clientRequestId = Guid.NewGuid().ToString("N"),
-                createdAtUtc = DateTime.UtcNow.ToString("o")
-            }
+            meta = BuildContentPostMeta(metaTitle, metaDescription, metaTextBody, metaLocalContentId)
         };
 
         return apiClient.CreateContent(request, onCompleted, timeoutSeconds);
@@ -269,5 +273,23 @@ public class ContentWorkflowService
         if (lower.Contains("image") || lower.Contains("poster") || lower.Contains("picture"))
             return "image";
         return lower;
+    }
+
+    private static ApiSyncMetaDto BuildContentPostMeta(
+        string metaTitle,
+        string metaDescription,
+        string metaTextBody,
+        string metaLocalContentId)
+    {
+        return new ApiSyncMetaDto
+        {
+            schemaVersion = "v1",
+            clientRequestId = Guid.NewGuid().ToString("N"),
+            createdAtUtc = DateTime.UtcNow.ToString("o"),
+            title = string.IsNullOrWhiteSpace(metaTitle) ? "" : metaTitle.Trim(),
+            description = string.IsNullOrWhiteSpace(metaDescription) ? "" : metaDescription.Trim(),
+            textBody = string.IsNullOrWhiteSpace(metaTextBody) ? "" : metaTextBody.Trim(),
+            localContentId = string.IsNullOrWhiteSpace(metaLocalContentId) ? "" : metaLocalContentId.Trim()
+        };
     }
 }

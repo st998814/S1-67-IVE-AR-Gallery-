@@ -21,6 +21,7 @@ namespace ARGallery.Workspace.Persistence
             auth.LocalTargetId = id;
             auth.ServerTargetId = id;
             auth.TargetName = string.IsNullOrWhiteSpace(targetDisplayName) ? id : targetDisplayName.Trim();
+            auth.RemoteDirty = true;
             AuthoredObjectRegistry.RegisterTarget(auth);
             return auth;
         }
@@ -38,6 +39,8 @@ namespace ARGallery.Workspace.Persistence
             AuthoredContentInstance ac = spawnedRoot.GetComponent<AuthoredContentInstance>() ?? spawnedRoot.AddComponent<AuthoredContentInstance>();
             if (string.IsNullOrWhiteSpace(ac.LocalContentId))
                 ac.LocalContentId = Guid.NewGuid().ToString("N");
+            if (string.IsNullOrWhiteSpace(ac.ServerContentId))
+                ac.ServerContentId = ac.LocalContentId;
 
             ac.TargetId = resolvedTargetId.Trim();
             ac.ContentType = WorkspaceStateSerializer.ToSnapshotContentTypeLabel(contentType);
@@ -55,6 +58,7 @@ namespace ARGallery.Workspace.Persistence
 
             TryPersistLocalContentAsset(ac, request);
 
+            ac.RemoteDirty = true;
             AuthoredObjectRegistry.RegisterContent(ac);
             return ac;
         }

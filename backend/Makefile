@@ -5,6 +5,7 @@ COMPOSE_ENV := $(shell test -f ../.env && echo "--env-file ../.env")
 
 up:
 	docker compose $(COMPOSE_ENV) up -d --build backend
+	@echo "API logs: make backend-logs   (or: cd backend && docker compose logs -f backend)"
 
 down:
 	docker compose $(COMPOSE_ENV) down

@@ -62,7 +62,9 @@ Used for local position, Euler rotation (degrees), and scale in authoring/runtim
 
 ## `ApiSyncMetaDto` (meta)
 
-Optional on requests where noted; helps idempotency and tracing.
+Optional on requests where noted; helps idempotency and tracing. The same JSON shape is reused across endpoints; **servers should ignore keys they do not persist** (extra fields are forward-compatible).
+
+### Core fields (all endpoints that embed `meta`)
 
 | Field | Type | Description |
 |--------|------|-------------|
@@ -70,11 +72,38 @@ Optional on requests where noted; helps idempotency and tracing.
 | `clientRequestId` | string | Client-generated correlation / idempotency hint. |
 | `createdAtUtc` | string | ISO-8601 UTC timestamp when the client formed the request. |
 
+### Optional content-oriented fields (primarily `POST /api/content`)
+
+Used by the authoring client when persisting content so backends or CMS layers can store human-readable copy alongside transforms and `mediaUrl`. All are optional; empty string or omission is acceptable.
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `title` | string | Display title for the content instance. |
+| `description` | string | Longer description or notes. |
+| `textBody` | string | For `text` content: body text (may duplicate the text stored in `mediaUrl` depending on client; useful when `mediaUrl` is a marker or shortened). |
+| `localContentId` | string | Client-local id (e.g. draft registry id). Distinct from canonical **`contentId`** in the POST body when both are sent; aids reconciliation and logs. |
+
+### Example — tracing only (targets, uploads, minimal content)
+
 ```json
 {
   "schemaVersion": "v1",
   "clientRequestId": "req-001",
   "createdAtUtc": "2026-04-18T12:00:00Z"
+}
+```
+
+### Example — content save with extended meta
+
+```json
+{
+  "schemaVersion": "v1",
+  "clientRequestId": "req-content-001",
+  "createdAtUtc": "2026-04-18T12:05:00Z",
+  "title": "Welcome panel",
+  "description": "Lobby AR copy",
+  "textBody": "Tap to continue",
+  "localContentId": "a1b2c3d4e5f64789"
 }
 ```
 
@@ -86,7 +115,7 @@ Optional on requests where noted; helps idempotency and tracing.
 - Identifiers: **`targetId`**, **`contentId`** are canonical keys across APIs.
 - Target publish lifecycle strings: `draft`, `publishing`, `published`, `failed`.
 - Timestamps: **ISO-8601 UTC** (e.g. `2026-04-18T12:00:00Z`).
-- Enum-like strings: lowercase with hyphens where already established (e.g. `poster-a`); `contentType` values such as `image`, `video`, `text`, `empty`, `model(3D)` as agreed with backend.
+- Enum-like strings: lowercase with hyphens where already established (e.g. `poster-a`); `contentType` values such as `image`, `video`, `text`, `empty`, `model` as sent by the Unity authoring client (legacy rows or copy may say `model(3D)`).
 
 ---
 
@@ -100,6 +129,7 @@ Optional on requests where noted; helps idempotency and tracing.
 | **Normalization** (trim labels, duplicate id policy, timestamps on records) | Backend | Server may echo or adjust fields; document divergences if any. |
 | **Runtime / scene transforms** (local position, rotation, scale) | Frontend (authoring) | Client sends snapshots (`ApiVector3Dto`); backend stores if the product requires sync across devices. |
 | **Client correlation** | Frontend | `clientRequestId` and optional `createdAtUtc` in `meta`. |
+| **Optional content copy in `meta`** | Frontend proposes | `title`, `description`, `textBody`, `localContentId` on `POST /api/content`; backend may persist, echo on `GET`, or ignore. |
 | **Proposed ids** (`targetId`, `contentId` on create) | Frontend proposes | Backend may accept as-is, normalize, or reject with `CONFLICT` / `VALIDATION_ERROR`. |
 
 **Examples**

@@ -14,6 +14,14 @@ public class UploadFileRequestDto
     public string mimeType; // mime = Multipurpose Internet Mail Extensions 
     /// <summary>Possible values: non-empty byte array from selected local file.</summary>
     public byte[] fileBytes;
+    /// <summary>
+    /// Optional multipart field for <c>POST /api/upload</c>: <c>content</c> (default), <c>target</c>, or <c>target_ref</c> — selects server folder under <c>uploads/</c>.
+    /// </summary>
+    public string uploadCategory = "";
+    /// <summary>When <see cref="uploadCategory"/> is <c>target</c>, sent as form field <c>targetId</c> so the server uses one file name per target (avoids duplicate UUID suffixes).</summary>
+    public string targetId = "";
+    /// <summary>When <see cref="uploadCategory"/> is <c>content</c>, sent as <c>contentId</c> so re-sync overwrites the same stored file.</summary>
+    public string contentId = "";
     /// <summary>Possible values: schemaVersion "v1", clientRequestId "req-123", createdAtUtc ISO-8601.</summary>
     public ApiSyncMetaDto meta = new ApiSyncMetaDto();
 }

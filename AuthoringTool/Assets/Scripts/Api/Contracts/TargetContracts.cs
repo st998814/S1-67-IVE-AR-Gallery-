@@ -19,6 +19,8 @@ public class CreateTargetRequestDto
     public string targetImageUrl;
     /// <summary>Current contract field. Possible values: workspace key such as "default".</summary>
     public string workspaceId = "default";
+    /// <summary>Optional human-readable name; backend upserts workspaces when missing.</summary>
+    public string workspaceName = "";
     /// <summary>Current contract field. Possible values: positive meter value such as 0.2, 0.5, 1.0.</summary>
     public float physicalWidthM = 1.0f;
     /// <summary>Legacy field kept for backward compatibility with older clients/contracts.</summary>
@@ -74,6 +76,7 @@ public class CreateCloudTargetRequestDto
     public string targetName;
     public string displayLabel;
     public string workspaceId = "default";
+    public string workspaceName = "";
     public float width = 1.0f;
     public ApiVector3Dto localPosition = new ApiVector3Dto(0f, 0f, 0f);
     public ApiVector3Dto localEuler = new ApiVector3Dto(0f, 0f, 0f);

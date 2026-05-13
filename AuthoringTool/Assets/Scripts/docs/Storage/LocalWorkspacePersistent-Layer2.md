@@ -1,14 +1,20 @@
-# Local Workspace Persistence and Authoring UI Layout (Refresh)
+# Local workspace persistence (Layer 2)
 
-## Assignment : Durable local workspace state + authoring chrome iteration (MWP)
+**Layer 2** is durable **local** workspace state under `Application.persistentDataPath`: JSON snapshots, binary assets, workspace index, debounced autosave, and disk deletion (including **`snapshot.json`**). It does **not** include remote/API sync—that is **[SyncingToPersistentStorage-Layer3.md](SyncingToPersistentStorage-Layer3.md)** (Layer 3).
+
+For **authoring chrome** (FAB, inspector, viewport), see **[AuthoringUILayout.md](../Authoring/AuthoringUILayout.md)**.
+
+---
+
+## Assignment (MWP context)
+
+Durable local workspace state suitable for round-trip reload; authoring UI shell iteration lives in the Authoring UI doc above.
 
 ---
 
 ## Outlines
 
 ### 1. Local workspace snapshot model
-
-Authoring workspaces can be persisted under `Application.persistentDataPath` as JSON snapshots plus referenced binary assets:
 
 - **Snapshot DTO** — `WorkspaceSnapshot` aggregates workspace identity, target/content instances, and transform metadata suitable for round-trip rebuild.
 - **Vector serialization** — `Vector3Data` (and related helpers) keep snapshot math stable and test-friendly independent of UnityEngine types in persistence layers.
@@ -30,19 +36,8 @@ Authoring workspaces can be persisted under `Application.persistentDataPath` as 
 ### 4. Workspace lifecycle (switcher, delete, session handoff)
 
 - **Switcher merge** — `WorkspaceSwitcherController` merges provider/mock seeds with on-disk `workspace-index.json` so local workspaces appear alongside demo entries.
-- **Deletion** — `WorkspaceDeletion.TryDeleteWorkspaceEverywhere` removes workspace folder and index entry consistently.
+- **Deletion (local)** — `WorkspaceDeletion.TryDeleteWorkspaceEverywhere` removes the workspace folder (**including `snapshot.json`**), updates the index, clears draft cache, and clears session when it matches. **Backend cascade** is Layer 3 / API (see Layer 3 doc and `DELETE /api/workspaces/<id>` before local delete when the switcher is configured with **`backendApiBaseUrl`**).
 - **Session flush** — before leaving authoring (e.g. back to switcher), snapshot flush integrates with app flow so unsaved edits are written where appropriate (`AppFlowController` / `AuthoringUIController` navigation paths).
-
-### 5. Authoring UI layout (current)
-
-Recent authoring chrome changes:
-
-- **Left column removed** — former content-library column and toggle are gone; center viewport expands horizontally.
-- **Add control** — circular **+** FAB (`AddContentFabButton`) anchored **lower-left** of the authoring root; background matches panel tone (`AuthoringUI.uss`); invokes the same **`WebGLFileBrowser`** browse pipeline as legacy **Add Content** (`AuthoringUIController.OnBrowseButtonClicked`).
-- **Right panel** — inspector remains (Target / Content tabs, spatial fields, optional target reference). **Content Library** list block was removed from this panel; hierarchy selection is driven by scene/coordinator flows when no list is present (controller guards null `ListView`).
-- **Workspace switcher** — **DELETE** uses destructive styling (`switcher-action-danger` in `WorkspaceSwitcherUI.uss`; fallback styling in `WorkspaceSwitcherController` runtime UI).
-
-Related historical context for interaction and camera rules remains in [AuthoringUILayout.md](AuthoringUILayout.md), [PlacementInteractionAndTransformAuthoring.md](PlacementInteractionAndTransformAuthoring.md), and [RuntimeSceneCameraControl.md](RuntimeSceneCameraControl.md). That older layout doc still describes prior left-panel behavior; treat **this document** as the source of truth for **current** authoring shell + persistence.
 
 ---
 
@@ -63,7 +58,7 @@ Paths are under `Assets/Scripts/` unless noted.
 | **WorkspaceStateSerializer.cs** | Maps registry/scene → snapshot. |
 | **WorkspaceSceneReconstructor.cs** | Snapshot → scene instantiation path. |
 | **WorkspaceAutoSaveService.cs** | Debounced persistence notifications. |
-| **WorkspaceDeletion.cs** | Deletes workspace artifacts on disk + index maintenance. |
+| **WorkspaceDeletion.cs** | Local workspace artifacts + index; backend delete orchestrated from switcher before this when API is configured. |
 | **WorkspacePersistenceBootstrap.cs** | Early `AuthoredObjectRegistry` ensure for authoring scene. |
 | **WorkspaceAuthoredAttach.cs** | Attach/registry helpers as used by authoring prefabs (see usages in tree). |
 
@@ -74,31 +69,22 @@ Paths are under `Assets/Scripts/` unless noted.
 | **Target/Models/Vector3Data.cs** | Serializable vector helper for snapshots/tests. |
 | **Tests/EditMode/Vector3DataTests.cs** | Unit coverage for vector persistence helpers. |
 
-### 3. Authoring entry and UI integration
+### 3. Authoring entry (persistence hooks)
 
 | File | Description |
 |------|-------------|
 | **AuthoringWorkspaceEntry.cs** | Loads/reconstructs workspace snapshot on scene entry; coordinates with session context. |
-| **AuthoringUIController.cs** | Browse/FAB wiring, workspace guard enablement, persistence notify hooks, optional list wiring when `ContentLibraryList` absent. |
+| **AuthoringUIController.cs** | Persistence notify hooks, workspace guards; UI layout detail in **AuthoringUILayout.md**. |
 | **ContentTransformController.cs** | Drag/end paths that notify autosave where applicable (see implementation). |
 
 ### 4. App flow and switcher — `Scripts/`
 
 | File | Description |
 |------|-------------|
-| **WorkspaceSwitcherController.cs** | Disk index merge, navigation to authoring, fallback UI including DELETE styling. |
+| **WorkspaceSwitcherController.cs** | Disk index merge, navigation to authoring; optional backend workspace delete before local delete (`backendApiBaseUrl`). UI styling for DELETE in Authoring UI doc. |
 | **AppFlowController.cs** / **WorkspaceSessionContext.cs** | Session payload and transitions (flush before clear on back-navigation). |
 
-### 5. UI assets — `Assets/UI/`
-
-| File | Description |
-|------|-------------|
-| **UI/UXML/AuthoringUI.uxml** | Layout: top bar, center viewport, right inspector, FAB host. |
-| **UI/USS/AuthoringUI.uss** | Panel tones, `.authoring-add-fab` circular add button. |
-| **UI/UXML/WorkspaceSwitcherUI.uxml** | DELETE uses `.switcher-action-danger`. |
-| **UI/USS/WorkspaceSwitcherUI.uss** | Danger button styles for DELETE. |
-
-### 6. Third-party browse integration — `Assets/Plugins/`
+### 5. Third-party browse integration — `Assets/Plugins/`
 
 | File | Description |
 |------|-------------|
@@ -106,44 +92,30 @@ Paths are under `Assets/Scripts/` unless noted.
 
 ---
 
-## Persistence Flow (high level)
+## Persistence flow (high level)
 
 1. Authoring scene boots; `WorkspacePersistenceBootstrap` ensures `AuthoredObjectRegistry`.
 2. `AuthoringWorkspaceEntry` applies session context and loads snapshot via repositories when a persisted workspace is opened.
 3. `WorkspaceSceneReconstructor` instantiates targets/content per snapshot and registry rules.
 4. Edits update transforms/content; services call `WorkspaceAutoSaveService.NotifyWorkspaceChanged()` (debounced).
 5. Serializer writes snapshot; asset repository stores new blobs as needed.
-6. On workspace delete, `WorkspaceDeletion` removes directory + index entry.
+6. On workspace delete (local path), `WorkspaceDeletion` removes directory + index entry after optional API delete (switcher).
 7. On return to switcher, session flush/clear ordering avoids dropping the last debounced snapshot (see `AuthoringUIController` / app-flow call sites).
 
 ---
 
-## Authoring UI Summary (current)
-
-| Area | Behavior |
-|------|----------|
-| **Top bar** | Workspace name, mode pills, Return, Save. |
-| **Center** | 3D viewport (`CenterViewport`). |
-| **Lower-left** | Circular **+** → same upload/browse intent as former Add Content. |
-| **Right** | Collapsible inspector (Target/Content); no embedded content-library list. |
-| **Switcher DELETE** | Red/danger styling. |
-
----
-
-## Validation
+## Validation (Layer 2)
 
 - Open an existing local workspace: targets/content reconstruct without duplicate registry ids where contracts hold.
 - Edit transforms/content: debounced save writes under expected workspace folder.
-- Delete workspace from switcher: folder and index row removed.
-- Authoring **+** opens file browser path consistent with `OnBrowseButtonClicked` / `UploadPurpose.Content`.
-- Inspector and scene selection still update spatial fields when list UI is absent.
+- Delete workspace from switcher: folder and index row removed; with backend configured, server rows cleaned first.
+- Inspector and scene selection still update spatial fields when list UI is absent (see Authoring UI doc).
 
 ---
 
-## Known Gaps / Follow-ups
+## Known gaps / follow-ups
 
-- **AuthoringUILayout.md** still narrates an older shell (left content library). Prefer **this document** for current layout + persistence until that file is revised or superseded.
-- Remote/API workspace sync remains outside local snapshot scope; provider replaces mock when integrated.
+- Remote/API workspace sync is **Layer 3** — see **SyncingToPersistentStorage-Layer3.md**.
 - Optional: restore a lightweight hierarchy UI elsewhere if product wants list-driven selection again without restoring the old left column.
 
 ---
@@ -151,5 +123,4 @@ Paths are under `Assets/Scripts/` unless noted.
 ## Result
 
 - Workspaces gain **repeatable local persistence** (snapshot + assets + index) suitable for reload and deletion.
-- Authoring UI is **simplified**: no left library column, **FAB add** for imports, inspector-only right panel, and **clear destructive styling** for workspace delete.
 - Controller code paths tolerate **missing `ContentLibraryList`** while preserving coordinator-driven selection and spatial editing.

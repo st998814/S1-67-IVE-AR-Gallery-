@@ -4,13 +4,14 @@ services:
     container_name: ive-ar-gallery-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ive_ar_gallery
+      POSTGRES_DB: ${DB_NAME:-ive_ar_gallery}
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Host port for TablePlus / local tools (set DOCKER_DB_PUBLISH=5433 if another Postgres uses 5432 on the host).
+      - "${DOCKER_DB_PUBLISH:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ive_ar_gallery"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -41,8 +42,8 @@ services:
     ports:
       - "5050:5050"
     volumes:
-      - ive_ar_gallery_uploads:/app/uploads
+      # Bind mount so uploads land in ./uploads next to this compose file (backend/uploads on the host), not an anonymous Docker volume.
+      - ./uploads:/app/uploads
 
 volumes:
   ive_ar_gallery_pgdata:
-  ive_ar_gallery_uploads:

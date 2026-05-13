@@ -30,7 +30,7 @@ public class CreateContentRequestDto
     /// <summary>Asset format hint (e.g. "glb"). Optional and used mainly for model content.</summary>
     public string assetFormat;
 
-    /// <summary>Possible values: schemaVersion "v1", clientRequestId, createdAtUtc ISO-8601.</summary>
+    /// <summary>Possible values: <see cref="ApiSyncMetaDto"/> (tracing + optional title, description, textBody, localContentId).</summary>
     public ApiSyncMetaDto meta = new ApiSyncMetaDto();
 }
 

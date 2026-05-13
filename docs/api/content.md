@@ -25,14 +25,14 @@ Persists local draft content and binds it to a target. Aligns with `CreateConten
 |--------|------|----------|-------------|
 | `contentId` | string | yes | Client-proposed or generated id. |
 | `targetId` | string | yes | Parent target canonical id. |
-| `contentType` | string | yes | e.g. `image`, `video`, `text`, `empty`, `model(3D)`. |
+| `contentType` | string | yes | e.g. `image`, `video`, `text`, `empty`, `model`. Unity authoring normalizes 3D content to lowercase `model` (some docs or legacy rows may show `model(3D)`). |
 | `mediaUrl` | string | conditional | Required for `image`/`video`/`model` at save-time persistence; usually from `UploadFileResponseDto.url`. Optional/empty for `text`. |
 | `localPosition` | object | yes | `ApiVector3Dto`. |
 | `localEuler` | object | yes | `ApiVector3Dto` (degrees). |
 | `localScale` | object | yes | `ApiVector3Dto`. |
 | `renderKind` | string | no | e.g. `surface`, `volumetric`. |
 | `assetFormat` | string | no | Hint, e.g. `glb` for models. |
-| `meta` | object | no | `ApiSyncMetaDto`. |
+| `meta` | object | no | `ApiSyncMetaDto` — tracing fields plus optional `title`, `description`, `textBody`, `localContentId` for content persistence (see `common.md`). |
 
 ### Response `200` / `201`
 
@@ -63,7 +63,11 @@ Body matches `CreateContentResponseDto`:
   "meta": {
     "schemaVersion": "v1",
     "clientRequestId": "req-content-001",
-    "createdAtUtc": "2026-04-18T12:05:00Z"
+    "createdAtUtc": "2026-04-18T12:05:00Z",
+    "title": "Poster image",
+    "description": "Main wall asset",
+    "textBody": "",
+    "localContentId": "local-abc123"
   }
 }
 ```
@@ -105,7 +109,7 @@ Body: **JSON array** of content detail objects (raw array, no envelope). Each it
 |--------|------|-------------|
 | `contentId` | string | Canonical content id. |
 | `targetId` | string | Parent target id. |
-| `contentType` | string | e.g. `image`, `video`, `text`, `empty`, `model(3D)`. |
+| `contentType` | string | e.g. `image`, `video`, `text`, `empty`, `model`. |
 | `mediaUrl` | string | Stable URL or text payload marker, depending on content type. |
 | `localPosition` | object | `ApiVector3Dto`. |
 | `localEuler` | object | `ApiVector3Dto`. |

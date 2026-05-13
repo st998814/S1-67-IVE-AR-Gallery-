@@ -308,14 +308,88 @@ namespace ARGallery.Spawning
 
         public IApiRequestHandle BeginSyncCreateTarget(IApiClient apiClient, SpawnTargetRequest request, GameObject targetObject, Action<ApiResult<CreateTargetResponseDto>> onCompleted = null, float timeoutSeconds = 20f)
         {
-            return targetWorkflowService.SyncCreateTarget(apiClient, targetObject, request.targetId ?? "", request.targetName ?? "", request.displayLabel ?? request.targetName, request.targetImageUrl ?? "", onCompleted, timeoutSeconds);
+            return targetWorkflowService.SyncCreateTarget(
+                apiClient,
+                targetObject,
+                request.targetId ?? "",
+                request.targetName ?? "",
+                request.displayLabel ?? request.targetName,
+                request.targetImageUrl ?? "",
+                request.workspaceId ?? "",
+                request.workspaceName ?? "",
+                onCompleted,
+                timeoutSeconds);
         }
 
         public IApiRequestHandle BeginSyncCreateContent(IApiClient apiClient, SpawnRequest request, Transform spawnedTransform, Action<ApiResult<CreateContentResponseDto>> onCompleted = null, float timeoutSeconds = 20f)
         {
             string contentType = ToApiContentType(request.contentType);
             string mediaUrl = request.contentType == SpawnContentType.Text ? request.textPayload : request.mediaUrl;
-            return contentCoordinator.SyncCreateContent(apiClient, contentType, spawnedTransform.localPosition, spawnedTransform.localEulerAngles, spawnedTransform.localScale, mediaUrl, request.targetId, onCompleted, timeoutSeconds);
+            string contentIdOverride = ResolveContentIdOverrideForSync(request, spawnedTransform);
+            TryGetAuthoredContentMeta(spawnedTransform, out string metaTitle, out string metaDescription, out string metaTextBody, out string metaLocalContentId);
+            return contentCoordinator.SyncCreateContent(
+                apiClient,
+                contentType,
+                spawnedTransform.localPosition,
+                spawnedTransform.localEulerAngles,
+                spawnedTransform.localScale,
+                mediaUrl,
+                request.targetId,
+                onCompleted,
+                timeoutSeconds,
+                contentIdOverride,
+                metaTitle,
+                metaDescription,
+                metaTextBody,
+                metaLocalContentId);
+        }
+
+        /// <summary>Stable POST contentId: explicit request override, else <see cref="AuthoredContentInstance.ServerContentId"/>, else null (workflow mints).</summary>
+        private static string ResolveContentIdOverrideForSync(SpawnRequest request, Transform spawnedTransform)
+        {
+            if (request != null && !string.IsNullOrWhiteSpace(request.contentIdOverride))
+                return request.contentIdOverride.Trim();
+
+            if (spawnedTransform == null)
+                return null;
+
+            AuthoredContentInstance ac = FindAuthoredContent(spawnedTransform);
+            if (ac != null && !string.IsNullOrWhiteSpace(ac.ServerContentId))
+                return ac.ServerContentId.Trim();
+
+            return null;
+        }
+
+        private static AuthoredContentInstance FindAuthoredContent(Transform spawnedTransform)
+        {
+            if (spawnedTransform == null)
+                return null;
+
+            return spawnedTransform.GetComponent<AuthoredContentInstance>()
+                ?? spawnedTransform.GetComponentInParent<AuthoredContentInstance>()
+                ?? spawnedTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+        }
+
+        private static void TryGetAuthoredContentMeta(
+            Transform spawnedTransform,
+            out string metaTitle,
+            out string metaDescription,
+            out string metaTextBody,
+            out string metaLocalContentId)
+        {
+            metaTitle = null;
+            metaDescription = null;
+            metaTextBody = null;
+            metaLocalContentId = null;
+
+            AuthoredContentInstance ac = FindAuthoredContent(spawnedTransform);
+            if (ac == null)
+                return;
+
+            metaTitle = ac.Title;
+            metaDescription = ac.Description;
+            metaTextBody = ac.TextBody;
+            metaLocalContentId = ac.LocalContentId;
         }
 
         private static string ToApiContentType(SpawnContentType type)

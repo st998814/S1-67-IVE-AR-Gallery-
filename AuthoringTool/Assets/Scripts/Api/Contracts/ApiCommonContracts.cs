@@ -53,4 +53,13 @@ public class ApiSyncMetaDto
     public string clientRequestId;
     /// <summary>Possible values: ISO-8601 UTC timestamp, e.g. "2026-04-06T12:00:00Z".</summary>
     public string createdAtUtc;
+
+    /// <summary>Optional display title for content (POST <c>/api/content</c> meta).</summary>
+    public string title = "";
+    /// <summary>Optional description for content.</summary>
+    public string description = "";
+    /// <summary>For text content: body echoed in meta for indexing / CMS (may duplicate <c>mediaUrl</c> text payload).</summary>
+    public string textBody = "";
+    /// <summary>Client-local content id (distinct from canonical POST <c>contentId</c> when both exist).</summary>
+    public string localContentId = "";
 }

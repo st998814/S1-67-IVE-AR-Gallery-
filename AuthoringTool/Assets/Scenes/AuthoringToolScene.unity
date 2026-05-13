@@ -774,6 +774,7 @@ GameObject:
   - component: {fileID: 1900000016}
   - component: {fileID: 1900000017}
   - component: {fileID: 1900000018}
+  - component: {fileID: 1900000019}
   m_Layer: 5
   m_Name: UIDocument
   m_TagString: Untagged
@@ -838,11 +839,12 @@ MonoBehaviour:
   picturePrefab: {fileID: 5812775703293105532, guid: d7e81759395336647a582400e29fa7e7, type: 3}
   textPrefab: {fileID: 8795060008269078731, guid: f48d1b2894c30d34c8f4f1b5659f2e98, type: 3}
   modelContentContainerPrefab: {fileID: 0}
-  apiClientBehaviour: {fileID: 0}
+  apiClientBehaviour: {fileID: 1900000004}
   createTargetTimeoutSeconds: 20
   uploadTimeoutSeconds: 20
   createContentTimeoutSeconds: 20
   spawnForwardOffsetFromWall: 0.008
+  remoteSyncService: {fileID: 1900000019}
 --- !u!114 &1900000015
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -906,6 +908,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARGallery.Workspace.Persistence.WorkspaceAutoSaveService
   debounceSeconds: 3
+--- !u!114 &1900000019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2c3d4e5f6a74859b0a1928374655649, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARGallery.Workspace.Persistence.WorkspaceRemoteSyncService
+  apiClientBehaviour: {fileID: 1900000004}
+  remoteSyncDebounceSeconds: 20
+  apiTimeoutSeconds: 25
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

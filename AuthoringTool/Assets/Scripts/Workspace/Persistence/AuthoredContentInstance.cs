@@ -26,6 +26,11 @@ namespace ARGallery.Workspace.Persistence
         public bool UploadPending;
         public bool PersistPending;
 
+        /// <summary>Layer 3: persists with <see cref="ContentSnapshot.remoteDirty"/>.</summary>
+        public bool RemoteDirty;
+        /// <summary>ISO-8601 UTC; aligns with <see cref="ContentSnapshot.lastRemoteSyncedAtUtc"/>.</summary>
+        public string LastRemoteSyncedAtUtc = "";
+
         private void Awake()
         {
             AuthoredObjectRegistry.RegisterContent(this);
