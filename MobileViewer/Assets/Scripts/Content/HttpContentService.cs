@@ -34,9 +34,12 @@ namespace MobileViewer.Content
             public string description;
             public string contentType;
             public string mediaUrl;
+            public float targetPhysicalWidthM = 1f;
             public Vector3Dto localPosition;
             public Vector3Dto localEuler;
             public Vector3Dto localScale;
+            public Vector3Dto targetLocalEuler;
+            public string targetPosture;
             public string color;
             public string displayLabel;
         }
@@ -142,9 +145,12 @@ namespace MobileViewer.Content
                 description = dto.description ?? string.Empty,
                 contentType = string.IsNullOrWhiteSpace(dto.contentType) ? "cube" : dto.contentType,
                 mediaUrl = dto.mediaUrl ?? string.Empty,
+                targetPhysicalWidthM = dto.targetPhysicalWidthM > 0f ? dto.targetPhysicalWidthM : 1f,
                 localPosition = ToVector3(dto.localPosition, new Vector3(0f, 0.05f, 0f)),
                 localEuler = ToVector3(dto.localEuler, Vector3.zero),
                 localScale = ToVector3(dto.localScale, Vector3.one * 0.3f),
+                targetLocalEuler = ToVector3(dto.targetLocalEuler, Vector3.zero),
+                targetPosture = string.IsNullOrWhiteSpace(dto.targetPosture) ? "wall" : dto.targetPosture,
                 mockColor = ParseColorOrDefault(dto.color, Color.white),
                 displayLabel = string.IsNullOrWhiteSpace(dto.displayLabel)
                     ? (string.IsNullOrWhiteSpace(dto.targetName) ? fallbackTargetName : dto.targetName)
@@ -178,9 +184,12 @@ namespace MobileViewer.Content
                 description = "The backend did not return content for this target.",
                 contentType = "cube",
                 mediaUrl = string.Empty,
+                targetPhysicalWidthM = 1f,
                 localPosition = new Vector3(0f, 0.05f, 0f),
                 localEuler = Vector3.zero,
                 localScale = Vector3.one * 0.3f,
+                targetLocalEuler = Vector3.zero,
+                targetPosture = "wall",
                 mockColor = new Color(0.9f, 0.5f, 0.5f),
                 displayLabel = "!"
             };

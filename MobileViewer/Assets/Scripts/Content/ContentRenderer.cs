@@ -31,9 +31,18 @@ namespace MobileViewer.Content
         [SerializeField] private float imagePlaneScale = 0.3f; // fallback when backend localScale is missing
         [SerializeField] private Vector3 imageLocalOffset = new(0f, 0.08f, 0f); // fallback when backend localPosition is missing
         [SerializeField] private float imageForwardOffset = 0.01f;
-        [SerializeField] private float authoredPositionScale = 0.3f;
+        [SerializeField] private float authoredPositionScale = 1f;
         [SerializeField] private Vector3 authoredPositionScalePerAxis = Vector3.one;
         [SerializeField] private bool keepImageOnTargetPlane = true;
+        [SerializeField] private bool useTargetPhysicalWidthScaling = true;
+        [SerializeField] private bool clampImageOffsetNearTarget = true;
+        [SerializeField] private Vector3 imageOffsetClampPerAxis = new(0.25f, 0.25f, 0.25f);
+
+        [Header("Posture Rotation Correction")]
+        [SerializeField] private bool applyPostureRotationCorrection = true;
+        [SerializeField] private Vector3 wallRotationCorrectionEuler = new(90f, 0f, 0f);
+        [SerializeField] private Vector3 floorRotationCorrectionEuler = Vector3.zero;
+        [SerializeField] private Vector3 ceilingRotationCorrectionEuler = new(-90f, 0f, 0f);
 
         private GameObject previewObject;
         private Renderer previewRenderer;
@@ -169,7 +178,7 @@ namespace MobileViewer.Content
             {
                 imageObject.transform.SetParent(targetTransform, false);
                 imageObject.transform.localPosition = ResolveImageLocalPosition(contentData);
-                imageObject.transform.localRotation = Quaternion.Euler(contentData.localEuler);
+                imageObject.transform.localRotation = ResolveRuntimeLocalRotation(contentData);
                 imageObject.transform.localScale = ResolveImageLocalScale(contentData);
 
                 if (imageForwardOffset > 0f)
@@ -241,7 +250,7 @@ namespace MobileViewer.Content
             {
                 previewObject.transform.SetParent(targetTransform, false);
                 previewObject.transform.localPosition = contentData.localPosition;
-                previewObject.transform.localRotation = Quaternion.Euler(contentData.localEuler);
+                previewObject.transform.localRotation = ResolveRuntimeLocalRotation(contentData);
                 var resolvedScale = contentData.localScale;
                 if (resolvedScale == Vector3.zero)
                 {
@@ -402,13 +411,23 @@ namespace MobileViewer.Content
             }
 
             // Authoring and runtime use different scene scales; normalize authored offsets for mobile runtime.
-            position.x *= authoredPositionScale * authoredPositionScalePerAxis.x;
-            position.y *= authoredPositionScale * authoredPositionScalePerAxis.y;
-            position.z *= authoredPositionScale * authoredPositionScalePerAxis.z;
+            var widthScale = useTargetPhysicalWidthScaling && contentData.targetPhysicalWidthM > 0f
+                ? contentData.targetPhysicalWidthM
+                : 1f;
+            position.x *= authoredPositionScale * authoredPositionScalePerAxis.x * widthScale;
+            position.y *= authoredPositionScale * authoredPositionScalePerAxis.y * widthScale;
+            position.z *= authoredPositionScale * authoredPositionScalePerAxis.z * widthScale;
 
             if (keepImageOnTargetPlane)
             {
                 position.z = imageLocalOffset.z;
+            }
+
+            if (clampImageOffsetNearTarget)
+            {
+                position.x = Mathf.Clamp(position.x, -imageOffsetClampPerAxis.x, imageOffsetClampPerAxis.x);
+                position.y = Mathf.Clamp(position.y, -imageOffsetClampPerAxis.y, imageOffsetClampPerAxis.y);
+                position.z = Mathf.Clamp(position.z, -imageOffsetClampPerAxis.z, imageOffsetClampPerAxis.z);
             }
 
             return position;
@@ -422,12 +441,43 @@ namespace MobileViewer.Content
                 scale = new Vector3(imagePlaneScale, imagePlaneScale, 1f);
             }
 
+            var widthScale = useTargetPhysicalWidthScaling && contentData.targetPhysicalWidthM > 0f
+                ? contentData.targetPhysicalWidthM
+                : 1f;
+
             // Treat authored scale as multiplier over runtime base plane size.
             return new Vector3(
-                Mathf.Max(0.01f, scale.x * imagePlaneScale),
-                Mathf.Max(0.01f, scale.y * imagePlaneScale),
+                Mathf.Max(0.01f, scale.x * imagePlaneScale * widthScale),
+                Mathf.Max(0.01f, scale.y * imagePlaneScale * widthScale),
                 Mathf.Max(0.01f, scale.z <= 0f ? 1f : scale.z)
             );
+        }
+
+        private Quaternion ResolveRuntimeLocalRotation(ContentData contentData)
+        {
+            var authored = Quaternion.Euler(contentData.localEuler);
+            if (!applyPostureRotationCorrection)
+            {
+                return authored;
+            }
+
+            var posture = (contentData.targetPosture ?? string.Empty).Trim().ToLowerInvariant();
+            Vector3 correctionEuler;
+            switch (posture)
+            {
+                case "floor":
+                    correctionEuler = floorRotationCorrectionEuler;
+                    break;
+                case "ceiling":
+                    correctionEuler = ceilingRotationCorrectionEuler;
+                    break;
+                default:
+                    correctionEuler = wallRotationCorrectionEuler;
+                    break;
+            }
+
+            var correction = Quaternion.Euler(correctionEuler);
+            return correction * authored;
         }
 
         private static PrimitiveType ResolvePrimitiveType(string contentType)

@@ -73,6 +73,9 @@ Backends may support both forms simultaneously; the lookup rules should be docum
 | `localPosition` | object | no | Optional `ApiVector3Dto` authored local position relative to target. |
 | `localEuler` | object | no | Optional `ApiVector3Dto` authored local Euler rotation (degrees) relative to target. |
 | `localScale` | object | no | Optional `ApiVector3Dto` authored local scale relative to target. |
+| `targetLocalEuler` | object | no | Target authored local Euler basis (`ApiVector3Dto`) for rotation-frame correction in runtime. |
+| `targetPosture` | string | no | Inferred posture hint (`wall`, `floor`, `ceiling`) derived from target basis; runtime may apply posture-specific rotation correction. |
+| `targetPhysicalWidthM` | number | no | Physical width of the target in meters. Runtime may use this to normalize authored transforms to real-world scale. |
 | `color` | string | no | Hex color (`#RRGGBB` or `#RRGGBBAA`) for mock primitive tinting. |
 | `displayLabel` | string | no | Label to show in UI; falls back to `targetName` when empty. |
 

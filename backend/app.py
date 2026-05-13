@@ -958,7 +958,8 @@ def mobileviewer_get_content_by_target(target_key):
                 # Resolve key -> canonical target row.
                 cur.execute(
                     """
-                    SELECT target_id, target_name, display_label
+                    SELECT target_id, target_name, display_label, physical_width_m,
+                           local_euler_x, local_euler_y, local_euler_z
                     FROM targets
                     WHERE target_id = %s OR vuforia_target_id = %s
                     LIMIT 1;
@@ -969,7 +970,25 @@ def mobileviewer_get_content_by_target(target_key):
                 if target_row is None:
                     return error_response(f"Target '{target_key}' was not found.", "NOT_FOUND", 404)
 
-                target_id, target_name, display_label = target_row[0], target_row[1], target_row[2]
+                target_id, target_name, display_label, physical_width_m, target_euler_x, target_euler_y, target_euler_z = (
+                    target_row[0],
+                    target_row[1],
+                    target_row[2],
+                    target_row[3],
+                    target_row[4],
+                    target_row[5],
+                    target_row[6],
+                )
+
+                # Infer posture from target local X rotation convention used by authoring:
+                # Wall: ~0, Floor: ~-90, Ceiling: ~+90
+                posture = "wall"
+                if target_euler_x is not None:
+                    x = float(target_euler_x)
+                    if x <= -45.0:
+                        posture = "floor"
+                    elif x >= 45.0:
+                        posture = "ceiling"
 
                 # Pick one content row for runtime. Current policy: earliest created content for the target.
                 cur.execute(
@@ -1037,8 +1056,11 @@ def mobileviewer_get_content_by_target(target_key):
                         "localPosition": _vector_response(local_pos_x, local_pos_y, local_pos_z),
                         "localEuler": _vector_response(local_euler_x, local_euler_y, local_euler_z),
                         "localScale": _vector_response(local_scale_x, local_scale_y, local_scale_z),
+                        "targetLocalEuler": _vector_response(target_euler_x or 0.0, target_euler_y or 0.0, target_euler_z or 0.0),
+                        "targetPosture": posture,
                         "color": color,
                         "displayLabel": (display_label or "").strip() or (target_name or target_id),
+                        "targetPhysicalWidthM": float(physical_width_m) if physical_width_m is not None else 1.0,
                     }
                 )
     except psycopg2.Error as e:
