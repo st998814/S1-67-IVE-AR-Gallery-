@@ -68,11 +68,29 @@ Backends may support both forms simultaneously; the lookup rules should be docum
 | `targetName` | string | yes | Canonical or display name for the target. Used for logging and status text. |
 | `title` | string | no | Content title. |
 | `description` | string | no | Longer description. |
-| `contentType` | string | yes | Semantic content type, e.g. `cube`, `capsule`, `sphere`, or future values. |
+| `contentType` | string | yes | Strict backend runtime type: `image`, `video`, `model`. |
+| `mediaUrl` | string | no | URL for renderable media. Required in practice for `image`, `video`, and `model` runtime renderers. |
+| `localPosition` | object | no | Optional `ApiVector3Dto` authored local position relative to target. |
+| `localEuler` | object | no | Optional `ApiVector3Dto` authored local Euler rotation (degrees) relative to target. |
+| `localScale` | object | no | Optional `ApiVector3Dto` authored local scale relative to target. |
 | `color` | string | no | Hex color (`#RRGGBB` or `#RRGGBBAA`) for mock primitive tinting. |
 | `displayLabel` | string | no | Label to show in UI; falls back to `targetName` when empty. |
 
 Servers may include extra fields; MobileViewer should ignore unknown keys.
+
+### Source content type constraints
+
+Persisted content in backend is validated against the strict set:
+
+- `image`
+- `video`
+- `model`
+
+Current MobileViewer runtime behavior:
+
+- image plane renderer
+- video surface/player renderer: **stub for next step**
+- `.glb` model renderer: **stub for next step**
 
 **Example — success response**
 

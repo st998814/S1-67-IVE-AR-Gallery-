@@ -21,10 +21,22 @@ namespace MobileViewer.Content
         [Serializable]
         private class ContentDto
         {
+            [Serializable]
+            public class Vector3Dto
+            {
+                public float x;
+                public float y;
+                public float z;
+            }
+
             public string targetName;
             public string title;
             public string description;
             public string contentType;
+            public string mediaUrl;
+            public Vector3Dto localPosition;
+            public Vector3Dto localEuler;
+            public Vector3Dto localScale;
             public string color;
             public string displayLabel;
         }
@@ -129,6 +141,10 @@ namespace MobileViewer.Content
                 title = dto.title ?? string.Empty,
                 description = dto.description ?? string.Empty,
                 contentType = string.IsNullOrWhiteSpace(dto.contentType) ? "cube" : dto.contentType,
+                mediaUrl = dto.mediaUrl ?? string.Empty,
+                localPosition = ToVector3(dto.localPosition, new Vector3(0f, 0.05f, 0f)),
+                localEuler = ToVector3(dto.localEuler, Vector3.zero),
+                localScale = ToVector3(dto.localScale, Vector3.one * 0.3f),
                 mockColor = ParseColorOrDefault(dto.color, Color.white),
                 displayLabel = string.IsNullOrWhiteSpace(dto.displayLabel)
                     ? (string.IsNullOrWhiteSpace(dto.targetName) ? fallbackTargetName : dto.targetName)
@@ -161,9 +177,18 @@ namespace MobileViewer.Content
                 title = "Content unavailable",
                 description = "The backend did not return content for this target.",
                 contentType = "cube",
+                mediaUrl = string.Empty,
+                localPosition = new Vector3(0f, 0.05f, 0f),
+                localEuler = Vector3.zero,
+                localScale = Vector3.one * 0.3f,
                 mockColor = new Color(0.9f, 0.5f, 0.5f),
                 displayLabel = "!"
             };
+        }
+
+        private static Vector3 ToVector3(ContentDto.Vector3Dto source, Vector3 fallback)
+        {
+            return source == null ? fallback : new Vector3(source.x, source.y, source.z);
         }
     }
 }

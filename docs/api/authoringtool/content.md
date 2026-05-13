@@ -25,8 +25,8 @@ Persists local draft content and binds it to a target. Aligns with `CreateConten
 |--------|------|----------|-------------|
 | `contentId` | string | yes | Client-proposed or generated id. |
 | `targetId` | string | yes | Parent target canonical id. |
-| `contentType` | string | yes | e.g. `image`, `video`, `text`, `empty`, `model`. Unity authoring normalizes 3D content to lowercase `model` (some docs or legacy rows may show `model(3D)`). |
-| `mediaUrl` | string | conditional | Required for `image`/`video`/`model` at save-time persistence; usually from `UploadFileResponseDto.url`. Optional/empty for `text`. |
+| `contentType` | string | yes | **Strict set:** `image`, `video`, `model`. Any other value is rejected with `VALIDATION_ERROR`. |
+| `mediaUrl` | string | yes | Required for all supported content types (`image`, `video`, `model`) at save-time persistence; usually from `UploadFileResponseDto.url` or an approved external URL for video. |
 | `localPosition` | object | yes | `ApiVector3Dto`. |
 | `localEuler` | object | yes | `ApiVector3Dto` (degrees). |
 | `localScale` | object | yes | `ApiVector3Dto`. |
@@ -109,7 +109,7 @@ Body: **JSON array** of content detail objects (raw array, no envelope). Each it
 |--------|------|-------------|
 | `contentId` | string | Canonical content id. |
 | `targetId` | string | Parent target id. |
-| `contentType` | string | e.g. `image`, `video`, `text`, `empty`, `model`. |
+| `contentType` | string | Strict set: `image`, `video`, `model`. |
 | `mediaUrl` | string | Stable URL or text payload marker, depending on content type. |
 | `localPosition` | object | `ApiVector3Dto`. |
 | `localEuler` | object | `ApiVector3Dto`. |
@@ -255,7 +255,7 @@ Minimal confirmation DTO:
 
 ## Errors
 
-Standard error body from `common.md`. Examples: `404` if `contentId` or referenced `targetId` is invalid; `VALIDATION_ERROR` for invalid `contentType`, invalid transform data, or unresolved `mediaUrl` for non-text content.
+Standard error body from `common.md`. Examples: `404` if `contentId` or referenced `targetId` is invalid; `VALIDATION_ERROR` for invalid `contentType` (anything outside `image`/`video`/`model`), invalid transform data, or unresolved `mediaUrl`.
 
 ---
 
