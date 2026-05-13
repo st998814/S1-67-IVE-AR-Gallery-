@@ -182,14 +182,59 @@ def test_list_targets_success(client):
     now = datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc)
     mock_cur = MagicMock()
     mock_cur.fetchall.return_value = [
-        ("poster-a", "Poster A", "Main wall poster", "http://example.com/poster.jpg", "accepted", now)
+        ("poster-a", "Poster A", "Main wall poster", "http://example.com/poster.jpg", "accepted", now, "vu-target", "TargetCreated")
     ]
 
     with patch("app.get_db_connection", return_value=db_context(mock_cur)):
         res = client.get("/api/targets")
 
     assert res.status_code == 200
-    assert res.get_json()[0]["targetId"] == "poster-a"
+    body = res.get_json()
+    assert body[0]["targetId"] == "poster-a"
+    assert body[0]["vuforiaTargetId"] == "vu-target"
+    assert body[0]["vuforiaStatus"] == "TargetCreated"
+
+
+def test_resolve_target_by_vuforia_id_success(client):
+    now = datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = (
+        "poster-a",
+        "Poster A",
+        "Main wall poster",
+        "http://example.com/poster.jpg",
+        "accepted",
+        now,
+        "vu-target",
+        "TargetCreated",
+    )
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.get("/api/targets/resolve?vuforiaTargetId=vu-target")
+
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["targetId"] == "poster-a"
+    assert body["vuforiaTargetId"] == "vu-target"
+    assert mock_cur.execute.call_args[0][1] == ("vu-target",)
+
+
+def test_resolve_target_by_vuforia_id_missing_param(client):
+    res = client.get("/api/targets/resolve")
+
+    assert res.status_code == 400
+    assert res.get_json()["errorCode"] == "VALIDATION_ERROR"
+
+
+def test_resolve_target_by_vuforia_id_not_found(client):
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = None
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.get("/api/targets/resolve?vuforiaTargetId=missing")
+
+    assert res.status_code == 404
+    assert res.get_json()["errorCode"] == "NOT_FOUND"
 
 
 def test_delete_target_not_found(client):

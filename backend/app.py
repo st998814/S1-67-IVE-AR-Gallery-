@@ -172,7 +172,7 @@ def _parse_form_json(field: str, default):
 
 
 def _target_response(row, status_override=None):
-    return {
+    body = {
         "targetId": row[0],
         "targetName": row[1],
         "displayLabel": row[2],
@@ -180,12 +180,15 @@ def _target_response(row, status_override=None):
         "createdAtUtc": _row_timestamp_to_iso(row[5]),
         "targetImageUrl": row[3],
     }
+    if len(row) > 6:
+        body["vuforiaTargetId"] = row[6] or ""
+    if len(row) > 7:
+        body["vuforiaStatus"] = row[7] or ""
+    return body
 
 
 def _target_cloud_response(row, status_override=None):
     body = _target_response(row, status_override)
-    body["vuforiaTargetId"] = row[6] if len(row) > 6 else ""
-    body["vuforiaStatus"] = row[7] if len(row) > 7 else ""
     return body
 
 
@@ -638,7 +641,8 @@ def list_targets():
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc
+                    SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc,
+                           vuforia_target_id, vuforia_status
                     FROM targets
                     ORDER BY created_at_utc ASC, target_id ASC;
                     """
@@ -647,6 +651,33 @@ def list_targets():
     except psycopg2.Error as e:
         logger.error("Database error in list_targets (pgcode=%s): %s", getattr(e, "pgcode", None), e)
         return error_response("Database error while listing targets.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@app.route("/api/targets/resolve", methods=["GET"])
+def resolve_target_by_vuforia_id():
+    vuforia_target_id = (request.args.get("vuforiaTargetId") or "").strip()
+    if not vuforia_target_id:
+        return error_response("vuforiaTargetId query parameter is required.", "VALIDATION_ERROR", 400)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc,
+                           vuforia_target_id, vuforia_status
+                    FROM targets
+                    WHERE vuforia_target_id = %s;
+                    """,
+                    (vuforia_target_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return error_response(f"Vuforia target '{vuforia_target_id}' was not found.", "NOT_FOUND", 404)
+                return jsonify(_target_response(row))
+    except psycopg2.Error as e:
+        logger.error("Database error in resolve_target_by_vuforia_id (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while resolving target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
 
 
 @app.route("/api/targets/<path:target_id>", methods=["DELETE"])

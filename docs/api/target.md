@@ -152,6 +152,64 @@ Each item currently includes:
 | `targetImageUrl` | string | Stored image URL. |
 | `status` | string | Lifecycle status. |
 | `createdAtUtc` | string | ISO-8601 UTC timestamp. |
+| `vuforiaTargetId` | string | Vuforia Cloud target id, empty for non-cloud/manual targets. |
+| `vuforiaStatus` | string | Last Vuforia result/status, empty for non-cloud/manual targets. |
+
+### Example — success response
+
+```json
+[
+  {
+    "targetId": "poster-a",
+    "targetName": "Poster A",
+    "displayLabel": "Main wall poster",
+    "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
+    "status": "accepted",
+    "createdAtUtc": "2026-05-06T10:26:13.296729Z",
+    "vuforiaTargetId": "ac359e111d82418785dbf0f6a1312564",
+    "vuforiaStatus": "TargetCreated"
+  }
+]
+```
+
+---
+
+## `GET /api/targets/resolve`
+
+Resolves a Vuforia Cloud target id into the backend's canonical target record. This is useful after MobileViewer receives a Vuforia recognition id and needs to call `GET /api/content?targetId=...`.
+
+### Request
+
+| Query parameter | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `vuforiaTargetId` | string | yes | Exact Vuforia Cloud target id stored on the target row. |
+
+### Response `200`
+
+Returns the same target summary shape as `GET /api/targets` items.
+
+### Example
+
+```http
+GET /api/targets/resolve?vuforiaTargetId=ac359e111d82418785dbf0f6a1312564
+```
+
+```json
+{
+  "targetId": "poster-a",
+  "targetName": "Poster A",
+  "displayLabel": "Main wall poster",
+  "targetImageUrl": "http://127.0.0.1:5050/uploads/poster_a.jpg",
+  "status": "accepted",
+  "createdAtUtc": "2026-05-06T10:26:13.296729Z",
+  "vuforiaTargetId": "ac359e111d82418785dbf0f6a1312564",
+  "vuforiaStatus": "TargetCreated"
+}
+```
+
+### Response `400` / `404`
+
+Standard error object from `common.md` with `VALIDATION_ERROR` for missing `vuforiaTargetId`, or `NOT_FOUND` when no target stores that Vuforia id.
 
 ---
 
