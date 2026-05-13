@@ -39,48 +39,69 @@ See full field listing and examples in `../target.md` (`GET /api/targets/resolve
 
 ---
 
-## 2. Fetching content for a resolved target
+## 2. Fetching content for a resolved target (MobileViewer-specific)
 
-### `GET /api/content?targetId={targetId}`
+MobileViewer uses a **runtime-optimized** content endpoint that returns at most one record for a given target key.  
+This is a convenience wrapper over the more general authoring content APIs in `../content.md`.
 
-Once MobileViewer has a canonical `targetId`, it retrieves content rows bound to that target using the existing content listing endpoint.
+### `GET /api/mobileviewer/content/by-target/{targetKey}`
 
-See full shape in `../content.md` (`GET /api/content`); MobileViewer uses a narrowed view to drive its simple mock-3D renderer.
+Where `targetKey` is one of:
+
+- the canonical backend `targetId` (e.g. `ttest`, `demo-vuforia-target-2`), or
+- a Vuforia Cloud target id (UUID-style) that the backend aliases to a canonical target.
+
+Backends may support both forms simultaneously; the lookup rules should be documented in backend code comments if they diverge from this doc.
 
 **Request**
 
-- Query parameter: `targetId` — string, required for this flow.
+- Path parameter: `targetKey` — string, required.
 - No body.
 
 **Success response (`200`)**
 
-- Body: JSON array of content objects.
-- For this prototype, MobileViewer expects **zero or more** rows and typically uses the **first** record matching simple criteria (for example, first `contentType` it recognizes).
+- Body: a single JSON object representing **the content that MobileViewer should render for this target**.
+- Field names are camelCase and map directly or trivially into the Unity `ContentData` DTO.
 
-Fields MobileViewer reads:
+| Field | Type | Required | Description |
+|--------|------|----------|-------------|
+| `targetName` | string | yes | Canonical or display name for the target. Used for logging and status text. |
+| `title` | string | no | Content title. |
+| `description` | string | no | Longer description. |
+| `contentType` | string | yes | Semantic content type, e.g. `cube`, `capsule`, `sphere`, or future values. |
+| `color` | string | no | Hex color (`#RRGGBB` or `#RRGGBBAA`) for mock primitive tinting. |
+| `displayLabel` | string | no | Label to show in UI; falls back to `targetName` when empty. |
 
-| Field | Type | Description |
-|--------|------|-------------|
-| `contentId` | string | Content identifier (for logging/analytics). |
-| `targetId` | string | Must match the requested target id. |
-| `contentType` | string | Mapped to mock primitive type (e.g. `cube`, `capsule`, `sphere`) or future richer renderers. |
-| `meta.title` | string | Optional title used for debug/toast messaging. |
-| `meta.description` | string | Optional description (debug use in logs). |
+Servers may include extra fields; MobileViewer should ignore unknown keys.
 
-Other fields (`mediaUrl`, transforms) are available but not required by the current MobileViewer implementation.
+**Example — success response**
 
-**Empty result (`200` with `[]`)**
+```json
+{
+  "targetName": "ttest",
+  "title": "Demo cube",
+  "description": "Test content for ttest target.",
+  "contentType": "cube",
+  "color": "#FFAA33",
+  "displayLabel": "Test Target"
+}
+```
 
-- MobileViewer treats this as “no content configured for this target” and may:
-  - show a toast like `No content configured for {displayLabel}`, and
-  - continue scanning.
+**Not found (`404`)**
 
-**Error responses (`4xx` / `5xx`)**
+- Indicates that no runtime content is configured for this `targetKey`.
+- Body: standard error object from `common.md` with `errorCode` typically `NOT_FOUND`.
+- MobileViewer behavior:
+  - show a toast such as `No content configured for this target`, and
+  - continue scanning; no content is rendered.
 
-- Standard error object from `common.md`; MobileViewer should:
-  - log the message,
-  - show a short error toast (`Loading content failed`), and
-  - remain stable (continue scanning on next recognition).
+**Other errors (`5xx` / network)**
+
+- Treated as transient faults.
+- MobileViewer behavior:
+  - show a short error toast (`Loading content failed`),
+  - log the `message` and `errorCode`,
+  - allow retry on the next recognition of the same target.
 
 ---
 
