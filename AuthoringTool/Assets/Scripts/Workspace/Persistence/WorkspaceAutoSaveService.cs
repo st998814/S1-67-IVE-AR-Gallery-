@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using ARGallery.AppFlow;
 using UnityEngine;
@@ -6,11 +7,19 @@ namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
     /// Debounced write of <see cref="WorkspaceSnapshot"/> to disk via <see cref="WorkspaceSnapshotRepository"/>.
-    /// Does not call backend APIs.
+    /// Does not call backend APIs. After a successful save (unless suppressed), raises <see cref="SnapshotSaved"/>
+    /// so Layer 3 can schedule remote sync without coupling HTTP here.
     /// </summary>
     public sealed class WorkspaceAutoSaveService : MonoBehaviour
     {
         private const string LogPrefix = "[WorkspacePersistence] ";
+
+        /// <summary>
+        /// Fired once <see cref="WorkspaceSnapshot"/> was written successfully to disk.
+        /// Use <see cref="FlushSnapshotToDisk"/> with <c>suppressSnapshotSaved: true</c> (or save via repository directly)
+        /// when persisting merged server state so Layer 3 does not re-enter its own debounce loop.
+        /// </summary>
+        public event Action<WorkspaceSnapshot> SnapshotSaved;
 
         [SerializeField] [Min(0.5f)] private float debounceSeconds = 3f;
 
@@ -49,16 +58,17 @@ namespace ARGallery.Workspace.Persistence
                 Debug.Log($"{LogPrefix}SaveNow skipped (component inactive/disabled).");
                 return;
             }
-            FlushSnapshotToDisk();
+            FlushSnapshotToDisk(suppressSnapshotSaved: false);
         }
 
         /// <summary>
         /// Writes <see cref="WorkspaceSnapshot"/> immediately, cancelling any pending debounce.
         /// Does not require the component to be enabled (call before scene unload or after session is still valid).
         /// </summary>
-        public void FlushSnapshotToDisk()
+        /// <param name="suppressSnapshotSaved">If true, successful disk write does not raise <see cref="SnapshotSaved"/>.</param>
+        public void FlushSnapshotToDisk(bool suppressSnapshotSaved = false)
         {
-            Debug.Log($"{LogPrefix}FlushSnapshotToDisk begin | persistentDataPath={Application.persistentDataPath}");
+            Debug.Log($"{LogPrefix}FlushSnapshotToDisk begin | suppressSnapshotSaved={suppressSnapshotSaved} | persistentDataPath={Application.persistentDataPath}");
 
             if (debounceCoroutine != null)
             {
@@ -111,7 +121,13 @@ namespace ARGallery.Workspace.Persistence
                 Debug.Log($"{LogPrefix}Built snapshot: targets={snapTargets} contents={snapContents}");
 
                 if (!snapshotRepository.TrySaveSnapshot(snapshot, out string err))
+                {
                     Debug.LogWarning($"{LogPrefix}TrySaveSnapshot failed: {err}");
+                    return;
+                }
+
+                if (!suppressSnapshotSaved)
+                    SnapshotSaved?.Invoke(snapshot);
             }
             finally
             {
