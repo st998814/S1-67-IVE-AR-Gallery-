@@ -2105,6 +2105,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         else
             autoSave.FlushSnapshotToDisk();
 
+        FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
+
         AppFlowController.ClearWorkspaceSession();
         Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
         SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
@@ -2121,6 +2123,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             saveButton.text = "Nothing to save";
             saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(1600);
             isSaveInProgress = false;
+            FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
             yield break;
         }
 
@@ -2183,6 +2186,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         isSaveInProgress = false;
         RefreshHierarchyListFromCoordinator();
+        FindFirstObjectByType<WorkspaceRemoteSyncService>()?.SyncNow();
     }
 
     private void MarkLibraryItemSavedByTransform(Transform transform, bool saved)
