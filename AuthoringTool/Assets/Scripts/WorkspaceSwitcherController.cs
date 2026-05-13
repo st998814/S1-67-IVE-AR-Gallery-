@@ -216,30 +216,34 @@ namespace ARGallery.AppFlow
 
             if (insertionOrder.Count == 0)
             {
-                RegisterSeed(new WorkspaceSessionContext
-                {
-                    workspaceId = "ws-wall-001",
-                    workspaceName = "Target on Wall",
-                    targetId = "target-wall-001",
-                    isNewWorkspace = false,
-                    setupState = WorkspaceSetupState.Ready
-                });
-                RegisterSeed(new WorkspaceSessionContext
-                {
-                    workspaceId = "ws-floor-001",
-                    workspaceName = "Target on Floor",
-                    targetId = "target-floor-001",
-                    isNewWorkspace = false,
-                    setupState = WorkspaceSetupState.Ready
-                });
-                RegisterSeed(new WorkspaceSessionContext
-                {
-                    workspaceId = "ws-ceiling-001",
-                    workspaceName = "Target on Ceiling",
-                    targetId = "target-ceiling-001",
-                    isNewWorkspace = false,
-                    setupState = WorkspaceSetupState.Ready
-                });
+                var hidden = Workspace.MockWorkspaceProvider.LoadHiddenSeedWorkspaceIds();
+                if (!hidden.Contains("ws-wall-001"))
+                    RegisterSeed(new WorkspaceSessionContext
+                    {
+                        workspaceId = "ws-wall-001",
+                        workspaceName = "Target on Wall",
+                        targetId = "target-wall-001",
+                        isNewWorkspace = false,
+                        setupState = WorkspaceSetupState.Ready
+                    });
+                if (!hidden.Contains("ws-floor-001"))
+                    RegisterSeed(new WorkspaceSessionContext
+                    {
+                        workspaceId = "ws-floor-001",
+                        workspaceName = "Target on Floor",
+                        targetId = "target-floor-001",
+                        isNewWorkspace = false,
+                        setupState = WorkspaceSetupState.Ready
+                    });
+                if (!hidden.Contains("ws-ceiling-001"))
+                    RegisterSeed(new WorkspaceSessionContext
+                    {
+                        workspaceId = "ws-ceiling-001",
+                        workspaceName = "Target on Ceiling",
+                        targetId = "target-ceiling-001",
+                        isNewWorkspace = false,
+                        setupState = WorkspaceSetupState.Ready
+                    });
             }
 
             for (int i = 0; i < insertionOrder.Count; i++)
