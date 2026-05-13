@@ -1,45 +1,106 @@
-# Authoring UI/Layout 
+# Authoring UI / layout
 
-## Scope Completed
+## Documentation map
 
-This document summarizes the implementation and side-task adjustments completed for DEV-186 in `AuthoringToolScene`.
+| Topic | Document |
+|-------|----------|
+| **Current authoring shell** (viewport, FAB, inspector, switcher styling) | **This file** — sections *Current authoring shell* and *Authoring UI summary*. |
+| **Local snapshot + disk persistence (Layer 2)** | [LocalWorkspacePersistent-Layer2.md](../Storage/LocalWorkspacePersistent-Layer2.md) |
+| **Remote sync + backend + DB (Layer 3)** | [SyncingToPersistentStorage-Layer3.md](../Storage/SyncingToPersistentStorage-Layer3.md) |
+| Placement / camera / transform behavior | [PlacementInteractionAndTransformAuthoring.md](PlacementInteractionAndTransformAuthoring.md), [RuntimeSceneCameraControl.md](RuntimeSceneCameraControl.md) |
 
 ---
 
-## 1) Scene + Layout Foundation
+## Scope completed (DEV-186 baseline)
+
+This document originated as the DEV-186 implementation summary for `AuthoringToolScene`. The **current** authoring chrome is described in **Current authoring shell** below; earlier sections retain **historical** detail where still useful (left panel era, DEV-186 tasks).
+
+---
+
+## Current authoring shell (post–Layer 2 refresh)
+
+Recent authoring chrome changes (source of truth for layout):
+
+- **Left column removed** — former content-library column and toggle are gone; the center viewport expands horizontally.
+- **Add control** — circular **+** FAB (`AddContentFabButton`) anchored **lower-left** of the authoring root; background matches panel tone (`AuthoringUI.uss`); invokes the same **`WebGLFileBrowser`** browse pipeline as legacy **Add Content** (`AuthoringUIController.OnBrowseButtonClicked`).
+- **Right panel** — inspector remains (Target / Content tabs, spatial fields, optional target reference). **Content Library** list block was removed from this panel; hierarchy selection is driven by scene/coordinator flows when no list is present (controller guards null `ListView`).
+- **Workspace switcher** — **DELETE** uses destructive styling (`switcher-action-danger` in `WorkspaceSwitcherUI.uss`; fallback styling in `WorkspaceSwitcherController` runtime UI). Optional **`backendApiBaseUrl`** triggers server workspace delete before local snapshot removal (see Layer 3 doc).
+
+---
+
+## Authoring UI summary (current)
+
+| Area | Behavior |
+|------|----------|
+| **Top bar** | Workspace name, mode pills, Return, Save. |
+| **Center** | 3D viewport (`CenterViewport`). |
+| **Lower-left** | Circular **+** → same upload/browse intent as former Add Content. |
+| **Right** | Collapsible inspector (Target/Content); no embedded content-library list. |
+| **Switcher DELETE** | Red/danger styling; optional API delete before disk delete. |
+
+### UI assets — `Assets/UI/`
+
+| Asset | Role |
+|-------|------|
+| **UI/UXML/AuthoringUI.uxml** | Layout: top bar, center viewport, right inspector, FAB host. |
+| **UI/USS/AuthoringUI.uss** | Panel tones, `.authoring-add-fab` circular add button. |
+| **UI/UXML/WorkspaceSwitcherUI.uxml** | DELETE uses `.switcher-action-danger`. |
+| **UI/USS/WorkspaceSwitcherUI.uss** | Danger button styles for DELETE. |
+
+---
+
+## Validation (UI shell)
+
+- Authoring **+** opens file browser path consistent with `OnBrowseButtonClicked` / `UploadPurpose.Content`.
+- Inspector and scene selection still update spatial fields when list UI is absent.
+- Switcher DELETE presents danger styling and completes local delete (and server delete when configured).
+
+---
+
+## Known gaps / follow-ups
+
+- Optional: restore a lightweight hierarchy UI elsewhere if product wants list-driven selection again without restoring the old left column.
+
+---
+
+## Historical: DEV-186 scene + layout foundation
 
 - Authoring scene visual tone was moved to a clean dark editor-like style.
-- UI shell was restructured into:
+- UI shell **at the time** was restructured into:
   - top bar
-  - left content panel (collapsible)
+  - left content panel (collapsible) — **since removed**; see *Current authoring shell*.
   - center 3D viewport
   - right inspector panel (collapsible)
-- Side toggles remain visible in collapsed state.
-- `Return` action is present for navigating back to workspace switcher.
+- Side toggles remained visible in collapsed state.
+- `Return` action navigates back to workspace switcher.
 
 ---
 
-## 2) Left Panel (Content Library)
+## Historical: left panel (content library)
 
-- Left side now behaves as a runtime content library rather than old target-creation form.
-- Supports add/upload flow and content list selection.
-- Selection syncs with scene transform selection.
+> **Superseded:** the dedicated left content-library column was removed in the Layer 2 UI refresh. Selection is coordinator-driven without an embedded list.
+
+Previously:
+
+- Left side behaved as a runtime content library rather than old target-creation form.
+- Supported add/upload flow and content list selection.
+- Selection synced with scene transform selection.
 - One-target/one-active-content behavior was preserved in runtime activation flow.
 - Duplicate "saved" entry issue was addressed with one-time bootstrap + stricter stale cleanup logic.
 
 ---
 
-## 3) Right Panel (Inspector)
+## Historical: right panel (inspector)
 
 - Removed old fields (type/media/youtube/text spawn) from right inspector scope.
 - Kept spatial coordinates (`X/Y/Z`) for target/content contexts.
-- Added explicit inspector tabs:
+- Explicit inspector tabs:
   - `Target`
   - `Content`
 - Context behavior:
   - `Content`: edits selected content transform
   - `Target`: edits active target transform and shows target-reference section
-- Added optional target-reference upload UI:
+- Optional target-reference upload UI:
   - one reference per target
   - replacement supported
   - per-target preview/status in inspector
@@ -47,16 +108,16 @@ This document summarizes the implementation and side-task adjustments completed 
 
 ---
 
-## 4) Mode Indicator Visuals
+## Historical: mode indicator visuals
 
-- Top bar mode visualization now uses active-state pills (Move/Rotate/Scale/Universal).
+- Top bar mode visualization uses active-state pills (Move/Rotate/Scale/Universal).
 - Active styling follows current gizmo mode.
 - Text `Mode:` label was removed per request; only pills remain.
 - In target inspector mode, mode pills are hidden.
 
 ---
 
-## 5) Interaction Blocking / Input Conflict Pass
+## Historical: interaction blocking / input conflict pass
 
 - `picking-mode` usage across UXML was aligned for UI-vs-scene separation.
 - `ObjectSelectionManager` and `RuntimeCameraController` were hardened to reliably resolve/use `AuthoringUIController` for UI blocking.
@@ -65,7 +126,7 @@ This document summarizes the implementation and side-task adjustments completed 
 
 ---
 
-## 6) Selection Feedback (TODO 6)
+## Historical: selection feedback (TODO 6)
 
 - Added textured-safe selection visualization in `AuthoringTransformCoordinator`.
 - Replaced filled overlay behavior with edge-only bounds highlight to avoid obscuring content.
@@ -75,7 +136,7 @@ This document summarizes the implementation and side-task adjustments completed 
 
 ---
 
-## 7) Demo Workspace Side Task
+## Historical: demo workspace side task
 
 Predefined mock/demo workspaces were aligned to 3 contexts:
 
@@ -89,7 +150,7 @@ Target image uses default visual behavior (backend image flow deferred).
 
 ---
 
-## 8) Spawn Position / Front-Side Adjustments
+## Historical: spawn position / front-side adjustments
 
 To address "spawn behind target" and overlap behavior, spawn direction and front-side rules were aligned:
 
@@ -101,7 +162,7 @@ Note: Any remaining edge cases should be validated against exact active target h
 
 ---
 
-## Key Files Touched (High Impact)
+## Key files touched (high impact)
 
 - `Assets/UI/UXML/AuthoringUI.uxml`
 - `Assets/UI/USS/AuthoringUI.uss`
@@ -119,8 +180,9 @@ Note: Any remaining edge cases should be validated against exact active target h
 
 ---
 
-## Current Status
+## Current status
 
-- DEV-186 required layout/system tasks are implemented.
-- Side demo workspace setup is in place.
-- Spawn/front-side behavior has been iterated and aligned with current constraint direction conventions.
+- **Layout:** Current authoring shell is summarized in *Current authoring shell* and *Authoring UI summary*; persistence and sync are split into **Storage** docs (Layers 2–3).
+- **DEV-186:** Required layout/system tasks from the original milestone are implemented; historical sections document pre-refresh behavior where it differs.
+- **Demo workspaces:** Side demo workspace setup remains in place.
+- **Spawn/front-side:** Iterated and aligned with current constraint direction conventions.

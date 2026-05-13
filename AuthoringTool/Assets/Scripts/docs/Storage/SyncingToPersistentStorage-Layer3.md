@@ -1,0 +1,73 @@
+# Syncing to persistent storage (Layer 3)
+
+**Layer 3** is **remote** synchronization: pushing authored workspace state to the AR Gallery **backend** (Postgres + files under `uploads/`). It builds on **Layer 2** (local snapshot + assets — see **[LocalWorkspacePersistent-Layer2.md](LocalWorkspacePersistent-Layer2.md)**).
+
+Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring/AuthoringUILayout.md)**.
+
+---
+
+## Purpose
+
+- Persist targets, content rows, and uploaded media on the server so TablePlus / API consumers see the same data as the authoring tool after sync.
+- Support workspace-scoped records (`workspace_id` / `workspaceId`) and optional workspace row upsert on the server.
+- On workspace delete from the switcher, cascade server-side data via **`DELETE /api/workspaces/<workspace_id>`** before removing local snapshot folders.
+
+---
+
+## Unity components
+
+| Area | Role |
+|------|------|
+| **WorkspaceRemoteSyncService** | Coroutine-driven pass: sync targets then contents when `RemoteDirty` / session valid; uses **`IApiClient`** (`HttpApiClient`). |
+| **HttpApiClient** | `POST /api/upload` (multipart `category`, optional **`targetId`** / **`contentId`** for stable file names), `POST /api/targets`, `POST /api/content`; multipart **`POST /api/targets/cloud`** where used. |
+| **TargetWorkflowService** / **ContentWorkflowService** | Build JSON DTOs for create/update flows; target sync includes **`workspaceId`** / **`workspaceName`** from session. |
+| **Workspace session** | `AppFlowController` / `WorkspaceSessionContext` supplies **`workspaceId`** for API payloads. |
+
+### Stable upload filenames (avoid duplicates)
+
+- **Target:** multipart **`targetId`** with `category=target` → server stores **`{targetId}.{ext}`** and overwrites on re-sync (aligned with **`/api/targets/cloud`** naming).
+- **Content:** multipart **`contentId`** with `category=content` → **`{contentId}.{ext}`** overwrite semantics.
+
+---
+
+## Backend (Flask)
+
+| Endpoint | Notes |
+|----------|------|
+| **`GET /api/health`** | `postgresDatabase`, row counts — sanity check vs DB GUI (**database name** must match **`DB_NAME`**, e.g. `ive_ar_gallery`). |
+| **`POST /api/upload`** | Multipart `file`, `category` (`content` \| `target` \| `target_ref`), optional **`targetId`** / **`contentId`**. |
+| **`POST /api/targets`** | JSON create/update; **`workspaceId`** / optional **`workspaceName`**. |
+| **`POST /api/targets/cloud`** | Vuforia + multipart image; **`workspaceId`** / **`workspaceName`**. |
+| **`POST /api/content`** | JSON; **`contentId`**, **`targetId`**, **`mediaUrl`**, transforms, meta. |
+| **`DELETE /api/workspaces/<workspace_id>`** | Cascade: uploads URLs + files under **`PUBLIC_BASE_URL`**, **`targets`** (contents cascade), **`workspaces`**. Reserved **`default`** workspace returns **403**. |
+
+Environment: see repo **`.env.example`** (`DB_NAME`, `PUBLIC_BASE_URL`, Docker **`DOCKER_DB_PUBLISH`** when host Postgres already uses port **5432**).
+
+---
+
+## Operational notes
+
+### Database GUI vs Docker Postgres
+
+If **`psql` / TablePlus on `127.0.0.1:5432`** shows empty tables while **`/api/health`** shows counts, another Postgres instance often owns **5432**. Use the **published Docker port** (e.g. **`5433`** when **`DOCKER_DB_PUBLISH=5433`**) and database name **`ive_ar_gallery`** (or your **`DB_NAME`**).
+
+### Workspace delete
+
+Local **`WorkspaceDeletion`** always removes **`snapshot.json`** and workspace folder. With **`backendApiBaseUrl`** set on **`WorkspaceSwitcherController`**, the client calls **`DELETE /api/workspaces/...`** first; **404** is treated as OK (never synced).
+
+---
+
+## Validation (Layer 3)
+
+- After sync, **`GET /api/health`** counts match expectations; TablePlus connects to the **same** DB/host/port as the backend.
+- Re-sync does not multiply **`uploads/target/`** / **`uploads/content/`** files for the same ids when **`targetId`** / **`contentId`** are sent.
+- Deleting a workspace removes related server rows and upload files when the delete API succeeds.
+
+---
+
+## Related code (scripts)
+
+- `AuthoringTool/Assets/Scripts/Workspace/Persistence/WorkspaceRemoteSyncService.cs`
+- `AuthoringTool/Assets/Scripts/Api/Http/HttpApiClient.cs`
+- `AuthoringTool/Assets/Scripts/WorkspaceSwitcherController.cs` (backend URL + delete flow)
+- `backend/app.py` (routes above)
