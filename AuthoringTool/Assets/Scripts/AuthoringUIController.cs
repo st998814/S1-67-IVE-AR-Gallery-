@@ -1020,15 +1020,36 @@ public class AuthoringUIController : MonoBehaviour
 
     private void OnRemoteSyncToastChanged(WorkspaceRemoteSyncToastKind kind, string message)
     {
+        // Local snapshot save does not raise this event. Debouncing / syncing are log-only in WorkspaceRemoteSyncService.
+        if (kind == WorkspaceRemoteSyncToastKind.Debouncing || kind == WorkspaceRemoteSyncToastKind.Syncing)
+            return;
+
         if (_syncStatusToast == null || _syncStatusTitle == null || _syncStatusMessage == null)
             return;
 
         CancelSyncToastHideRoutine();
 
-        _syncStatusTitle.text = TitleForRemoteSyncToast(kind);
-        _syncStatusMessage.text = string.IsNullOrWhiteSpace(message) ? " " : message;
-
         ApplyRemoteSyncToastStyle(kind);
+
+        if (kind == WorkspaceRemoteSyncToastKind.Synced)
+        {
+            _syncStatusTitle.style.display = DisplayStyle.None;
+            _syncStatusTitle.text = "";
+            _syncStatusMessage.text = string.IsNullOrWhiteSpace(message)
+                ? "Workspace synchronized with the server."
+                : message;
+            _syncStatusMessage.style.fontSize = 13;
+            _syncStatusMessage.style.unityFontStyleAndWeight = FontStyle.Bold;
+        }
+        else
+        {
+            _syncStatusTitle.style.display = DisplayStyle.Flex;
+            _syncStatusTitle.text = TitleForRemoteSyncToast(kind);
+            _syncStatusMessage.text = string.IsNullOrWhiteSpace(message) ? " " : message;
+            _syncStatusMessage.style.fontSize = 11;
+            _syncStatusMessage.style.unityFontStyleAndWeight = FontStyle.Normal;
+        }
+
         _syncStatusToast.RemoveFromClassList("sync-toast--hidden");
         _syncStatusToast.style.display = DisplayStyle.Flex;
 
@@ -1065,7 +1086,7 @@ public class AuthoringUIController : MonoBehaviour
             case WorkspaceRemoteSyncToastKind.Syncing:
                 return 0f;
             case WorkspaceRemoteSyncToastKind.Synced:
-                return 4.5f;
+                return 3f;
             case WorkspaceRemoteSyncToastKind.Failed:
                 return 8f;
             case WorkspaceRemoteSyncToastKind.Skipped:
@@ -1085,6 +1106,7 @@ public class AuthoringUIController : MonoBehaviour
         _syncStatusToast.RemoveFromClassList("sync-toast--success");
         _syncStatusToast.RemoveFromClassList("sync-toast--failed");
         _syncStatusToast.RemoveFromClassList("sync-toast--skipped");
+        _syncStatusToast.RemoveFromClassList("sync-toast--success-banner");
 
         switch (kind)
         {
@@ -1096,6 +1118,7 @@ public class AuthoringUIController : MonoBehaviour
                 break;
             case WorkspaceRemoteSyncToastKind.Synced:
                 _syncStatusToast.AddToClassList("sync-toast--success");
+                _syncStatusToast.AddToClassList("sync-toast--success-banner");
                 break;
             case WorkspaceRemoteSyncToastKind.Failed:
                 _syncStatusToast.AddToClassList("sync-toast--failed");
@@ -1118,6 +1141,7 @@ public class AuthoringUIController : MonoBehaviour
         _syncStatusToast.RemoveFromClassList("sync-toast--success");
         _syncStatusToast.RemoveFromClassList("sync-toast--failed");
         _syncStatusToast.RemoveFromClassList("sync-toast--skipped");
+        _syncStatusToast.RemoveFromClassList("sync-toast--success-banner");
     }
 
     private void CancelSyncToastHideRoutine()
@@ -2062,6 +2086,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         if (filePathInput != null)
             filePathInput.value = "Added to library: " + displayName;
         RefreshHierarchyListFromCoordinator();
+        NotifyWorkspacePersistenceChanged();
         return;
     }
 
@@ -2244,12 +2269,15 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
     {
         if (activeContentDraft == null)
             activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
-        if (activeContentDraft == null)
-            return;
+        if (activeContentDraft != null)
+        {
+            activeContentDraft.isUnsaved = true;
+            activeContentDraft.persistPending = true;
+            activeContentDraft.targetId = GetActiveTargetIdForSave();
+        }
 
-        activeContentDraft.isUnsaved = true;
-        activeContentDraft.persistPending = true;
-        activeContentDraft.targetId = GetActiveTargetIdForSave();
+        if (authoringSpatialTarget != null)
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(authoringSpatialTarget);
     }
 
     private static bool LooksLikeYouTubeUrl(string u)
@@ -2686,5 +2714,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         {
             suppressSpatialUiCallbacks = false;
         }
+
+        MarkActiveDraftDirty();
+        NotifyWorkspacePersistenceChanged();
     }
 }

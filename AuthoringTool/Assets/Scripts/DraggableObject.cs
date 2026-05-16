@@ -32,6 +32,7 @@ public class DraggableObject : MonoBehaviour
     private Camera cam;
     private Transform dragTransform;
     private Transform scaleTransform;
+    private int dragStartedAtFrame = -1;
 
     public static InteractionOwner CurrentInteractionOwner => currentInteractionOwner;
     public static bool IsDraggingObjectInteractionActive => currentInteractionOwner == InteractionOwner.DraggingObject;
@@ -60,6 +61,7 @@ public class DraggableObject : MonoBehaviour
                 TryAcquireDragInteraction())
             {
                 isDragging = true;
+                dragStartedAtFrame = Time.frameCount;
                 dragTransform = ResolveDragTransform();
                 scaleTransform = ResolveScaleTransform();
                 lockedLocalZ = dragTransform.localPosition.z;
@@ -87,7 +89,12 @@ public class DraggableObject : MonoBehaviour
                 ApplyScrollScale(mouse);
         }
 
-        if (isDragging && mouse.leftButton.wasReleasedThisFrame)
+        // End drag when the primary button is up. Relying only on wasReleasedThisFrame has been observed to fire
+        // repeatedly in some Editor/input setups, which spammed workspace autosave and prevented snapshot writes.
+        // Require a later frame than drag start so we never cancel a drag on the same frame it began.
+        if (isDragging
+            && !mouse.leftButton.isPressed
+            && Time.frameCount > dragStartedAtFrame)
         {
             EndDrag(notifyUi: true);
         }
@@ -120,7 +127,11 @@ public class DraggableObject : MonoBehaviour
 
     private void EndDrag(bool notifyUi)
     {
+        if (!isDragging)
+            return;
+
         isDragging = false;
+        dragStartedAtFrame = -1;
         ReleaseDragInteraction();
         if (notifyUi && uiController != null)
             uiController.UpdateCoordinatesFromDrag((dragTransform != null ? dragTransform : transform).localPosition);

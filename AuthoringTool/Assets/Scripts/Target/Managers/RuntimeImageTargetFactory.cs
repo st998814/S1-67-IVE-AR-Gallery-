@@ -24,7 +24,7 @@ public class RuntimeImageTargetFactory : MonoBehaviour
     /// Creates a new target root with required children:
     /// ImageTargetPlaceholder, TargetVisual and ContentRoot.
     /// </summary>
-    public GameObject CreateTarget(string targetName, string targetId, string displayLabel = null)
+    public GameObject CreateTarget(string targetName, string targetId, string displayLabel = null, float physicalWidthMeters = 0.2f)
     {
         string safeName = string.IsNullOrWhiteSpace(targetName) ? "NewTarget" : targetName.Trim();
         string safeId = string.IsNullOrWhiteSpace(targetId) ? safeName : targetId.Trim();
@@ -38,7 +38,7 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         arTarget.Configure(safeId, displayLabel);
 
         CreateImageTargetPlaceholder(targetRoot.transform, arTarget.TargetId);
-        CreateTargetVisual(targetRoot.transform, safeName);
+        CreateTargetVisual(targetRoot.transform, safeName, physicalWidthMeters);
         CreateContentRoot(targetRoot.transform);
 
         return targetRoot;
@@ -74,14 +74,16 @@ public class RuntimeImageTargetFactory : MonoBehaviour
     /// <summary>
     /// Adds the target visual surface used as frame/alignment reference.
     /// </summary>
-    private void CreateTargetVisual(Transform parent, string targetName)
+    private void CreateTargetVisual(Transform parent, string targetName, float physicalWidthMeters)
     {
         GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad);
         go.name = "TargetVisual";
         go.transform.SetParent(parent, false);
         go.transform.localPosition = targetVisualLocalPosition;
         go.transform.localRotation = Quaternion.Euler(targetVisualLocalEuler);
-        go.transform.localScale = targetVisualLocalScale;
+        float w = Mathf.Max(0.001f, physicalWidthMeters);
+        TargetVisualPhysicalLayout.Apply(go.transform, w, textureOrNull: null);
+        go.transform.localScale = Vector3.Scale(go.transform.localScale, targetVisualLocalScale);
 
         if (makeTargetVisualDraggable && go.GetComponent<DraggableObject>() == null)
         {

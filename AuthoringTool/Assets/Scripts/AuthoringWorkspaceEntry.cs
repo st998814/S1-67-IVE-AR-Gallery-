@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
@@ -185,13 +186,15 @@ namespace ARGallery.AppFlow
                 ? workspace.target.displayLabel.Trim()
                 : (!string.IsNullOrWhiteSpace(workspace.target.targetName) ? workspace.target.targetName.Trim() : "WorkspaceTarget");
 
+            float physicalWidthM = ResolvePhysicalWidthMeters(targetId, null, workspace);
+
             int index = manager.FindTargetIndexById(targetId);
             if (index >= 0)
             {
                 manager.SetActiveTarget(index);
+                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session, physicalWidthM);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
-                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
                 if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                     AppFlowController.MarkWorkspaceReady(targetId);
                 Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' (index={index}).");
@@ -208,15 +211,17 @@ namespace ARGallery.AppFlow
                 this,
                 targetName,
                 targetId,
-                targetName);
+                targetName,
+                physicalWidthM);
 
             if (!result.success)
             {
                 if (result.isDuplicate && result.duplicateIndex >= 0)
                 {
                     manager.SetActiveTarget(result.duplicateIndex);
+                    EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session, physicalWidthM);
                     ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
-                    EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
+                    ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
                     Debug.Log($"AuthoringWorkspaceEntry: Duplicate target resolved by activating index={result.duplicateIndex}.");
                     return;
                 }
@@ -229,9 +234,9 @@ namespace ARGallery.AppFlow
             if (createdIndex >= 0)
             {
                 manager.SetActiveTarget(createdIndex);
+                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session, physicalWidthM);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
-                EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session);
             }
 
             // Keep app-flow context aligned with provider-loaded target in mock-first mode.
@@ -241,19 +246,55 @@ namespace ARGallery.AppFlow
             Debug.Log($"AuthoringWorkspaceEntry: Created and activated workspace target '{targetId}'.");
         }
 
-        private static void EnsureAuthoredTargetForPersistence(GameObject targetGo, string targetId, string targetDisplayName, WorkspaceSessionContext session)
+        private static void EnsureAuthoredTargetForPersistence(
+            GameObject targetGo,
+            string targetId,
+            string targetDisplayName,
+            WorkspaceSessionContext session,
+            float physicalWidthMeters)
         {
             if (targetGo == null || string.IsNullOrWhiteSpace(targetId))
                 return;
 
             AuthoredTargetInstance auth = WorkspaceAuthoredAttach.EnsureTarget(targetGo, targetId, targetDisplayName);
-            if (auth == null || session == null)
+            if (auth == null)
+                return;
+
+            if (physicalWidthMeters > 1e-5f)
+                auth.PhysicalWidthM = physicalWidthMeters;
+
+            if (session == null)
                 return;
 
             if (!string.IsNullOrWhiteSpace(session.vuforiaTargetId))
                 auth.VuforiaTargetId = session.vuforiaTargetId.Trim();
             if (!string.IsNullOrWhiteSpace(session.targetImageRelativePath))
                 auth.TargetImageLocalPath = session.targetImageRelativePath.Trim();
+        }
+
+        private static float ResolvePhysicalWidthMeters(
+            string targetId,
+            WorkspaceSnapshot snapshotOrNull,
+            WorkspaceDomain.WorkspaceDraftState workspace)
+        {
+            if (!string.IsNullOrWhiteSpace(targetId) && snapshotOrNull?.targets != null)
+            {
+                string id = targetId.Trim();
+                for (int i = 0; i < snapshotOrNull.targets.Length; i++)
+                {
+                    TargetSnapshot ts = snapshotOrNull.targets[i];
+                    if (ts == null)
+                        continue;
+                    string rowId = !string.IsNullOrWhiteSpace(ts.serverTargetId) ? ts.serverTargetId.Trim() : ts.localTargetId != null ? ts.localTargetId.Trim() : "";
+                    if (string.Equals(rowId, id, StringComparison.Ordinal) && ts.physicalWidthM > 1e-5f)
+                        return ts.physicalWidthM;
+                }
+            }
+
+            if (workspace?.target != null && workspace.target.physicalWidth > 1e-5f)
+                return workspace.target.physicalWidth;
+
+            return 0.2f;
         }
 
         /// <summary>
@@ -284,19 +325,22 @@ namespace ARGallery.AppFlow
                 return;
             }
 
+            string displayName = workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.displayLabel)
+                ? workspace.target.displayLabel.Trim()
+                : workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetName)
+                    ? workspace.target.targetName.Trim()
+                    : (!string.IsNullOrWhiteSpace(snapshot?.workspaceName) ? snapshot.workspaceName.Trim() : targetId);
+
+            float physicalWidthM = ResolvePhysicalWidthMeters(targetId, snapshot, workspace);
+
             manager.SetActiveTarget(index);
+            EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, displayName, session, physicalWidthM);
             WorkspaceDomain.WorkspacePosture posture = workspace?.target != null
                 ? workspace.target.posture
                 : WorkspaceDomain.WorkspacePosture.Wall;
             ApplyWorkspacePreset(manager.GetActiveTarget(), posture);
             string imageUrl = workspace?.target != null ? workspace.target.targetImageUrl : "";
             ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), imageUrl ?? "", session);
-            string displayName = workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.displayLabel)
-                ? workspace.target.displayLabel.Trim()
-                : workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetName)
-                    ? workspace.target.targetName.Trim()
-                    : (!string.IsNullOrWhiteSpace(snapshot?.workspaceName) ? snapshot.workspaceName.Trim() : targetId);
-            EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, displayName, session);
             if (session != null && string.IsNullOrWhiteSpace(session.targetId))
                 AppFlowController.MarkWorkspaceReady(targetId);
 

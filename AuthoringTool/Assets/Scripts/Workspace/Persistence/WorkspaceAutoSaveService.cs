@@ -25,9 +25,14 @@ namespace ARGallery.Workspace.Persistence
 
         private readonly WorkspaceSnapshotRepository snapshotRepository = new WorkspaceSnapshotRepository();
         private Coroutine debounceCoroutine;
+        private float debounceQuietAfterRealtime;
         private bool saveInProgress;
 
-        /// <summary>Call after edits; schedules a save after <see cref="debounceSeconds"/> (timer resets on each call).</summary>
+        /// <summary>
+        /// Call after edits. Uses a <b>quiet period</b> after the last call: each call pushes the save time forward by
+        /// <see cref="debounceSeconds"/> (same as classic debounce), but without restarting a <see cref="WaitForSeconds"/>
+        /// coroutine. High-frequency notifies (e.g. held keyboard nudges) no longer prevent a snapshot from ever writing.
+        /// </summary>
         public void NotifyWorkspaceChanged()
         {
             if (!isActiveAndEnabled)
@@ -36,18 +41,19 @@ namespace ARGallery.Workspace.Persistence
                 return;
             }
 
-            if (debounceCoroutine != null)
-                StopCoroutine(debounceCoroutine);
-            debounceCoroutine = StartCoroutine(DebounceThenSave());
-            Debug.Log($"{LogPrefix}NotifyWorkspaceChanged → debounced save in {debounceSeconds}s.");
+            debounceQuietAfterRealtime = Time.realtimeSinceStartup + debounceSeconds;
+            if (debounceCoroutine == null)
+                debounceCoroutine = StartCoroutine(DebounceUntilQuietThenSave());
         }
 
-        private IEnumerator DebounceThenSave()
+        private IEnumerator DebounceUntilQuietThenSave()
         {
-            yield return new WaitForSeconds(debounceSeconds);
+            while (Time.realtimeSinceStartup < debounceQuietAfterRealtime)
+                yield return null;
+
             debounceCoroutine = null;
-            Debug.Log($"{LogPrefix}Debounce elapsed → SaveNow().");
-            SaveNow();
+            // Flush directly so behaviour matches BackToSwitcher (SaveNow would skip when this behaviour is disabled).
+            FlushSnapshotToDisk(suppressSnapshotSaved: false);
         }
 
         /// <summary>Flush snapshot immediately. Skips if a save is already in progress.</summary>
@@ -68,13 +74,10 @@ namespace ARGallery.Workspace.Persistence
         /// <param name="suppressSnapshotSaved">If true, successful disk write does not raise <see cref="SnapshotSaved"/>.</param>
         public void FlushSnapshotToDisk(bool suppressSnapshotSaved = false)
         {
-            Debug.Log($"{LogPrefix}FlushSnapshotToDisk begin | suppressSnapshotSaved={suppressSnapshotSaved} | persistentDataPath={Application.persistentDataPath}");
-
             if (debounceCoroutine != null)
             {
                 StopCoroutine(debounceCoroutine);
                 debounceCoroutine = null;
-                Debug.Log($"{LogPrefix}Cancelled pending debounce coroutine.");
             }
 
             if (saveInProgress)
@@ -103,10 +106,6 @@ namespace ARGallery.Workspace.Persistence
                 string workspaceId = session.workspaceId.Trim();
                 string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
 
-                int targetCount = registry.GetTargetsOrdered().Count;
-                int contentCount = registry.GetContentsOrdered().Count;
-                Debug.Log($"{LogPrefix}Session workspaceId={workspaceId} name={workspaceName} | registry targets={targetCount} contents={contentCount}");
-
                 WorkspaceSnapshot existing = null;
                 snapshotRepository.TryLoadSnapshot(workspaceId, out existing);
 
@@ -115,10 +114,6 @@ namespace ARGallery.Workspace.Persistence
                     workspaceName,
                     registry,
                     existing);
-
-                int snapTargets = snapshot.targets != null ? snapshot.targets.Length : 0;
-                int snapContents = snapshot.contents != null ? snapshot.contents.Length : 0;
-                Debug.Log($"{LogPrefix}Built snapshot: targets={snapTargets} contents={snapContents}");
 
                 if (!snapshotRepository.TrySaveSnapshot(snapshot, out string err))
                 {

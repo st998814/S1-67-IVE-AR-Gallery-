@@ -55,7 +55,8 @@ for _d in (UPLOAD_TARGET_FOLDER, UPLOAD_CONTENT_FOLDER, UPLOAD_TARGET_REF_FOLDER
     os.makedirs(_d, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
-CONTENT_TYPES_REQUIRING_MEDIA = {"image", "video", "model", "model(3d)", "model3d"}
+CONTENT_TYPES_ALLOWED = {"image", "video", "model"}
+CONTENT_TYPES_REQUIRING_MEDIA = {"image", "video", "model"}
 
 LOG_FILE = os.path.join(_BASE_DIR, "server.log")
 logging.basicConfig(
@@ -816,6 +817,13 @@ def create_content():
     content_type, err_msg = _clean_text(data, "contentType", required=True)
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
+    content_type = content_type.lower()
+    if content_type not in CONTENT_TYPES_ALLOWED:
+        return error_response(
+            "contentType must be one of: image, video, model.",
+            "VALIDATION_ERROR",
+            400,
+        )
     media_url, err_msg = _clean_text(data, "mediaUrl")
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
@@ -929,6 +937,137 @@ def list_content():
         return error_response("Database error while listing content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
 
 
+@app.route("/api/mobileviewer/content/by-target/<path:target_key>", methods=["GET"])
+def mobileviewer_get_content_by_target(target_key):
+    """
+    MobileViewer runtime endpoint.
+
+    Accepts either:
+    - canonical target id (targets.target_id), or
+    - Vuforia Cloud target id (targets.vuforia_target_id)
+
+    Returns a single MobileViewer-friendly content object per docs/api/mobileviewer/MobileViewerContentRuntime.md.
+    """
+    target_key = (target_key or "").strip()
+    if not target_key:
+        return error_response("targetKey path parameter is required.", "VALIDATION_ERROR", 400)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Resolve key -> canonical target row.
+                cur.execute(
+                    """
+                    SELECT target_id, target_name, display_label, physical_width_m,
+                           local_euler_x, local_euler_y, local_euler_z
+                    FROM targets
+                    WHERE target_id = %s OR vuforia_target_id = %s
+                    LIMIT 1;
+                    """,
+                    (target_key, target_key),
+                )
+                target_row = cur.fetchone()
+                if target_row is None:
+                    return error_response(f"Target '{target_key}' was not found.", "NOT_FOUND", 404)
+
+                target_id, target_name, display_label, physical_width_m, target_euler_x, target_euler_y, target_euler_z = (
+                    target_row[0],
+                    target_row[1],
+                    target_row[2],
+                    target_row[3],
+                    target_row[4],
+                    target_row[5],
+                    target_row[6],
+                )
+
+                # Infer posture from target local X rotation convention used by authoring:
+                # Wall: ~0, Floor: ~-90, Ceiling: ~+90
+                posture = "wall"
+                if target_euler_x is not None:
+                    x = float(target_euler_x)
+                    if x <= -45.0:
+                        posture = "floor"
+                    elif x >= 45.0:
+                        posture = "ceiling"
+
+                # Pick one content row for runtime. Current policy: earliest created content for the target.
+                cur.execute(
+                    """
+                    SELECT
+                        content_type,
+                        media_url,
+                        local_position_x, local_position_y, local_position_z,
+                        local_euler_x, local_euler_y, local_euler_z,
+                        local_scale_x, local_scale_y, local_scale_z,
+                        meta
+                    FROM contents
+                    WHERE target_id = %s
+                    ORDER BY created_at_utc ASC, content_id ASC
+                    LIMIT 1;
+                    """,
+                    (target_id,),
+                )
+                content_row = cur.fetchone()
+                if content_row is None:
+                    return error_response(f"No content configured for target '{target_id}'.", "NOT_FOUND", 404)
+
+                (
+                    content_type,
+                    media_url,
+                    local_pos_x,
+                    local_pos_y,
+                    local_pos_z,
+                    local_euler_x,
+                    local_euler_y,
+                    local_euler_z,
+                    local_scale_x,
+                    local_scale_y,
+                    local_scale_z,
+                    meta,
+                ) = content_row
+                if not isinstance(meta, dict):
+                    meta = {}
+
+                source_type = (content_type or "").strip().lower()
+                runtime_type = source_type if source_type in CONTENT_TYPES_ALLOWED else "image"
+
+                color = (meta.get("color") or meta.get("mockColor") or meta.get("tint") or "").strip()
+                if not color:
+                    # Keep deterministic fallback tinting for current mock object renderer paths.
+                    if runtime_type == "capsule":
+                        color = "#F39C12"
+                    elif runtime_type == "sphere":
+                        color = "#2ECC71"
+                    else:
+                        color = "#4EA3F5"
+
+                # If backend persisted localhost URLs, rewrite base to the incoming host so mobile devices can fetch media.
+                media_url = (media_url or "").strip()
+                if media_url.startswith(PUBLIC_BASE_URL):
+                    media_url = request.host_url.rstrip("/") + media_url[len(PUBLIC_BASE_URL.rstrip("/")) :]
+
+                return jsonify(
+                    {
+                        "targetName": target_name or target_id,
+                        "title": (meta.get("title") or "").strip(),
+                        "description": (meta.get("description") or "").strip(),
+                        "contentType": runtime_type,
+                        "mediaUrl": media_url,
+                        "localPosition": _vector_response(local_pos_x, local_pos_y, local_pos_z),
+                        "localEuler": _vector_response(local_euler_x, local_euler_y, local_euler_z),
+                        "localScale": _vector_response(local_scale_x, local_scale_y, local_scale_z),
+                        "targetLocalEuler": _vector_response(target_euler_x or 0.0, target_euler_y or 0.0, target_euler_z or 0.0),
+                        "targetPosture": posture,
+                        "color": color,
+                        "displayLabel": (display_label or "").strip() or (target_name or target_id),
+                        "targetPhysicalWidthM": float(physical_width_m) if physical_width_m is not None else 1.0,
+                    }
+                )
+    except psycopg2.Error as e:
+        logger.error("Database error in mobileviewer_get_content_by_target (pgcode=%s): %s", getattr(e, "pgcode", None), e)
+        return error_response("Database error while loading mobileviewer content.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
 @app.route("/api/content/<path:content_id>", methods=["GET"])
 def get_content(content_id):
     try:
@@ -985,6 +1124,13 @@ def patch_content(content_id):
         content_type, err_msg = _clean_text(data, "contentType", required=True)
         if err_msg:
             return error_response(err_msg, "VALIDATION_ERROR", 400)
+        content_type = content_type.lower()
+        if content_type not in CONTENT_TYPES_ALLOWED:
+            return error_response(
+                "contentType must be one of: image, video, model.",
+                "VALIDATION_ERROR",
+                400,
+            )
         updates.append("content_type = %s")
         params.append(content_type)
     if "mediaUrl" in data:

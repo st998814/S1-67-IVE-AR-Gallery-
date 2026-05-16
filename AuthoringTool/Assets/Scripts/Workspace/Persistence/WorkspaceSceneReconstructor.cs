@@ -139,7 +139,8 @@ namespace ARGallery.Workspace.Persistence
                 this,
                 string.IsNullOrWhiteSpace(ts.targetName) ? canonicalId : ts.targetName.Trim(),
                 canonicalId,
-                string.IsNullOrWhiteSpace(ts.targetName) ? canonicalId : ts.targetName.Trim());
+                string.IsNullOrWhiteSpace(ts.targetName) ? canonicalId : ts.targetName.Trim(),
+                ts.physicalWidthM > 1e-5f ? ts.physicalWidthM : 0.2f);
 
             GameObject targetGo = created.targetObject;
             if (!created.success || targetGo == null)
@@ -159,12 +160,6 @@ namespace ARGallery.Workspace.Persistence
             tr.localEulerAngles = ts.rotation.ToVector3();
             tr.localScale = ts.scale.ToVector3();
 
-            byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
-            if (imgBytes != null && imgBytes.Length > 0)
-                targetWorkflowService.ApplyTargetImageBytes(targetGo, imgBytes);
-            else
-                Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image bytes for '{canonicalId}' (path '{ts.targetImageLocalPath}').");
-
             AuthoredTargetInstance authored = targetGo.GetComponent<AuthoredTargetInstance>() ?? targetGo.AddComponent<AuthoredTargetInstance>();
             authored.LocalTargetId = ts.localTargetId ?? "";
             authored.ServerTargetId = ts.serverTargetId ?? "";
@@ -172,8 +167,18 @@ namespace ARGallery.Workspace.Persistence
             authored.TargetName = ts.targetName ?? "";
             authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
             authored.OriginalFileName = ts.originalFileName ?? "";
+            authored.PhysicalWidthM = ts.physicalWidthM > 1e-5f ? ts.physicalWidthM : 0.2f;
             authored.RemoteDirty = ts.remoteDirty;
             authored.LastRemoteSyncedAtUtc = ts.lastRemoteSyncedAtUtc ?? "";
+
+            byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
+            if (imgBytes != null && imgBytes.Length > 0)
+                targetWorkflowService.ApplyTargetImageBytes(targetGo, imgBytes);
+            else
+                Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image bytes for '{canonicalId}' (path '{ts.targetImageLocalPath}').");
+
+            if (imgBytes == null || imgBytes.Length == 0)
+                TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetGo, null);
 
             return true;
         }

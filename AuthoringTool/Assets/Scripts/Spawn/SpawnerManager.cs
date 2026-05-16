@@ -302,7 +302,7 @@ namespace ARGallery.Spawning
 
         public SpawnTargetResult CreateTarget(SpawnTargetRequest request)
         {
-            var result = targetWorkflowService.CreateAndRegisterLocal(runner, request.targetName, request.targetId, request.displayLabel);
+            var result = targetWorkflowService.CreateAndRegisterLocal(runner, request.targetName, request.targetId, request.displayLabel, request.physicalWidthMeters);
             return new SpawnTargetResult { success = result.success, targetId = result.targetId, targetObject = result.targetObject, message = result.message };
         }
 

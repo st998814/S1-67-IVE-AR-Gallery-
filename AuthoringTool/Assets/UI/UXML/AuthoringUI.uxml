@@ -51,6 +51,16 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="SyncStatusToast" class="sync-toast sync-toast--hidden" picking-mode="Ignore" style="display: none; position: absolute; top: 52px; left: 12px; right: 12px; z-index: 500;">
+            <ui:VisualElement class="sync-toast__row" picking-mode="Ignore" style="flex-direction: row; justify-content: space-between; align-items: flex-start;">
+                <ui:VisualElement class="sync-toast__textCol" picking-mode="Ignore" style="flex-grow: 1; flex-direction: column; row-gap: 2px; padding-right: 4px;">
+                    <ui:Label name="SyncStatusTitle" class="sync-toast__title" text="" picking-mode="Ignore" style="font-size: 12px; -unity-font-style: bold; white-space: normal;"/>
+                    <ui:Label name="SyncStatusMessage" class="sync-toast__message" text="" picking-mode="Ignore" style="font-size: 11px; white-space: normal;"/>
+                </ui:VisualElement>
+                <ui:Button name="SyncToastDismiss" text="×" class="sync-toast__dismiss" picking-mode="Position" style="width: 26px; min-width: 26px; height: 26px; min-height: 26px; margin-left: 4px; padding: 0; -unity-font-style: bold; font-size: 16px;"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:VisualElement name="AuthoringFabHost" picking-mode="Ignore" style="position: absolute; left: 16px; bottom: 16px;">
             <ui:Button name="AddContentFabButton" text="+" class="authoring-add-fab" picking-mode="Position"/>
         </ui:VisualElement>
@@ -66,14 +76,5 @@
     <ui:VisualElement name="error-toast" class="sync-toast sync-toast--failed sync-toast--hidden" style="position: absolute; top: 60px; right: 12px; width: 300px; max-width: 90%;">
         <ui:Label name="error-label" text="Error: Something went wrong" class="sync-toast__title" style="-unity-font-style: bold; font-size: 14px; margin-bottom: 4px;" />
         <ui:Label text="Please check your connection and try again." class="sync-toast__message" style="font-size: 12px;"/>
-    </ui:VisualElement>
-    <ui:VisualElement name="SyncStatusToast" class="sync-toast sync-toast--hidden" picking-mode="Ignore" style="position: absolute; top: 48px; right: 12px; width: 300px; max-width: 90%;">
-        <ui:VisualElement class="sync-toast__row" picking-mode="Ignore" style="flex-direction: row; justify-content: space-between; align-items: flex-start;">
-            <ui:VisualElement class="sync-toast__textCol" picking-mode="Ignore" style="flex-grow: 1; flex-direction: column; row-gap: 2px; padding-right: 4px;">
-                <ui:Label name="SyncStatusTitle" class="sync-toast__title" text="" picking-mode="Ignore" style="font-size: 12px; -unity-font-style: bold; white-space: normal;"/>
-                <ui:Label name="SyncStatusMessage" class="sync-toast__message" text="" picking-mode="Ignore" style="font-size: 11px; white-space: normal;"/>
-            </ui:VisualElement>
-            <ui:Button name="SyncToastDismiss" text="×" class="sync-toast__dismiss" picking-mode="Position" style="width: 26px; min-width: 26px; height: 26px; min-height: 26px; margin-left: 4px; padding: 0; -unity-font-style: bold; font-size: 16px;"/>
-        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
