@@ -88,6 +88,7 @@ public class RuntimeImageTargetFactory : MonoBehaviour
         if (makeTargetVisualDraggable && go.GetComponent<DraggableObject>() == null)
         {
             DraggableObject draggable = go.AddComponent<DraggableObject>();
+            draggable.ConfigurePositionDrag(true);
             draggable.ConfigureConstraints(shouldLockLocalZ: true, shouldAllowScrollScale: true); // the target  be tagged onto the surface 
             draggable.ConfigureDragBinding(shouldMoveParentOnDrag: true);
             draggable.ConfigureScaleBinding(shouldScaleParentOnScroll: true);

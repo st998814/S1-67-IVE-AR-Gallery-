@@ -7,14 +7,14 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Binds a runtime gizmo to the current selection and enforces target-local transform constraints.
+/// Binds RTG gizmos to the current selection. Rotate mode uses a rotation gizmo;
+/// Move and Scale modes use inspector sliders only (no translate/scale gizmo handles).
 /// </summary>
 [DefaultExecutionOrder(1000)]
 public sealed class TransformGizmoController : MonoBehaviour
 {
     [SerializeField] private ObjectSelectionManager selectionManager;
-    [SerializeField] private TargetLocalTransformService targetLocalTransformService;
-    [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private ContentTransformManipulator contentTransformManipulator;
     [SerializeField] private bool useRuntimeTransformGizmo = true;
     [Tooltip("For a wall target, Local often avoids fighting the front-Z clamp when using a thick 3D proxy mesh.")]
     [SerializeField] private GizmoSpace gizmoTransformSpace = GizmoSpace.Global;
@@ -31,8 +31,6 @@ public sealed class TransformGizmoController : MonoBehaviour
     private GizmoMode _mode = GizmoMode.Translate;
     private LocalTransformSnapshot _dragStartSnapshot;
     private bool _hasDragStartSnapshot;
-    private LocalTransformSnapshot _lastSnapshot;
-    private bool _hasSnapshot;
     private bool _gizmosInitialized;
     private int _lastSyncedTargetInstanceId = int.MinValue;
     private GizmoSpace _lastSyncedGizmoSpace;
@@ -86,37 +84,95 @@ public sealed class TransformGizmoController : MonoBehaviour
 
     public GizmoMode CurrentMode => _mode;
 
-    public void ConfigureDependencies(ObjectSelectionManager selectionRef, TargetLocalTransformService localServiceRef, FrontSideConstraint frontConstraintRef)
+    /// <summary>True when the active mode shows an enabled RTG gizmo (currently Rotate and Universal only).</summary>
+    public bool HasActiveSceneGizmo => _gizmosInitialized && _workGizmo != null && _workGizmo.Gizmo != null;
+
+    public void ConfigureDependencies(
+        ObjectSelectionManager selectionRef,
+        ContentTransformManipulator manipulatorRef)
     {
         if (selectionRef != null)
             selectionManager = selectionRef;
-        if (localServiceRef != null)
-            targetLocalTransformService = localServiceRef;
-        if (frontConstraintRef != null)
-            frontSideConstraint = frontConstraintRef;
+        if (manipulatorRef != null)
+            BindManipulator(manipulatorRef);
+    }
+
+    /// <summary>Legacy overload — resolves or creates <see cref="ContentTransformManipulator"/> from transform services.</summary>
+    public void ConfigureDependencies(
+        ObjectSelectionManager selectionRef,
+        TargetLocalTransformService localServiceRef,
+        FrontSideConstraint frontConstraintRef)
+    {
+        if (selectionRef != null)
+            selectionManager = selectionRef;
+
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
+        if (contentTransformManipulator == null && frontConstraintRef != null)
+        {
+            contentTransformManipulator = frontConstraintRef.gameObject.AddComponent<ContentTransformManipulator>();
+            contentTransformManipulator.Configure(
+                localServiceRef,
+                FindFirstObjectByType<PlacementBoundsService>(),
+                frontConstraintRef);
+        }
+        else if (contentTransformManipulator != null)
+        {
+            contentTransformManipulator.Configure(
+                localServiceRef,
+                FindFirstObjectByType<PlacementBoundsService>(),
+                frontConstraintRef);
+        }
+
+        BindManipulator(contentTransformManipulator);
+    }
+
+    private void BindManipulator(ContentTransformManipulator manipulator)
+    {
+        if (contentTransformManipulator != null)
+        {
+            contentTransformManipulator.ContentTransformChanged -= ForwardContentTransformChanged;
+            contentTransformManipulator.ContentTransformChangedDetailed -= ForwardContentTransformChangedDetailed;
+        }
+
+        contentTransformManipulator = manipulator;
+        if (contentTransformManipulator == null)
+            return;
+
+        contentTransformManipulator.ContentTransformChanged += ForwardContentTransformChanged;
+        contentTransformManipulator.ContentTransformChangedDetailed += ForwardContentTransformChangedDetailed;
     }
 
     private void Awake()
     {
         if (selectionManager == null)
             selectionManager = FindFirstObjectByType<ObjectSelectionManager>();
-        if (targetLocalTransformService == null)
-            targetLocalTransformService = FindFirstObjectByType<TargetLocalTransformService>();
-        if (frontSideConstraint == null)
-            frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
     }
 
     private void OnEnable()
     {
         if (selectionManager != null)
             selectionManager.SelectionChanged += OnSelectionChanged;
+        if (contentTransformManipulator != null)
+            BindManipulator(contentTransformManipulator);
     }
 
     private void OnDisable()
     {
         if (selectionManager != null)
             selectionManager.SelectionChanged -= OnSelectionChanged;
+        if (contentTransformManipulator != null)
+        {
+            contentTransformManipulator.ContentTransformChanged -= ForwardContentTransformChanged;
+            contentTransformManipulator.ContentTransformChangedDetailed -= ForwardContentTransformChangedDetailed;
+        }
     }
+
+    private void ForwardContentTransformChanged(Transform content) => ContentTransformChanged?.Invoke(content);
+
+    private void ForwardContentTransformChangedDetailed(TransformChangeEvent e) => ContentTransformChangedDetailed?.Invoke(e);
 
     private void Start()
     {
@@ -276,8 +332,8 @@ public sealed class TransformGizmoController : MonoBehaviour
     private void OnSelectionChanged(Transform selected)
     {
         _selected = selected;
-        _hasSnapshot = false;
         _hasDragStartSnapshot = false;
+        contentTransformManipulator?.ResetChangeTracking();
 
         if (!_gizmosInitialized)
             return;
@@ -334,11 +390,19 @@ public sealed class TransformGizmoController : MonoBehaviour
     {
         switch (mode)
         {
-            case GizmoMode.Translate: return _moveGizmo;
-            case GizmoMode.Rotate: return _rotateGizmo;
-            case GizmoMode.Scale: return _scaleGizmo;
-            case GizmoMode.Universal: return _universalGizmo;
-            default: return _moveGizmo;
+            case GizmoMode.Translate:
+            case GizmoMode.Scale:
+                // Position / uniform scale are driven by inspector sliders via ContentTransformManipulator.
+                return null;
+
+            case GizmoMode.Rotate:
+                return _rotateGizmo;
+
+            case GizmoMode.Universal:
+                return _universalGizmo;
+
+            default:
+                return null;
         }
     }
 
@@ -347,18 +411,14 @@ public sealed class TransformGizmoController : MonoBehaviour
         if (content == null)
             return;
 
-        // Always write local-space values through the local service to keep
-        // transform persistence model target-local and explicit.
-        if (targetLocalTransformService != null)
+        if (contentTransformManipulator != null)
         {
-            targetLocalTransformService.SetLocalPosition(content, content.localPosition);
-            targetLocalTransformService.SetLocalRotation(content, content.localRotation);
-            if (enforceUniformScale || _mode == GizmoMode.Scale)
-                targetLocalTransformService.NormalizeUniformScale(content);
+            bool normalizeScale = enforceUniformScale || _mode == GizmoMode.Scale;
+            contentTransformManipulator.ApplyGizmoResult(content, _mode, normalizeScale);
+            return;
         }
 
-        frontSideConstraint?.Enforce(content);
-        RaiseChangedIfNeeded(content);
+        Debug.LogWarning("TransformGizmoController: ContentTransformManipulator is missing; gizmo transform was not committed.");
     }
 
     private void ApplyModeConstraintRules(Transform content)
@@ -390,64 +450,6 @@ public sealed class TransformGizmoController : MonoBehaviour
             default:
                 break;
         }
-    }
-
-    private void RaiseChangedIfNeeded(Transform content)
-    {
-        LocalTransformSnapshot snapshot = LocalTransformSnapshot.From(content);
-        if (_hasSnapshot && _lastSnapshot.Equals(snapshot))
-            return;
-
-        _lastSnapshot = snapshot;
-        _hasSnapshot = true;
-        ContentTransformChanged?.Invoke(content);
-        ContentTransformChangedDetailed?.Invoke(BuildTransformChangeEvent(content));
-    }
-
-    private TransformChangeEvent BuildTransformChangeEvent(Transform content)
-    {
-        Transform targetRoot = ResolveTargetRoot(content);
-        string targetId = ResolveTargetId(targetRoot);
-        string contentId = content != null ? content.name : "";
-        return new TransformChangeEvent(
-            targetId,
-            contentId,
-            content != null ? content.localPosition : Vector3.zero,
-            content != null ? content.localEulerAngles : Vector3.zero,
-            content != null ? content.localScale : Vector3.one,
-            _mode);
-    }
-
-    private static Transform ResolveTargetRoot(Transform content)
-    {
-        if (content == null)
-            return null;
-
-        Transform current = content;
-        while (current != null)
-        {
-            if (string.Equals(current.name, "ContentRoot", StringComparison.Ordinal))
-                return current.parent;
-            current = current.parent;
-        }
-
-        return content.parent;
-    }
-
-    private static string ResolveTargetId(Transform targetRoot)
-    {
-        if (targetRoot == null)
-            return "";
-
-        ArImageTarget arImageTarget = targetRoot.GetComponent<ArImageTarget>();
-        if (arImageTarget != null && !string.IsNullOrWhiteSpace(arImageTarget.TargetId))
-            return arImageTarget.TargetId.Trim();
-
-        ImageTargetPlaceholder placeholder = targetRoot.GetComponentInChildren<ImageTargetPlaceholder>();
-        if (placeholder != null && !string.IsNullOrWhiteSpace(placeholder.TargetId))
-            return placeholder.TargetId.Trim();
-
-        return targetRoot.name;
     }
 
     private readonly struct LocalTransformSnapshot : IEquatable<LocalTransformSnapshot>

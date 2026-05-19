@@ -13,6 +13,8 @@ public class DraggableObject : MonoBehaviour
     [Header("Drag Constraints")]
     [SerializeField] private bool lockLocalZ;
     [SerializeField] private bool moveParentOnDrag;
+    [Tooltip("When false, LMB screen drag does not move this object (content uses inspector sliders). Target visuals keep this enabled.")]
+    [SerializeField] private bool allowPositionDrag = true;
 
     [Header("Scale While Dragging")]
     [SerializeField] private bool allowScrollScale;
@@ -52,7 +54,7 @@ public class DraggableObject : MonoBehaviour
         if (mouse == null || cam == null)
             return;
 
-        if (mouse.leftButton.wasPressedThisFrame && !isDragging)
+        if (mouse.leftButton.wasPressedThisFrame && !isDragging && allowPositionDrag)
         {
             Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f) &&
@@ -146,6 +148,22 @@ public class DraggableObject : MonoBehaviour
     public void ConfigureDragBinding(bool shouldMoveParentOnDrag)
     {
         moveParentOnDrag = shouldMoveParentOnDrag;
+    }
+
+    public void ConfigurePositionDrag(bool allowed)
+    {
+        allowPositionDrag = allowed;
+        if (!allowed && isDragging)
+            EndDrag(notifyUi: false);
+    }
+
+    /// <summary>Content under ContentRoot: no LMB drag (semantic sliders / gizmo only).</summary>
+    public static void ConfigureForContentShell(DraggableObject draggable)
+    {
+        if (draggable == null)
+            return;
+
+        draggable.ConfigurePositionDrag(false);
     }
 
     public void ConfigureScaleBinding(bool shouldScaleParentOnScroll)

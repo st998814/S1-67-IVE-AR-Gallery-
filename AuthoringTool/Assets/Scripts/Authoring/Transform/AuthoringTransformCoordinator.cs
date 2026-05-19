@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ARGallery.Workspace.Persistence;
+using ARGallery.Workspace.Presets;
 using RTG;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
@@ -8,7 +9,8 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Wires sandbox transform stack (<see cref="ObjectSelectionManager"/>, <see cref="TransformGizmoController"/>)
-/// into the authoring scene: target switching, UI sync, and legacy keyboard / selection affordances.
+/// into the authoring scene: target switching, UI sync, and selection affordances.
+/// Content transforms are changed only via <see cref="ContentTransformManipulator"/> (gizmo, inspector sliders).
 /// </summary>
 [DefaultExecutionOrder(-40)]
 public sealed class AuthoringTransformCoordinator : MonoBehaviour
@@ -18,14 +20,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     [SerializeField] private ObjectSelectionManager objectSelectionManager;
     [SerializeField] private TransformGizmoController gizmoController;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private PlacementBoundsService placementBoundsService;
+    [SerializeField] private ContentTransformManipulator contentTransformManipulator;
     [SerializeField] private AuthoringUIController authoringUI;
     [SerializeField] private Camera mainCamera;
-
-    [Header("Keyboard nudges (when gizmo is not active)")]
-    [SerializeField] private bool enableKeyboardNudges = true;
-    [SerializeField] private float moveStep = 0.1f;
-    [SerializeField] private float rotateStep = 10f;
-    [SerializeField] private float scaleStep = 0.1f;
 
     [Header("Selection Highlight")]
     [SerializeField] private Color selectionBoundsColor = new Color(0.23f, 0.51f, 0.96f, 0.9f);
@@ -70,17 +68,31 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             gizmoController = FindFirstObjectByType<TransformGizmoController>();
         if (frontSideConstraint == null)
             frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (placementBoundsService == null)
+            placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
+        if (placementBoundsService == null && frontSideConstraint != null)
+        {
+            placementBoundsService = frontSideConstraint.gameObject.AddComponent<PlacementBoundsService>();
+            placementBoundsService.Configure(frontSideConstraint);
+        }
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
+        if (contentTransformManipulator == null && frontSideConstraint != null)
+        {
+            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
+            contentTransformManipulator = frontSideConstraint.gameObject.AddComponent<ContentTransformManipulator>();
+            contentTransformManipulator.Configure(localSvc, placementBoundsService, frontSideConstraint);
+        }
         if (authoringUI == null)
             authoringUI = FindFirstObjectByType<AuthoringUIController>();
         if (mainCamera == null)
             mainCamera = Camera.main;
 
-        if (gizmoController != null && objectSelectionManager != null && frontSideConstraint != null)
-        {
-            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
-            gizmoController.ConfigureDependencies(objectSelectionManager, localSvc, frontSideConstraint);
-        }
+        if (gizmoController != null && objectSelectionManager != null && contentTransformManipulator != null)
+            gizmoController.ConfigureDependencies(objectSelectionManager, contentTransformManipulator);
     }
+
+    public ContentTransformManipulator ContentManipulator => contentTransformManipulator;
 
     private void OnEnable()
     {
@@ -126,8 +138,14 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             objectSelectionManager.Configure(mainCamera, contentRoot);
 
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        Transform targetRootTransform = activeTarget != null ? activeTarget.transform : null;
         if (frontSideConstraint != null)
-            frontSideConstraint.SetTargetContext(activeTarget != null ? activeTarget.transform : null, contentRoot);
+            frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
+        if (placementBoundsService != null)
+            placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
+
+        if (targetRootTransform != null)
+            WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
 
         RefreshContentList();
 
@@ -232,21 +250,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
             SelectNextContent();
-
-        Transform selected = objectSelectionManager != null ? objectSelectionManager.Selected : null;
-
-        if (!enableKeyboardNudges || selected == null)
-            return;
-
-        if (gizmoController != null && gizmoController.IsManipulating)
-            return;
-
-        if (RTGizmosEngine.Get != null && RTGizmosEngine.Get.DraggedGizmo != null)
-            return;
-
-        HandlePositionInput(selected);
-        HandleRotationInput(selected);
-        HandleScaleInput(selected);
     }
 
     private void SelectNextContent()
@@ -283,7 +286,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
 
         foreach (Transform child in contentRoot)
+        {
             _contentObjects.Add(child);
+            DraggableObject.ConfigureForContentShell(child.GetComponent<DraggableObject>());
+        }
 
         Transform sel = objectSelectionManager != null ? objectSelectionManager.Selected : null;
         if (sel == null)
@@ -573,74 +579,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         if (m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null)
             return true;
         return false;
-    }
-
-    private void HandlePositionInput(Transform target)
-    {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 pos = target.localPosition;
-        bool anyKey = false;
-
-        if (Keyboard.current.aKey.isPressed) { pos.x -= moveStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.dKey.isPressed) { pos.x += moveStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.wKey.isPressed) { pos.y += moveStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.sKey.isPressed) { pos.y -= moveStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.qKey.isPressed) { pos.z -= moveStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.eKey.isPressed) { pos.z += moveStep * Time.deltaTime * 10f; anyKey = true; }
-
-        if (!anyKey)
-            return;
-
-        target.localPosition = pos;
-        authoringUI?.SyncTransformToInspector(target);
-        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
-        NotifyWorkspaceAutosave();
-    }
-
-    private void HandleRotationInput(Transform target)
-    {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 rot = target.localEulerAngles;
-        bool anyKey = false;
-
-        if (Keyboard.current.zKey.isPressed) { rot.y -= rotateStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.xKey.isPressed) { rot.y += rotateStep * Time.deltaTime * 10f; anyKey = true; }
-
-        if (!anyKey)
-            return;
-
-        target.localEulerAngles = rot;
-        authoringUI?.SyncTransformToInspector(target);
-        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
-        NotifyWorkspaceAutosave();
-    }
-
-    private void HandleScaleInput(Transform target)
-    {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 scale = target.localScale;
-        bool anyKey = false;
-
-        if (Keyboard.current.cKey.isPressed) { scale += Vector3.one * scaleStep * Time.deltaTime * 10f; anyKey = true; }
-        if (Keyboard.current.vKey.isPressed) { scale -= Vector3.one * scaleStep * Time.deltaTime * 10f; anyKey = true; }
-
-        if (!anyKey)
-            return;
-
-        scale.x = Mathf.Max(0.1f, scale.x);
-        scale.y = Mathf.Max(0.1f, scale.y);
-        scale.z = Mathf.Max(0.1f, scale.z);
-
-        target.localScale = scale;
-        authoringUI?.SyncTransformToInspector(target);
-        WorkspaceAuthoredAttach.MarkContentRemoteDirty(target);
-        NotifyWorkspaceAutosave();
     }
 
     private static void NotifyWorkspaceAutosave()

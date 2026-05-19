@@ -617,10 +617,6 @@ MonoBehaviour:
   frontSideConstraint: {fileID: 188100003}
   authoringUI: {fileID: 1900000014}
   mainCamera: {fileID: 600757515}
-  enableKeyboardNudges: 1
-  moveStep: 0.1
-  rotateStep: 10
-  scaleStep: 0.1
 --- !u!1 &1480848357
 GameObject:
   m_ObjectHideFlags: 0
@@ -859,7 +855,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ARGallery.AppFlow.AuthoringWorkspaceEntry
   createMissingTarget: 1
   defaultWorkspaceId: ws-wall-001
-  showOrientationHelper: 1
+  showOrientationHelper: 0
   orientationHelperAxisLength: 0.35
   orientationHelperAxisThickness: 0.01
 --- !u!114 &1900000016

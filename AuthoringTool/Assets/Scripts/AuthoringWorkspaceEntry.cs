@@ -17,7 +17,7 @@ namespace ARGallery.AppFlow
         [SerializeField] private bool createMissingTarget = true;
         [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
         [Header("Orientation Helper")]
-        [SerializeField] private bool showOrientationHelper = true;
+        [SerializeField] private bool showOrientationHelper = false;
         [SerializeField] private float orientationHelperAxisLength = 0.35f;
         [SerializeField] private float orientationHelperAxisThickness = 0.01f;
         [SerializeField] private float ceilingTargetHeightOffset = 1.2f;

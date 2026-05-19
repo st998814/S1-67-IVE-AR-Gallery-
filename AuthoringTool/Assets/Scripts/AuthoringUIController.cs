@@ -120,6 +120,8 @@ public class AuthoringUIController : MonoBehaviour
     private string pendingTargetReferenceTargetId;
     private InspectorMode inspectorMode = InspectorMode.Target;
     private TransformGizmoController.GizmoMode _lastKnownGizmoMode = TransformGizmoController.GizmoMode.Translate;
+    private readonly AuthoringUIManipulatorPanel _manipulatorPanel = new AuthoringUIManipulatorPanel();
+    private PlacementBoundsService _placementBoundsService;
 
     private enum InspectorMode
     {
@@ -307,6 +309,8 @@ public class AuthoringUIController : MonoBehaviour
         authoringTransformCoordinator = ResolveAuthoringTransformCoordinator();
         if (transformGizmoController == null)
             transformGizmoController = FindFirstObjectByType<TransformGizmoController>();
+        _placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
+        BindManipulatorBottomPanel(root);
         apiClient = ResolveApiClient();
         spawnerManager = BuildSpawnerManager();
         ConfigureHierarchyListView();
@@ -551,6 +555,7 @@ public class AuthoringUIController : MonoBehaviour
     private void OnCoordinatorContentSelectionChanged(Transform _)
     {
         SyncHierarchySelectionFromCoordinator();
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void RefreshHierarchyListFromCoordinator()
@@ -820,6 +825,7 @@ public class AuthoringUIController : MonoBehaviour
     // Keep inspector coordinates synced when moving target/content via 3D interaction.
     SyncSpatialInspectorRealtime();
     SyncModeIndicatorLabel();
+    _manipulatorPanel.RefreshVisibilityAndValues();
 }
 
     private void SyncSpatialInspectorRealtime()
@@ -854,7 +860,10 @@ public class AuthoringUIController : MonoBehaviour
         var panel = uiDocument.rootVisualElement.panel;
         var focusedElement = panel != null && panel.focusController != null ? panel.focusController.focusedElement : null;
 
-        return focusedElement == posXInput || focusedElement == posYInput || focusedElement == posZInput;
+        if (focusedElement == posXInput || focusedElement == posYInput || focusedElement == posZInput)
+            return true;
+
+        return _manipulatorPanel.IsManipulatorSliderFocused(focusedElement);
     }
 
     public bool IsTargetInspectorActive()
@@ -879,6 +888,7 @@ public class AuthoringUIController : MonoBehaviour
             SetModePillActive(TransformGizmoController.GizmoMode.Rotate, false);
             SetModePillActive(TransformGizmoController.GizmoMode.Scale, false);
             SetModePillActive(TransformGizmoController.GizmoMode.Universal, false);
+            _manipulatorPanel.RefreshVisibilityAndValues();
             return;
         }
 
@@ -888,16 +898,18 @@ public class AuthoringUIController : MonoBehaviour
             topBarModeGroup.style.display = DisplayStyle.Flex;
 
         TransformGizmoController.GizmoMode current = transformGizmoController.CurrentMode;
-        if (current == _lastKnownGizmoMode)
-            return;
+        if (current != _lastKnownGizmoMode)
+        {
+            _lastKnownGizmoMode = current;
+            if (modeIndicatorLabel != null)
+                modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(current);
+        }
 
-        _lastKnownGizmoMode = current;
-        if (modeIndicatorLabel != null)
-            modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(current);
         SetModePillActive(TransformGizmoController.GizmoMode.Translate, current == TransformGizmoController.GizmoMode.Translate);
         SetModePillActive(TransformGizmoController.GizmoMode.Rotate, current == TransformGizmoController.GizmoMode.Rotate);
         SetModePillActive(TransformGizmoController.GizmoMode.Scale, current == TransformGizmoController.GizmoMode.Scale);
         SetModePillActive(TransformGizmoController.GizmoMode.Universal, current == TransformGizmoController.GizmoMode.Universal);
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void SetModePillActive(TransformGizmoController.GizmoMode mode, bool active)
@@ -1564,17 +1576,9 @@ public class AuthoringUIController : MonoBehaviour
         if (suppressSpatialUiCallbacks)
             return;
 
-        // Content inspector: edit selected content local position.
+        // Content position is edited via bottom sliders (ContentTransformManipulator).
         if (authoringSpatialTarget != null)
-        {
-            Vector3 lp = authoringSpatialTarget.localPosition;
-            lp.x = posXInput.value;
-            lp.y = posYInput.value;
-            lp.z = posZInput.value;
-            authoringSpatialTarget.localPosition = lp;
-            MarkActiveDraftDirty();
             return;
-        }
 
         // Target inspector: edit active target local position (info + optional edit).
         if (targetSelectionManager == null)
@@ -1599,9 +1603,14 @@ public class AuthoringUIController : MonoBehaviour
         if (suppressSpatialUiCallbacks || authoringSpatialTarget == null || scaleInput == null)
             return;
 
-        float s = Mathf.Max(0.01f, scaleInput.value);
-        authoringSpatialTarget.localScale = Vector3.one * s;
+        ContentTransformManipulator manipulator = ResolveContentManipulator();
+        if (manipulator != null)
+            manipulator.SetUniformScale(authoringSpatialTarget, scaleInput.value);
+        else
+            authoringSpatialTarget.localScale = Vector3.one * Mathf.Max(0.01f, scaleInput.value);
+
         MarkActiveDraftDirty();
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     /// <summary>用于场景点击选中 / Gizmo 拖拽后，把 Transform 写回面板（位置 + 均匀缩放）。</summary>
@@ -1624,6 +1633,8 @@ public class AuthoringUIController : MonoBehaviour
         {
             suppressSpatialUiCallbacks = false;
         }
+
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void ApplyInspectorModeContent()
@@ -1632,6 +1643,7 @@ public class AuthoringUIController : MonoBehaviour
         if (targetReferenceContainer != null)
             targetReferenceContainer.style.display = DisplayStyle.None;
         UpdateInspectorModeTabVisualState();
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void ApplyInspectorModeTarget()
@@ -1644,6 +1656,7 @@ public class AuthoringUIController : MonoBehaviour
         RefreshTargetReferenceUiForActiveTarget();
         UpdateTargetReferenceStatusLabel(showUploadingText: false);
         UpdateInspectorModeTabVisualState();
+        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void UpdateInspectorModeTabVisualState()
@@ -2717,5 +2730,65 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         MarkActiveDraftDirty();
         NotifyWorkspacePersistenceChanged();
+        _manipulatorPanel.RefreshVisibilityAndValues();
+    }
+
+    private void BindManipulatorBottomPanel(VisualElement root)
+    {
+        if (root == null)
+            return;
+
+        TargetLocalTransformService localSvc = FindFirstObjectByType<TargetLocalTransformService>();
+        ContentTransformManipulator manipulator = ResolveContentManipulator();
+
+        _manipulatorPanel.Bind(
+            root,
+            manipulator,
+            _placementBoundsService,
+            localSvc,
+            () => authoringSpatialTarget,
+            () => inspectorMode == InspectorMode.Content,
+            () => transformGizmoController != null ? transformGizmoController.CurrentMode : TransformGizmoController.GizmoMode.Translate,
+            OnManipulatorPanelTransformEdited);
+
+        _manipulatorPanel.RegisterModePill(modeMovePill, TransformGizmoController.GizmoMode.Translate, SetManipulatorMode);
+        _manipulatorPanel.RegisterModePill(modeRotatePill, TransformGizmoController.GizmoMode.Rotate, SetManipulatorMode);
+        _manipulatorPanel.RegisterModePill(modeScalePill, TransformGizmoController.GizmoMode.Scale, SetManipulatorMode);
+    }
+
+    private void SetManipulatorMode(TransformGizmoController.GizmoMode mode)
+    {
+        if (transformGizmoController == null)
+            transformGizmoController = FindFirstObjectByType<TransformGizmoController>();
+        if (transformGizmoController == null)
+            return;
+
+        transformGizmoController.SetMode(mode);
+        _lastKnownGizmoMode = mode;
+        if (modeIndicatorLabel != null)
+            modeIndicatorLabel.text = "Mode: " + GetModeDisplayName(mode);
+        SetModePillActive(TransformGizmoController.GizmoMode.Translate, mode == TransformGizmoController.GizmoMode.Translate);
+        SetModePillActive(TransformGizmoController.GizmoMode.Rotate, mode == TransformGizmoController.GizmoMode.Rotate);
+        SetModePillActive(TransformGizmoController.GizmoMode.Scale, mode == TransformGizmoController.GizmoMode.Scale);
+        SetModePillActive(TransformGizmoController.GizmoMode.Universal, mode == TransformGizmoController.GizmoMode.Universal);
+        _manipulatorPanel.RefreshVisibilityAndValues();
+    }
+
+    private void OnManipulatorPanelTransformEdited()
+    {
+        if (authoringSpatialTarget != null)
+            SyncTransformToInspector(authoringSpatialTarget);
+
+        MarkActiveDraftDirty();
+        if (authoringSpatialTarget != null)
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(authoringSpatialTarget);
+    }
+
+    private ContentTransformManipulator ResolveContentManipulator()
+    {
+        if (authoringTransformCoordinator != null && authoringTransformCoordinator.ContentManipulator != null)
+            return authoringTransformCoordinator.ContentManipulator;
+
+        return FindFirstObjectByType<ContentTransformManipulator>();
     }
 }
