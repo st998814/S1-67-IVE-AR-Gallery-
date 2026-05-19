@@ -286,7 +286,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
 
         foreach (Transform child in contentRoot)
+        {
             _contentObjects.Add(child);
+            DraggableObject.ConfigureForContentShell(child.GetComponent<DraggableObject>());
+        }
 
         Transform sel = objectSelectionManager != null ? objectSelectionManager.Selected : null;
         if (sel == null)

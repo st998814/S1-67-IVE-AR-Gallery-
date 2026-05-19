@@ -69,7 +69,11 @@ Mode pills in the top bar call **`SetManipulatorMode`** on **`AuthoringUIControl
 
 Pressing movement keys while navigating must **not** change content **`localPosition`**.
 
-### 6. Target inspector and orientation helper
+### 6. No LMB drag for content position
+
+Content shells under **`ContentRoot`** call **`DraggableObject.ConfigureForContentShell`**, which sets **`allowPositionDrag = false`**. LMB screen drag no longer moves content; **Move** uses bottom sliders only. **Target** **`TargetVisual`** keeps position drag (`ConfigurePositionDrag(true)`, `moveParentOnDrag`) and **`TargetMovementController`** plane drag.
+
+### 7. Target inspector and orientation helper
 
 - **Target** tab — **`TargetMovementController`** plane drag moves **`TargetRoot`**; content gizmo selection is cleared; mode pills and bottom panel are hidden.
 - **Selection highlight** — pulsing edge bounds from **`AuthoringTransformCoordinator`**: content selection in Content mode, **`TargetVisual`** in Target mode.
@@ -88,7 +92,7 @@ Paths are under `Assets/` unless noted.
 | **ContentTransformManipulator.cs** | Single write path: `SetSemanticAxis`, `SetUniformScale`, `ApplyGizmoResult`; fires transform-changed events. |
 | **PlacementBoundsService.cs** | MonoBehaviour: `TryGetBoundsForContent`, `ClampLocalPosition`, `SetSemanticAxis`, `GetAxisRange`; wires `FrontSideConstraint` + `TargetVisual`. |
 | **TransformGizmoController.cs** | `ResolveGizmoForMode` returns no gizmo for Translate/Scale; Rotate gizmo only; `HasActiveSceneGizmo` helper. |
-| **AuthoringTransformCoordinator.cs** | Wires manipulator + bounds; selection highlight; syncs UI on gizmo changes; disables orientation helper on target context; no keyboard content nudges. |
+| **AuthoringTransformCoordinator.cs** | Wires manipulator + bounds; selection highlight; syncs UI on gizmo changes; disables orientation helper on target context; applies `ConfigureForContentShell` on content list refresh. |
 | **TransformInteractionCompositionRoot.cs** | Bootstraps `PlacementBoundsService` / `ContentTransformManipulator` when missing. |
 | **TargetMovementController.cs** | Unchanged contract; target-plane drag when Target inspector active (see prerequisite doc). |
 
@@ -122,7 +126,15 @@ Paths are under `Assets/` unless noted.
 | **AuthoringWorkspaceEntry.cs** | Default `showOrientationHelper = false`. |
 | **Scenes/AuthoringToolScene.unity** | `TransformGizmoController` + coordinator wiring; orientation helper off in scene entry. |
 
-### 6. Camera — `Scripts/Camera/`
+### 6. Drag policy — `Scripts/`
+
+| File | Description |
+|------|-------------|
+| **DraggableObject.cs** | `allowPositionDrag`, `ConfigurePositionDrag`, `ConfigureForContentShell` (content LMB move off). |
+| **Content/Managers/RuntimeContentFactory.cs** | Applies content drag policy on pool acquire and factory create. |
+| **Target/Managers/RuntimeImageTargetFactory.cs** | Target visual keeps `ConfigurePositionDrag(true)`. |
+
+### 7. Camera — `Scripts/Camera/`
 
 | File | Description |
 |------|-------------|
@@ -133,7 +145,7 @@ Paths are under `Assets/` unless noted.
 ## Interaction flow (AuthoringToolScene)
 
 1. User selects **Content** tab and a child under **`ContentRoot`** → **`ObjectSelectionManager`** selection → coordinator highlight + inspector sync.
-2. User chooses **Move** → bottom panel shows three sliders; dragging updates **`ContentTransformManipulator.SetSemanticAxis`** → bounds clamp + **`FrontSideConstraint`** → inspector XYZ labels refresh.
+2. User chooses **Move** → bottom panel shows three sliders; dragging updates **`ContentTransformManipulator.SetSemanticAxis`** → bounds clamp + **`FrontSideConstraint`** → inspector XYZ labels refresh. LMB drag on content does not move it.
 3. User chooses **Scale** → bottom panel shows uniform scale slider → **`SetUniformScale`** with service min/max.
 4. User chooses **Rotate** → bottom panel hides → RTG rotation gizmo on selection; release applies **`ApplyGizmoResult`** (Rotate).
 5. User chooses **Target** tab → content selection cleared, gizmo modes hidden, target plane drag available; orientation helper stays off.
@@ -143,7 +155,7 @@ Paths are under `Assets/` unless noted.
 
 ## Validation (quick)
 
-- **Move** — sliders appear bottom-center; content stays inside TargetVisual XY and front-side Z; inspector XYZ updates live.
+- **Move** — sliders appear bottom-center; content stays inside TargetVisual XY and front-side Z; inspector XYZ updates live; LMB drag does not reposition content.
 - **Scale** — single slider; uniform scale only; no scale gizmo handles.
 - **Rotate** — rotation gizmo only; no bottom panel.
 - **Camera** — WASD does not nudge selected content local position.
