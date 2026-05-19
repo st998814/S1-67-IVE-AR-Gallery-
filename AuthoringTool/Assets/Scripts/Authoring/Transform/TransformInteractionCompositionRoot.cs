@@ -19,6 +19,7 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
     [SerializeField] private TargetMovementController targetMovementController;
     [SerializeField] private TargetLocalTransformService targetLocalTransformService;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private PlacementBoundsService placementBoundsService;
 
     private void Awake()
     {
@@ -62,12 +63,20 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
             targetLocalTransformService = FindFirstObjectByType<TargetLocalTransformService>();
         if (frontSideConstraint == null)
             frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (placementBoundsService == null)
+            placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
     }
 
     private void ApplyWiring()
     {
         if (selectionManager != null)
             selectionManager.Configure(mainCamera, contentRoot);
+
+        if (placementBoundsService != null)
+        {
+            placementBoundsService.Configure(frontSideConstraint);
+            placementBoundsService.SetTargetContext(targetRoot, contentRoot);
+        }
 
         if (gizmoController != null)
             gizmoController.ConfigureDependencies(selectionManager, targetLocalTransformService, frontSideConstraint);

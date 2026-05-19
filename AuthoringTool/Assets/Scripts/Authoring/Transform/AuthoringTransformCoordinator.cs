@@ -18,6 +18,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     [SerializeField] private ObjectSelectionManager objectSelectionManager;
     [SerializeField] private TransformGizmoController gizmoController;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private PlacementBoundsService placementBoundsService;
     [SerializeField] private AuthoringUIController authoringUI;
     [SerializeField] private Camera mainCamera;
 
@@ -70,6 +71,13 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             gizmoController = FindFirstObjectByType<TransformGizmoController>();
         if (frontSideConstraint == null)
             frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (placementBoundsService == null)
+            placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
+        if (placementBoundsService == null && frontSideConstraint != null)
+        {
+            placementBoundsService = frontSideConstraint.gameObject.AddComponent<PlacementBoundsService>();
+            placementBoundsService.Configure(frontSideConstraint);
+        }
         if (authoringUI == null)
             authoringUI = FindFirstObjectByType<AuthoringUIController>();
         if (mainCamera == null)
@@ -126,8 +134,11 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             objectSelectionManager.Configure(mainCamera, contentRoot);
 
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        Transform targetRootTransform = activeTarget != null ? activeTarget.transform : null;
         if (frontSideConstraint != null)
-            frontSideConstraint.SetTargetContext(activeTarget != null ? activeTarget.transform : null, contentRoot);
+            frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
+        if (placementBoundsService != null)
+            placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
 
         RefreshContentList();
 

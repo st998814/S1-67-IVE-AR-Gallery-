@@ -319,6 +319,21 @@ MonoBehaviour:
   previewDistance: 0.6
   previewVerticalOffset: -0.05
   previewScale: 0.08
+  showImageContent: 1
+  treatImageLocalScaleAsMeters: 1
+  imagePlaneScale: 0.3
+  imageLocalOffset: {x: 0, y: 0.08, z: 0}
+  imageForwardOffset: 0.01
+  authoredPositionScale: 1
+  authoredPositionScalePerAxis: {x: 1, y: 1, z: 1}
+  keepImageOnTargetPlane: 1
+  useTargetPhysicalWidthScaling: 1
+  clampImageOffsetNearTarget: 1
+  imageOffsetClampPerAxis: {x: 0.25, y: 0.25, z: 0.25}
+  applyPostureRotationCorrection: 1
+  wallRotationCorrectionEuler: {x: 90, y: 0, z: 0}
+  floorRotationCorrectionEuler: {x: 0, y: 0, z: 0}
+  ceilingRotationCorrectionEuler: {x: -90, y: 0, z: 0}
 --- !u!114 &9001004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -409,7 +424,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf5a40ff797e4b00bded33d1524a810, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileViewer.Content.HttpContentService
-  baseApiUrl: http://192.168.20.13:5050
+  baseApiUrl: http://172.20.10.2:5050
   contentPath: /api/mobileviewer/content/by-target/
   apiKeyHeaderName: 
   apiKeyValue: 

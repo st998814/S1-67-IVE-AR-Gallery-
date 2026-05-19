@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "ARGallery.Models",
+        "Assembly-CSharp",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
