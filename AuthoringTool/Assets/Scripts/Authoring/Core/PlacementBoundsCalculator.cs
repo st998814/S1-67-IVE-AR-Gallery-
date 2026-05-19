@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Pure placement-bound math for content <see cref="Transform.localPosition"/> in ContentRoot space.
-/// Used by <see cref="PlacementBoundsService"/> and EditMode tests.
+/// Lives in <see cref="ARGallery.Authoring.Core"/> so EditMode tests can reference it without Assembly-CSharp.
 /// </summary>
 public static class PlacementBoundsCalculator
 {
@@ -93,7 +93,6 @@ public static class PlacementBoundsCalculator
 
         if (negativeFrontLocalZ)
         {
-            // Content must stay on negative-Z front side: z <= -minOffset, with a max protrusion depth.
             maxLocalZ = -minOffset;
             minLocalZ = -depth;
         }

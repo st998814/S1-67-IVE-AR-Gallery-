@@ -2,7 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 
 /// <summary>
-/// EditMode tests for <see cref="PlacementBoundsCalculator"/> and <see cref="PlacementBoundsService"/>.
+/// EditMode tests for <see cref="PlacementBoundsCalculator"/> (pure math; no Assembly-CSharp dependency).
 /// Run via: Unity Editor &gt; Window &gt; General &gt; Test Runner &gt; EditMode
 /// </summary>
 public class PlacementBoundsServiceTests
@@ -151,50 +151,4 @@ public class PlacementBoundsServiceTests
         Assert.AreEqual(-1f, result.z, Epsilon);
     }
 
-    // -----------------------------------------------------------------------
-    // PlacementBoundsService — scene hierarchy integration
-    // -----------------------------------------------------------------------
-
-    [Test]
-    public void Service_ResolvesTargetVisualScale_AndClampsContent()
-    {
-        GameObject targetRootGo = new GameObject("TargetRoot");
-        GameObject targetVisualGo = new GameObject("TargetVisual");
-        targetVisualGo.transform.SetParent(targetRootGo.transform, false);
-        targetVisualGo.transform.localScale = new Vector3(1f, 0.8f, 1f);
-
-        GameObject contentRootGo = new GameObject("ContentRoot");
-        contentRootGo.transform.SetParent(targetRootGo.transform, false);
-
-        GameObject contentGo = new GameObject("Cube");
-        contentGo.transform.SetParent(contentRootGo.transform, false);
-        contentGo.transform.localPosition = new Vector3(5f, 5f, 0f);
-
-        GameObject serviceGo = new GameObject("PlacementBoundsService");
-        PlacementBoundsService service = serviceGo.AddComponent<PlacementBoundsService>();
-        FrontSideConstraint front = serviceGo.AddComponent<FrontSideConstraint>();
-
-        try
-        {
-            service.Configure(front);
-            service.SetTargetContext(targetRootGo.transform, contentRootGo.transform);
-
-            Assert.IsTrue(service.TryGetBoundsForContent(contentGo.transform, out PlacementBoundsCalculator.Snapshot bounds));
-            Assert.AreEqual(-0.48f, bounds.x.min, Epsilon);
-            Assert.AreEqual(0.48f, bounds.x.max, Epsilon);
-
-            Vector3 clamped = service.ClampLocalPosition(contentGo.transform, contentGo.transform.localPosition);
-            Assert.AreEqual(0.48f, clamped.x, Epsilon);
-            Assert.AreEqual(0.38f, clamped.y, Epsilon);
-            Assert.AreEqual(-0.5f, clamped.z, Epsilon);
-        }
-        finally
-        {
-            Object.DestroyImmediate(serviceGo);
-            Object.DestroyImmediate(contentGo);
-            Object.DestroyImmediate(contentRootGo);
-            Object.DestroyImmediate(targetVisualGo);
-            Object.DestroyImmediate(targetRootGo);
-        }
-    }
 }

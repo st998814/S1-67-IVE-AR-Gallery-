@@ -617,10 +617,6 @@ MonoBehaviour:
   frontSideConstraint: {fileID: 188100003}
   authoringUI: {fileID: 1900000014}
   mainCamera: {fileID: 600757515}
-  enableKeyboardNudges: 1
-  moveStep: 0.1
-  rotateStep: 10
-  scaleStep: 0.1
 --- !u!1 &1480848357
 GameObject:
   m_ObjectHideFlags: 0

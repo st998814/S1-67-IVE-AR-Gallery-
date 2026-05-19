@@ -2,8 +2,8 @@
     "name": "ARGallery.Tests.EditMode",
     "rootNamespace": "",
     "references": [
+        "ARGallery.Authoring.Core",
         "ARGallery.Models",
-        "Assembly-CSharp",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

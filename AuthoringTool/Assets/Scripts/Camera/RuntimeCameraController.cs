@@ -21,6 +21,7 @@ namespace ARGallery.CameraControl
 
     /// <summary>
     /// Runs late in <see cref="MonoBehaviour.Update"/> so RTG / gizmo hover and drag state are current before movement and zoom run.
+    /// WASD / arrow keys move the camera only; content <see cref="Transform.localPosition"/> is never modified here.
     /// </summary>
     [DefaultExecutionOrder(2000)]
     public sealed class RuntimeCameraController : MonoBehaviour
@@ -116,6 +117,7 @@ namespace ARGallery.CameraControl
         }
 
 #if ENABLE_INPUT_SYSTEM
+        /// <summary>Camera fly — does not write content transforms (see AuthoringTransformCoordinator / ContentTransformManipulator).</summary>
         private void ApplyKeyboardMove(Keyboard keyboard)
         {
             Vector2 input = Vector2.zero;
