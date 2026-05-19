@@ -19,6 +19,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     [SerializeField] private TransformGizmoController gizmoController;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
     [SerializeField] private PlacementBoundsService placementBoundsService;
+    [SerializeField] private ContentTransformManipulator contentTransformManipulator;
     [SerializeField] private AuthoringUIController authoringUI;
     [SerializeField] private Camera mainCamera;
 
@@ -78,17 +79,24 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             placementBoundsService = frontSideConstraint.gameObject.AddComponent<PlacementBoundsService>();
             placementBoundsService.Configure(frontSideConstraint);
         }
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
+        if (contentTransformManipulator == null && frontSideConstraint != null)
+        {
+            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
+            contentTransformManipulator = frontSideConstraint.gameObject.AddComponent<ContentTransformManipulator>();
+            contentTransformManipulator.Configure(localSvc, placementBoundsService, frontSideConstraint);
+        }
         if (authoringUI == null)
             authoringUI = FindFirstObjectByType<AuthoringUIController>();
         if (mainCamera == null)
             mainCamera = Camera.main;
 
-        if (gizmoController != null && objectSelectionManager != null && frontSideConstraint != null)
-        {
-            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
-            gizmoController.ConfigureDependencies(objectSelectionManager, localSvc, frontSideConstraint);
-        }
+        if (gizmoController != null && objectSelectionManager != null && contentTransformManipulator != null)
+            gizmoController.ConfigureDependencies(objectSelectionManager, contentTransformManipulator);
     }
+
+    public ContentTransformManipulator ContentManipulator => contentTransformManipulator;
 
     private void OnEnable()
     {
