@@ -7,7 +7,8 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Binds a runtime gizmo to the current selection and enforces target-local transform constraints.
+/// Binds RTG gizmos to the current selection. Rotate mode uses a rotation gizmo;
+/// Move and Scale modes use inspector sliders only (no translate/scale gizmo handles).
 /// </summary>
 [DefaultExecutionOrder(1000)]
 public sealed class TransformGizmoController : MonoBehaviour
@@ -82,6 +83,9 @@ public sealed class TransformGizmoController : MonoBehaviour
     }
 
     public GizmoMode CurrentMode => _mode;
+
+    /// <summary>True when the active mode shows an enabled RTG gizmo (currently Rotate and Universal only).</summary>
+    public bool HasActiveSceneGizmo => _gizmosInitialized && _workGizmo != null && _workGizmo.Gizmo != null;
 
     public void ConfigureDependencies(
         ObjectSelectionManager selectionRef,
@@ -386,11 +390,19 @@ public sealed class TransformGizmoController : MonoBehaviour
     {
         switch (mode)
         {
-            case GizmoMode.Translate: return _moveGizmo;
-            case GizmoMode.Rotate: return _rotateGizmo;
-            case GizmoMode.Scale: return _scaleGizmo;
-            case GizmoMode.Universal: return _universalGizmo;
-            default: return _moveGizmo;
+            case GizmoMode.Translate:
+            case GizmoMode.Scale:
+                // Position / uniform scale are driven by inspector sliders via ContentTransformManipulator.
+                return null;
+
+            case GizmoMode.Rotate:
+                return _rotateGizmo;
+
+            case GizmoMode.Universal:
+                return _universalGizmo;
+
+            default:
+                return null;
         }
     }
 
