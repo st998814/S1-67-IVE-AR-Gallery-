@@ -84,6 +84,60 @@
 }
 .authoring-add-fab:hover { background-color: rgb(31, 41, 51); }
 
+/* Bottom-center manipulator panel (Move / Scale modes) */
+.manipulator-bottom-panel {
+    position: absolute;
+    bottom: 24px;
+    align-self: center;
+    width: 420px;
+    max-width: 92%;
+    padding: 12px 16px;
+    flex-direction: column;
+    row-gap: 8px;
+    background-color: rgba(18, 24, 33, 0.94);
+    border-width: 1px;
+    border-color: rgb(55, 65, 81);
+    border-radius: 8px;
+}
+
+.manipulator-bottom-panel--hidden { display: none; }
+
+.manipulator-bottom-panel__group {
+    flex-direction: column;
+    row-gap: 6px;
+}
+
+.manipulator-bottom-panel__title {
+    color: rgb(229, 231, 235);
+    font-size: 12px;
+    -unity-font-style: bold;
+    margin-bottom: 2px;
+}
+
+.manipulator-bottom-panel__row {
+    flex-direction: row;
+    align-items: center;
+    column-gap: 8px;
+}
+
+.manipulator-bottom-panel__label {
+    min-width: 108px;
+    color: rgb(156, 163, 175);
+    font-size: 11px;
+}
+
+.manipulator-bottom-panel__slider {
+    flex-grow: 1;
+    min-width: 120px;
+}
+
+.manipulator-bottom-panel__value {
+    min-width: 44px;
+    color: rgb(229, 231, 235);
+    font-size: 11px;
+    -unity-text-align: middle-right;
+}
+
 .input-field {
     background-color: rgb(17, 24, 39);
     border-width: 1px;
