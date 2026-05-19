@@ -855,7 +855,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ARGallery.AppFlow.AuthoringWorkspaceEntry
   createMissingTarget: 1
   defaultWorkspaceId: ws-wall-001
-  showOrientationHelper: 1
+  showOrientationHelper: 0
   orientationHelperAxisLength: 0.35
   orientationHelperAxisThickness: 0.01
 --- !u!114 &1900000016

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ARGallery.Workspace.Persistence;
+using ARGallery.Workspace.Presets;
 using RTG;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
@@ -142,6 +143,9 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
         if (placementBoundsService != null)
             placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
+
+        if (targetRootTransform != null)
+            WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
 
         RefreshContentList();
 
