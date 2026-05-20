@@ -361,6 +361,36 @@ namespace ARGallery.AppFlow
                 cardOpacityCurrent.Add(InactiveCardOpacity);
                 cardOpacityTarget.Add(InactiveCardOpacity);
             }
+
+            var addCard = new VisualElement { name = "WorkspaceAddCard" };
+            addCard.AddToClassList("card");
+            addCard.AddToClassList("card--active");
+            addCard.AddToClassList("workspace-add-card");
+            addCard.style.flexDirection = FlexDirection.Column;
+            addCard.style.justifyContent = Justify.Center;
+            addCard.style.alignItems = Align.Center;
+
+            var plusIcon = new Label("+");
+            plusIcon.AddToClassList("workspace-add-card__icon");
+            plusIcon.style.fontSize = 48;
+            plusIcon.style.color = Color.white;
+            plusIcon.style.unityFontStyleAndWeight = FontStyle.Bold;
+            plusIcon.style.unityTextAlign = TextAnchor.MiddleCenter;
+            plusIcon.style.width = new Length(100, LengthUnit.Percent);
+            addCard.Add(plusIcon);
+
+            var addLabel = new Label("Add workspace");
+            addLabel.AddToClassList("workspace-add-card__label");
+            addLabel.style.color = Color.white;
+            addLabel.style.fontSize = 18;
+            addLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            addLabel.style.marginTop = 8;
+            addLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            addLabel.style.width = new Length(100, LengthUnit.Percent);
+            addCard.Add(addLabel);
+
+            addCard.RegisterCallback<ClickEvent>(_ => OnNewButtonClicked());
+            workspaceCardsRow.Add(addCard);
         }
 
         private void RefreshSelectionUi(bool forceImmediate = false)

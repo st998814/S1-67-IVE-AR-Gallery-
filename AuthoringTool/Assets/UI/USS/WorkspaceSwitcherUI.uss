@@ -77,3 +77,33 @@
 .switcher-action-danger:active {
     background-color: rgb(153, 27, 27);
 }
+
+.workspace-add-card {
+    width: 240px;
+    height: 150px;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--color-surface-secondary);
+    border-width: 1px;
+    border-color: #8CBFFF;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.workspace-add-card:hover {
+    background-color: rgba(26, 36, 52, 0.98);
+}
+
+.workspace-add-card__icon {
+    width: 100%;
+    text-align: center;
+    color: rgb(255, 255, 255);
+}
+
+.workspace-add-card__label {
+    width: 100%;
+    text-align: center;
+    color: rgb(255, 255, 255);
+    font-size: 18px;
+    font-weight: bold;
+}
