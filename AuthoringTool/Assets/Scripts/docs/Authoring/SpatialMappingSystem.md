@@ -1,183 +1,201 @@
-# Spatial Mapping System (Authoring Scene)
-
-Authoring-only helpers that explain **where content may be placed** relative to the AR target, without changing runtime AR rendering or persisted transform semantics.
-
-Related docs:
-
-- [SemanticTransformInspectorAuthoring.md](SemanticTransformInspectorAuthoring.md) — semantic sliders and `ContentTransformManipulator`
-- [WorkspacePresetSystem.md](WorkspacePresetSystem.md) — posture presets and scene entry
-- [PlacementInteractionAndTransformAuthoring.md](PlacementInteractionAndTransformAuthoring.md) — interaction ownership
+# Spatial Mapping System (DEV-134)
+## Assignment : Physical World ↔ Virtual Placement Mapping System (Authoring Scene)
 
 ---
 
-## Goals
+## Outlines
 
-- Show a **bounded editable region** (not an infinite empty scene)
-- Communicate **left/right**, **up/down**, **closer/further** without raw transform numbers
-- Keep all guides **target-relative** (ContentRoot-local, same as saved `localPosition`)
-- Stay **lightweight** (line renderers, no room meshes, no physics)
+### 1. Posture-aware placement boundaries
 
----
+Authoring placement limits are now driven by workspace posture presets, not only implicit `TargetVisual` scale.
 
-## Architecture
+- **Posture source** — `WorkspacePreset.placementBoundary` from `WorkspacePresetLibrary` (`Wall`, `Floor`, `Ceiling`).
+- **Pure math** — `PlacementBoundsCalculator` builds ContentRoot-local axis ranges and eight box corners.
+- **Runtime service** — `PlacementBoundsService` resolves bounds from `TargetVisual`, active preset, and `FrontSideConstraint` Z rules.
+- **Wall safe zone** — `PlacementBoundaryPreset.WallDefault` uses absolute half-extents (±0.75 m left/right, ±0.50 m up/down, 0.05 m–1.00 m in front) so the target acts as a spatial anchor rather than a tight card-sized box.
+- **Clamp path unchanged** — `ContentTransformManipulator` remains the only writer; sliders and gizmo still clamp through the same service.
 
-```mermaid
-flowchart TB
-  subgraph presets [Workspace presets]
-    Posture[WorkspacePosture]
-    Lib[WorkspacePresetLibrary]
-    Boundary[PlacementBoundaryPreset]
-    Camera[PlacementVolumeCameraFraming]
-    Present[WorkspacePresentationPreset]
-  end
+### 2. Semantic real-world distance labels
 
-  subgraph logic [Bounds logic - Core]
-    Calc[PlacementBoundsCalculator]
-    PBS[PlacementBoundsService]
-  end
+Slider and inspector values no longer show raw `localPosition` floats as the primary UX.
 
-  subgraph visuals [Authoring visuals]
-    Coord[SpatialMappingCoordinator]
-    Volume[PlacementSpaceVisualizer]
-    Hologram[HolographicProjectionIndicator]
-  end
+- **Formatter** — `SemanticDistanceFormatter` outputs phrases such as `25 cm right`, `10 cm up`, `54 cm in front of target`.
+- **Bottom manipulator** — `AuthoringUIManipulatorPanel` value labels call the formatter per semantic axis.
+- **Right inspector** — `AuthoringUIController` shows semantic offset rows for content selection; default content inspector no longer leads with raw Local X/Y/Z fields.
 
-  subgraph ui [UI]
-    Sliders[AuthoringUIManipulatorPanel]
-    Formatter[SemanticDistanceFormatter]
-  end
+### 3. Placement boundary visualization (corner-only)
 
-  Posture --> Lib
-  Lib --> Boundary
-  Lib --> Camera
-  Lib --> Present
-  Boundary --> Calc
-  Calc --> PBS
-  PBS --> Volume
-  PBS --> Sliders
-  Formatter --> Sliders
-  Coord --> Volume
-  Coord --> Hologram
-  PBS --> Coord
-```
+The editable region is shown as a lightweight limit cue, not a second projection volume.
 
----
+- **Visualizer** — `PlacementSpaceVisualizer` draws **red corner brackets** only (three axis-aligned legs per corner, 24 lines total).
+- **No full box** — twelve-edge wireframe, front-plane grid, and diagonal corner accents were removed after user feedback.
+- **Visual hierarchy** — boundary alpha and line width stay below the holographic projection so content and target remain dominant.
+- **Parent space** — guides attach under the target root (`PlacementBoundaryVisual`) and follow target-relative bounds from `PlacementBoundsService.TryGetPlacementVolumeVisualBounds`.
 
-## 1. Placement boundaries (posture-aware)
+### 4. Holographic target-to-content projection (primary spatial cue)
 
-| File | Role |
-|------|------|
-| `Authoring/Core/PlacementBoundaryPreset.cs` | Per-posture XY scale, depth, margin, optional min standoff |
-| `Authoring/Core/PlacementBoundsCalculator.cs` | Pure ContentRoot-local clamp ranges + box corners |
-| `Authoring/Transform/PlacementBoundsService.cs` | Resolves bounds from `TargetVisual` + active preset |
-| `Workspace/Presets/WorkspacePresetLibrary.cs` | Wall / Floor / Ceiling boundary table |
+The original orange target→content line and later RGB axis legs were replaced by a single primary relationship indicator.
 
-Content movement is still written only through `ContentTransformManipulator`; bounds are applied on every position change and slider range refresh.
+- **Indicator** — `HolographicProjectionIndicator` builds a frustum from the target face toward the selected content bounds (solid frustum edges, dashed face rings, optional scan-line fill mesh).
+- **Shader** — `AuthoringHologramProjection.shader` (URP + built-in fallback): scrolling stripe alpha mask, rim, subtle pulse; glitch disabled by default.
+- **Read-only** — updates on selection and `ContentTransformChanged`; does not modify placement data, physics, or backend snapshots.
+- **Removed** — `SpatialMappingIndicatorRenderer` (RGB axis projections) deleted per UX request.
 
----
+### 5. Spatial mapping coordinator and scene wiring
 
-## 2. Placement boundary visualization
+A dedicated coordinator owns authoring-only visuals separately from content rendering.
 
-| File | Role |
-|------|------|
-| `Authoring/SpatialMapping/PlacementSpaceVisualizer.cs` | Low-opacity red corner brackets at placement limits (no full box) |
-| `Authoring/SpatialMapping/AuthoringLineVisualUtility.cs` | Shared transparent `LineRenderer` materials |
+- **Component** — `SpatialMappingCoordinator` on `AuthoringTransformSystems` in `AuthoringToolScene`.
+- **Responsibilities** — placement boundary refresh, holographic projection attach/hide, camera-distance line sizing, target/layout change detection.
+- **Events** — `ActiveTargetChanged`, `ContentSelectionChanged`, `ContentTransformChanged`, plus `LateUpdate` refresh while content is selected.
+- **Entry hook** — `AuthoringWorkspaceEntry` calls `RefreshPlacementVolume()` after posture preset apply.
 
-Parent: `{TargetRoot}/PlacementBoundaryVisual`. Does not use content meshes or colliders.
+### 6. Target-aligned bounds and interaction cleanup
 
----
+Bounds and guides were aligned to the physical target anchor and de-cluttered from duplicate box visuals.
 
-## 3. Spatial mapping indicators
+- **Volume centering** — `PlacementBoundsService` and `PlacementBoundsCalculator.ConvertSnapshotLocalSpace` support target-root visual bounds when `TargetVisual` is offset from `ContentRoot`.
+- **Front standoff** — `FrontSideConstraint.frontOffset` default reduced to `0.05 m` so preset near-limit (5 cm) is not overridden by enforce logic.
+- **Selection wireframe removed** — large blue selection-bounds box removed from `AuthoringTransformCoordinator`; material highlight on selected renderers retained.
 
-| File | Role |
-|------|------|
-| `Authoring/SpatialMapping/HolographicProjectionIndicator.cs` | Subtle holographic frustum from target face to content (dashed edges + scan-line fill) |
-| `Authoring/SpatialMapping/Shaders/AuthoringHologramProjection.shader` | URP hologram fill: scrolling stripe alpha mask, rim, scan lines (glitch off by default) |
-| `Authoring/SpatialMapping/AuthoringHologramMaterialUtility.cs` | Runtime stripe mask + material setup |
-Shown only when content is selected. Updates on:
+### 7. EditMode test coverage
 
-- `AuthoringTransformCoordinator.ContentSelectionChanged`
-- `ContentTransformManipulator.ContentTransformChanged`
-- `LateUpdate` while selection is active
-
-Parent: `{TargetRoot}/HolographicProjection`.
-
----
-
-## 4. Real-world distance labels
-
-| File | Role |
-|------|------|
-| `Authoring/Core/SemanticDistanceFormatter.cs` | e.g. `20 cm left`, `54 cm in front of target` |
-
-Used by:
-
-- Bottom manipulator value labels (`AuthoringUIManipulatorPanel`)
-- Right inspector placement offset rows (`AuthoringUIController` + `AuthoringUI.uxml`)
-
-Unity units are treated as **metres**. Raw `Local X/Y/Z` float fields were removed from the default content inspector.
-
----
-
-## 5. Camera framing and presentation
-
-| File | Role |
-|------|------|
-| `Workspace/Presets/PlacementVolumeCameraFraming.cs` | Camera pose from placement volume center/size |
-| `Workspace/Presets/WorkspacePresetModels.cs` | `WorkspacePresentationPreset` (orientation helper, grid toggle) |
-
-`AuthoringWorkspaceEntry.ApplyWorkspacePreset`:
-
-1. Applies target rotation and placement boundary preset
-2. Frames camera with `preset.camera` (look-at = volume center)
-3. Applies optional `WorkspaceOrientationHelper` per posture
-4. Refreshes `SpatialMappingCoordinator`
-
-| Posture | Orientation helper | Typical camera |
-|---------|-------------------|----------------|
-| Wall | Off | Upper-rear, looks at volume center |
-| Floor | On | Higher Y, downward tilt |
-| Ceiling | On | Lower Y, upward tilt |
-
-Inspector override: `AuthoringWorkspaceEntry.showOrientationHelper` can still force axes on for any posture.
-
----
-
-## Scene wiring (`AuthoringToolScene`)
-
-`AuthoringTransformSystems` GameObject:
-
-- `PlacementBoundsService`
-- `ContentTransformManipulator`
-- `SpatialMappingCoordinator` (volume + indicators)
-- Existing transform stack (`AuthoringTransformCoordinator`, gizmos, etc.)
-
----
-
-## EditMode tests
-
-| Test assembly | Covers |
-|---------------|--------|
-| `PlacementBoundsServiceTests.cs` | Calculator, presets, box corners |
-| `SemanticDistanceFormatterTests.cs` | Label wording and units |
-| `PlacementVolumeCameraFramingTests.cs` | Posture camera framing and presentation presets |
+| Test file | Covers |
+|-----------|--------|
+| **Tests/EditMode/PlacementBoundsServiceTests.cs** | Preset multipliers, absolute Wall safe zone, corner fill, target-context bounds |
+| **Tests/EditMode/SemanticDistanceFormatterTests.cs** | Axis wording, cm/m thresholds, combined offset strings |
 
 Run: Unity **Window → General → Test Runner → EditMode**.
 
 ---
 
-## Manual acceptance checklist
+## Modification
 
-1. Open `AuthoringToolScene` with a Wall workspace — cyan placement box visible around target.
-2. Select content — holographic projection frustum from target to content; slider labels show cm/m phrases.
-3. Switch Floor/Ceiling mock workspace — box depth/size and camera angle change; floor/ceiling show orientation axes.
-4. Move content with bottom sliders — box unchanged, guides and labels update live.
-5. Save/reload — `localPosition` in snapshot unchanged; guides reappear after reconstruct.
+Paths are under `Assets/Scripts/` unless noted.
+
+### 1. Placement boundary domain (Core + Transform)
+
+| File | Description |
+|------|-------------|
+| **Authoring/Core/PlacementBoundaryPreset.cs** | Posture boundary struct: scale multipliers, depth, margin, optional min standoff, optional absolute XY half-extents; `WallDefault` safe zone. |
+| **Authoring/Core/PlacementBoundsCalculator.cs** | ContentRoot-local range and corner math; preset-aware `Compute`; `ConvertSnapshotLocalSpace` for target-root visualization. |
+| **Authoring/Transform/PlacementBoundsService.cs** | Resolves bounds/clamp ranges from `TargetVisual` + active preset; `SetPosture`, `SetTargetContext`, `TryGetPlacementVolumeVisualBounds`. |
+| **Authoring/Transform/FrontSideConstraint.cs** | Default `frontOffset` `0.05 m` so near-plane preset limits apply correctly. |
+| **Authoring/Transform/ContentTransformManipulator.cs** | Unchanged write path; continues to clamp via `PlacementBoundsService`. |
+
+### 2. Workspace preset integration
+
+| File | Description |
+|------|-------------|
+| **Workspace/Presets/WorkspacePresetModels.cs** | `WorkspacePlacementBoundaryPreset` and `WorkspacePreset.placementBoundary`. |
+| **Workspace/Presets/WorkspacePresetLibrary.cs** | Per-posture `PlacementBoundaryPreset` table (`WallDefault`, Floor, Ceiling variants). |
+| **AuthoringWorkspaceEntry.cs** | Applies workspace preset; refreshes `SpatialMappingCoordinator` placement boundary after posture apply. |
+
+### 3. Semantic distance UI
+
+| File | Description |
+|------|-------------|
+| **Authoring/Core/SemanticDistanceFormatter.cs** | Human-readable offset strings (cm/m, left/right, up/down, in front/behind target). |
+| **AuthoringUIManipulatorPanel.cs** | Slider value labels use formatter instead of raw metres. |
+| **AuthoringUIController.cs** | Content inspector semantic placement offset rows. |
+| **UI/UXML/AuthoringUI.uxml** | Inspector layout aligned with semantic offset presentation. |
+
+### 4. Spatial mapping visuals (new folder)
+
+| File | Description |
+|------|-------------|
+| **Authoring/SpatialMapping/SpatialMappingCoordinator.cs** | Owns boundary + hologram lifecycle; inspector colors for boundary corners and hologram projection. |
+| **Authoring/SpatialMapping/PlacementSpaceVisualizer.cs** | Red corner-only boundary brackets (no wireframe box). |
+| **Authoring/SpatialMapping/HolographicProjectionIndicator.cs** | Target-to-content holographic frustum lines and fill mesh. |
+| **Authoring/SpatialMapping/AuthoringBoundsVisualUtility.cs** | Renderer bounds and face-corner helpers for frustum anchoring. |
+| **Authoring/SpatialMapping/AuthoringLineVisualUtility.cs** | Shared `LineRenderer` materials (`Unlit/Color`, optional dash texture). |
+| **Authoring/SpatialMapping/AuthoringHologramMaterialUtility.cs** | Runtime hologram material and stripe alpha mask setup. |
+| **Authoring/SpatialMapping/Shaders/AuthoringHologramProjection.shader** | URP-compatible transparent hologram fill shader. |
+
+### 5. Transform coordinator cleanup
+
+| File | Description |
+|------|-------------|
+| **Authoring/Transform/AuthoringTransformCoordinator.cs** | Removed selection-bounds wireframe overlay; kept selection material highlight. |
+
+### 6. Scene and project maintenance
+
+| File | Description |
+|------|-------------|
+| **Scenes/AuthoringToolScene.unity** | `SpatialMappingCoordinator` on `AuthoringTransformSystems`; `PlacementBoundsService` wiring; boundary/hologram inspector defaults. |
+| **../Assembly-CSharp.csproj** | Includes spatial mapping scripts for IDE resolution. |
+
+### 7. Tests
+
+| File | Description |
+|------|-------------|
+| **Tests/EditMode/PlacementBoundsServiceTests.cs** | Boundary preset and calculator integration tests. |
+| **Tests/EditMode/SemanticDistanceFormatterTests.cs** | Formatter wording and unit thresholds. |
+
+### 8. Removed during DEV-134 (superseded or cut)
+
+| File | Description |
+|------|-------------|
+| **Authoring/SpatialMapping/SpatialMappingIndicatorRenderer.cs** | Deleted — RGB axis legs and arrow heads on target; replaced by holographic projection-only UX. |
+
+---
+
+## Spatial Mapping Flow
+
+1. Authoring scene loads target with `ContentRoot` / `TargetVisual` hierarchy.
+2. `AuthoringWorkspaceEntry` applies workspace posture preset (target rotation, camera, placement boundary).
+3. `PlacementBoundsService` stores active `PlacementBoundaryPreset` and target context.
+4. `SpatialMappingCoordinator.RefreshPlacementVolume()` builds boundary snapshot and shows red corner brackets under target root.
+5. User selects content under `ContentRoot`.
+6. Coordinator attaches `HolographicProjectionIndicator` and refreshes frustum on transform changes and `LateUpdate`.
+7. User moves content via bottom sliders or gizmo — `ContentTransformManipulator` clamps position; boundary corners and hologram update; semantic labels refresh.
+8. Save/reload — `localPosition` in workspace snapshot unchanged; guides rebuild after scene reconstruct.
+
+---
+
+## Visual Hierarchy (as shipped)
+
+| Layer | When visible | Role |
+|-------|----------------|------|
+| Content + target meshes | Always | Primary scene subjects |
+| Holographic projection | Content selected | **Primary** — explains target-relative content placement |
+| Red boundary corners | Active target | **Secondary** — allowed movement limits only |
+| Selection material tint | Object selected | Interaction feedback (no placement wireframe) |
+
+---
+
+## Result
+
+- Authoring placement is bounded by posture-aware presets with a relaxed Wall safe zone anchored on the target, not a postage-stamp card box.
+- The scene communicates left/right, up/down, and closer/further through semantic slider labels and a holographic target→content projection.
+- Placement limits are shown as subtle red corner brackets without a full collision-style wireframe volume.
+- RGB axis indicators and the old direct relationship line were removed to reduce visual noise.
+- All bounds and guides use ContentRoot-local space consistent with saved `localPosition`; runtime MobileViewer and snapshot schema are unchanged.
+- EditMode tests cover boundary math and semantic formatting for regression safety.
 
 ---
 
 ## Out of scope
 
-- Runtime MobileViewer rendering changes
+- Runtime AR / MobileViewer rendering changes
 - Room reconstruction, physics colliders, multi-room navigation
-- Changing `snapshot.json` schema (still stores raw local TRS)
+- Changing workspace `snapshot.json` transform schema (still stores raw local TRS)
+- Backend placement export format changes
+
+---
+
+## Manual acceptance checklist
+
+1. Open `AuthoringToolScene` with a Wall workspace — red corner brackets mark the movement limits around the target.
+2. Select content — cyan holographic frustum connects target face to content; no RGB axis lines on the target.
+3. Move content with bottom sliders — brackets stay fixed; hologram and labels (`cm` / `m` phrases) update live.
+4. Switch Floor/Ceiling mock workspace — boundary size and camera posture change per preset table.
+5. Save/reload workspace — `localPosition` unchanged in snapshot; boundary and hologram reappear after reconstruct.
+
+---
+
+## Related docs
+
+- [SemanticTransformInspectorAuthoring.md](SemanticTransformInspectorAuthoring.md) — semantic sliders and `ContentTransformManipulator`
+- [WorkspacePresetSystem.md](WorkspacePresetSystem.md) — posture presets and scene entry (DEV-129)
+- [PlacementInteractionAndTransformAuthoring.md](PlacementInteractionAndTransformAuthoring.md) — interaction ownership
