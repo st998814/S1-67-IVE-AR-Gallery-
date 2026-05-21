@@ -370,6 +370,10 @@ namespace ARGallery.AppFlow
             PlacementBoundsService placementBounds = FindFirstObjectByType<PlacementBoundsService>();
             if (placementBounds != null)
                 placementBounds.SetPosture(posture);
+
+            SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+            if (spatialMapping != null)
+                spatialMapping.RefreshPlacementVolume();
             WorkspacePresets.WorkspaceOrientationHelper.Apply(
                 targetRoot,
                 showOrientationHelper,

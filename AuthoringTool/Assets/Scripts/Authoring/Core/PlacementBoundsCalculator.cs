@@ -58,6 +58,32 @@ public static class PlacementBoundsCalculator
                 y.Clamp(localPosition.y),
                 z.Clamp(localPosition.z));
         }
+
+        public Vector3 LocalMin => new Vector3(x.min, y.min, z.min);
+
+        public Vector3 LocalMax => new Vector3(x.max, y.max, z.max);
+
+        public Vector3 LocalCenter => (LocalMin + LocalMax) * 0.5f;
+
+        public Vector3 LocalSize => LocalMax - LocalMin;
+    }
+
+    /// <summary>Fills eight ContentRoot-local box corners (bottom plane 0-3, top plane 4-7).</summary>
+    public static void FillLocalBoxCorners(Snapshot bounds, Vector3[] corners)
+    {
+        if (corners == null || corners.Length < 8)
+            throw new System.ArgumentException("Expected eight corner slots.", nameof(corners));
+
+        Vector3 min = bounds.LocalMin;
+        Vector3 max = bounds.LocalMax;
+        corners[0] = new Vector3(min.x, min.y, min.z);
+        corners[1] = new Vector3(max.x, min.y, min.z);
+        corners[2] = new Vector3(max.x, max.y, min.z);
+        corners[3] = new Vector3(min.x, max.y, min.z);
+        corners[4] = new Vector3(min.x, min.y, max.z);
+        corners[5] = new Vector3(max.x, min.y, max.z);
+        corners[6] = new Vector3(max.x, max.y, max.z);
+        corners[7] = new Vector3(min.x, max.y, max.z);
     }
 
     /// <summary>

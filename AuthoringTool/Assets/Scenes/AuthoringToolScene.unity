@@ -510,6 +510,9 @@ GameObject:
   - component: {fileID: 188100005}
   - component: {fileID: 188100006}
   - component: {fileID: 188100007}
+  - component: {fileID: 188100008}
+  - component: {fileID: 188100009}
+  - component: {fileID: 188100010}
   m_Layer: 0
   m_Name: AuthoringTransformSystems
   m_TagString: Untagged
@@ -617,6 +620,57 @@ MonoBehaviour:
   frontSideConstraint: {fileID: 188100003}
   authoringUI: {fileID: 1900000014}
   mainCamera: {fileID: 600757515}
+--- !u!114 &188100008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5552f1542eb143978f938ad7d0c72ad9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlacementBoundsService
+  frontSideConstraint: {fileID: 188100003}
+  edgeMargin: 0.02
+  maxDepthFromTarget: 2
+  fallbackHalfExtent: 0.1
+--- !u!114 &188100009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae57fb4b95724705a109202cf06baa1f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ContentTransformManipulator
+  targetLocalTransformService: {fileID: 188100004}
+  placementBoundsService: {fileID: 188100008}
+  frontSideConstraint: {fileID: 188100003}
+--- !u!114 &188100010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 188100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7e8f9a0b1d24356e7890abcdef12001, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpatialMappingCoordinator
+  targetSelectionManager: {fileID: 1480848358}
+  placementBoundsService: {fileID: 188100008}
+  frontSideConstraint: {fileID: 188100003}
+  volumeColor: {r: 0.45, g: 0.78, b: 0.92, a: 0.42}
+  edgeWidth: 0.006
+  showFrontPlaneGrid: 1
+  gridDivisions: 4
+  cornerTickLength: 0.04
 --- !u!1 &1480848357
 GameObject:
   m_ObjectHideFlags: 0

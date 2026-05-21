@@ -219,4 +219,21 @@ public class PlacementBoundsServiceTests
         Assert.AreEqual(0.35f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
     }
 
+    [Test]
+    public void FillLocalBoxCorners_ProducesExpectedMinMaxCorners()
+    {
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            edgeMargin: 0f,
+            effectiveMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true,
+            maxDepthFromTarget: 2f);
+
+        var corners = new Vector3[8];
+        PlacementBoundsCalculator.FillLocalBoxCorners(bounds, corners);
+
+        Assert.AreEqual(new Vector3(-0.5f, -0.5f, -2f), corners[0]);
+        Assert.AreEqual(new Vector3(0.5f, 0.5f, -0.5f), corners[6]);
+    }
+
 }

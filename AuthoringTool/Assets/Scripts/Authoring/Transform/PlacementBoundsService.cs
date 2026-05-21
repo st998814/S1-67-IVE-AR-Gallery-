@@ -69,6 +69,42 @@ public sealed class PlacementBoundsService : MonoBehaviour
         _activeBoundaryPreset = BuildFallbackBoundaryPreset();
     }
 
+    /// <summary>
+    /// Resolves the editable placement volume for the active target (ContentRoot-local), without requiring content.
+    /// </summary>
+    public bool TryGetPlacementVolumeBounds(out PlacementBoundsCalculator.Snapshot bounds)
+    {
+        return TryGetPlacementVolumeBounds(contentRoot, out bounds);
+    }
+
+    public bool TryGetPlacementVolumeBounds(Transform contentRootTransform, out PlacementBoundsCalculator.Snapshot bounds)
+    {
+        bounds = default;
+        Transform root = contentRootTransform != null ? contentRootTransform.parent : targetRoot;
+        if (root == null)
+            return false;
+
+        Transform targetVisual = root.Find("TargetVisual");
+        Vector3 targetVisualLocalScale = targetVisual != null && targetVisual.localScale.sqrMagnitude > 1e-8f
+            ? targetVisual.localScale
+            : Vector3.one * (fallbackHalfExtent * 2f);
+
+        if (!TryGetFrontZParameters(out float effectiveMinZ, out bool negativeFrontZ))
+        {
+            effectiveMinZ = 0.5f;
+            negativeFrontZ = true;
+        }
+
+        PlacementBoundaryPreset preset = ResolveBoundaryPreset();
+        bounds = PlacementBoundsCalculator.Compute(
+            targetVisualLocalScale,
+            preset,
+            effectiveMinZ,
+            negativeFrontZ);
+
+        return true;
+    }
+
     public bool TryGetBoundsForContent(Transform content, out PlacementBoundsCalculator.Snapshot bounds)
     {
         bounds = default;

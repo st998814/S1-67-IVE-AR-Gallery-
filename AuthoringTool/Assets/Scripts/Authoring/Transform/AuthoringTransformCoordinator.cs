@@ -149,6 +149,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             placementBoundsService.SetPosture(ResolveActiveWorkspacePosture());
         }
 
+        SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+        if (spatialMapping != null)
+            spatialMapping.RefreshPlacementVolume();
+
         if (targetRootTransform != null)
             WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
 
