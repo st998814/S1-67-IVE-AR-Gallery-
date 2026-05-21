@@ -35,6 +35,7 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     private PlacementSpaceVisualizer _placementVolume;
     private SpatialMappingIndicatorRenderer _mappingIndicators;
     private Transform _activeContentRoot;
+    private Transform _activeVolumeParent;
     private int _syncedTargetIndex = int.MinValue;
     private Transform _trackedSelectedContent;
 
@@ -116,17 +117,17 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (_placementVolume != null && _placementVolume.IsAttached)
+        if (_placementVolume != null && _placementVolume.IsAttached && _activeContentRoot != null && placementBoundsService != null)
         {
-            if (_placementVolume.TryRefreshFromTargetVisualScale())
-            {
+            if (_placementVolume.TryRefreshFromTargetVisualLayout())
                 RefreshPlacementVolume();
-            }
-            else if (_activeContentRoot != null && placementBoundsService != null
-                && placementBoundsService.TryGetPlacementVolumeBounds(_activeContentRoot, out PlacementBoundsCalculator.Snapshot bounds))
+            else if (placementBoundsService.TryGetPlacementVolumeVisualBounds(
+                _activeContentRoot,
+                out PlacementBoundsCalculator.Snapshot bounds,
+                out _))
             {
                 _placementVolume.SetCamera(mainCamera != null ? mainCamera : Camera.main);
-                _placementVolume.ApplyDynamicSizing(bounds);
+                _placementVolume.Refresh(bounds);
             }
         }
 
@@ -178,17 +179,27 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
         ApplyPlacementBoundsTargetContext(contentRoot);
         placementBoundsService.SetPosture(ResolveActiveWorkspacePosture());
 
-        if (_activeContentRoot != contentRoot)
-        {
-            _activeContentRoot = contentRoot;
-            _placementVolume.InvalidateTargetVisualScaleCache();
-            _placementVolume.AttachTo(contentRoot);
-        }
-
-        if (!placementBoundsService.TryGetPlacementVolumeBounds(contentRoot, out PlacementBoundsCalculator.Snapshot bounds))
+        Transform volumeParent = contentRoot.parent != null ? contentRoot.parent : contentRoot;
+        if (!placementBoundsService.TryGetPlacementVolumeVisualBounds(
+            contentRoot,
+            out PlacementBoundsCalculator.Snapshot bounds,
+            out Transform resolvedParent))
         {
             _placementVolume.Hide();
+            _activeContentRoot = null;
+            _activeVolumeParent = null;
             return;
+        }
+
+        if (resolvedParent != null)
+            volumeParent = resolvedParent;
+
+        if (_activeContentRoot != contentRoot || _activeVolumeParent != volumeParent)
+        {
+            _activeContentRoot = contentRoot;
+            _activeVolumeParent = volumeParent;
+            _placementVolume.InvalidateTargetVisualLayoutCache();
+            _placementVolume.AttachTo(volumeParent, contentRoot);
         }
 
         _placementVolume.SetCamera(mainCamera != null ? mainCamera : Camera.main);

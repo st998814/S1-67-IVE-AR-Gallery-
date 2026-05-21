@@ -68,7 +68,44 @@ public static class PlacementBoundsCalculator
         public Vector3 LocalSize => LocalMax - LocalMin;
     }
 
-    /// <summary>Fills eight ContentRoot-local box corners (bottom plane 0-3, top plane 4-7).</summary>
+    /// <summary>
+    /// Re-expresses an axis-aligned box from <paramref name="source"/> local space into <paramref name="destination"/> local space.
+    /// </summary>
+    public static Snapshot ConvertSnapshotLocalSpace(Transform source, Transform destination, Snapshot bounds)
+    {
+        if (source == null || destination == null || source == destination)
+            return bounds;
+
+        var corners = new Vector3[8];
+        FillLocalBoxCorners(bounds, corners);
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Vector3 world = source.TransformPoint(corners[i]);
+            corners[i] = destination.InverseTransformPoint(world);
+        }
+
+        return SnapshotFromCorners(corners);
+    }
+
+    public static Snapshot SnapshotFromCorners(Vector3[] corners)
+    {
+        if (corners == null || corners.Length < 8)
+            throw new System.ArgumentException("Expected eight corner slots.", nameof(corners));
+
+        Vector3 min = corners[0];
+        Vector3 max = corners[0];
+        for (int i = 1; i < corners.Length; i++)
+        {
+            min = Vector3.Min(min, corners[i]);
+            max = Vector3.Max(max, corners[i]);
+        }
+
+        return new Snapshot(
+            new AxisRange(min.x, max.x),
+            new AxisRange(min.y, max.y),
+            new AxisRange(min.z, max.z));
+    }
+
     public static void FillLocalBoxCorners(Snapshot bounds, Vector3[] corners)
     {
         if (corners == null || corners.Length < 8)
@@ -94,13 +131,15 @@ public static class PlacementBoundsCalculator
         float edgeMargin,
         float effectiveMinimumLocalZ,
         bool negativeFrontLocalZ,
-        float maxDepthFromTarget)
+        float maxDepthFromTarget,
+        Vector3 boundsCenterLocal = default)
     {
         return Compute(
             targetVisualLocalScale,
             new PlacementBoundaryPreset(1f, 1f, maxDepthFromTarget, edgeMargin, effectiveMinimumLocalZ),
             effectiveMinimumLocalZ,
-            negativeFrontLocalZ);
+            negativeFrontLocalZ,
+            boundsCenterLocal);
     }
 
     /// <summary>
@@ -110,7 +149,8 @@ public static class PlacementBoundsCalculator
         Vector3 targetVisualLocalScale,
         PlacementBoundaryPreset preset,
         float constraintMinimumLocalZ,
-        bool negativeFrontLocalZ)
+        bool negativeFrontLocalZ,
+        Vector3 boundsCenterLocal = default)
     {
         float edgeMargin = Mathf.Max(0f, preset.edgeMargin);
         float horizontalScale = Mathf.Max(0f, preset.horizontalScale);
@@ -118,15 +158,20 @@ public static class PlacementBoundsCalculator
         float effectiveMinimumLocalZ = preset.ResolveMinStandoffZ(constraintMinimumLocalZ);
         float maxDepthFromTarget = Mathf.Max(0f, preset.depthMeters);
 
-        float halfX = Mathf.Max(0f, targetVisualLocalScale.x * 0.5f * horizontalScale - edgeMargin);
-        float halfY = Mathf.Max(0f, targetVisualLocalScale.y * 0.5f * verticalScale - edgeMargin);
+        float halfX = preset.UsesAbsoluteHalfExtentX
+            ? preset.absoluteHalfExtentX
+            : Mathf.Max(0f, targetVisualLocalScale.x * 0.5f * horizontalScale - edgeMargin);
+        float halfY = preset.UsesAbsoluteHalfExtentY
+            ? preset.absoluteHalfExtentY
+            : Mathf.Max(0f, targetVisualLocalScale.y * 0.5f * verticalScale - edgeMargin);
 
         GetLocalZRange(effectiveMinimumLocalZ, negativeFrontLocalZ, maxDepthFromTarget, out float minZ, out float maxZ);
 
+        Vector3 center = boundsCenterLocal;
         return new Snapshot(
-            new AxisRange(-halfX, halfX),
-            new AxisRange(-halfY, halfY),
-            new AxisRange(minZ, maxZ));
+            new AxisRange(center.x - halfX, center.x + halfX),
+            new AxisRange(center.y - halfY, center.y + halfY),
+            new AxisRange(center.z + minZ, center.z + maxZ));
     }
 
     public static void GetLocalZRange(

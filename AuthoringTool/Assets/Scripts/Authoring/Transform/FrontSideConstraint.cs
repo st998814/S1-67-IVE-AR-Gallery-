@@ -15,8 +15,8 @@ public sealed class FrontSideConstraint : MonoBehaviour
     [Tooltip("Which local-Z direction counts as front side. Use NegativeLocalZ when your target faces the opposite direction.")]
     [SerializeField] private FrontSideAxis frontSideAxis = FrontSideAxis.NegativeLocalZ;
 
-    [Tooltip("Base offset from the target plane along the chosen front side axis.")]
-    [SerializeField] private float frontOffset = 0.5f;
+    [Tooltip("Base offset from the target plane along the chosen front side axis (metres). Wall preset safe zone uses 0.05 m.")]
+    [SerializeField] private float frontOffset = 0.05f;
 
     [Tooltip("Extra margin in local Z (e.g. half thickness of a 3D target cube along forward, in ContentRoot space).")]
     [SerializeField] private float additionalMinimumLocalZ;

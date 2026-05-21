@@ -180,35 +180,41 @@ public class PlacementBoundsServiceTests
     }
 
     [Test]
-    public void Compute_WallDefaultPreset_MatchesLegacyCompute()
+    public void Compute_WallDefaultPreset_UsesAbsoluteTargetRelativeSafeZone()
     {
-        var legacy = PlacementBoundsCalculator.Compute(
-            new Vector3(1f, 1f, 1f),
-            edgeMargin: 0.02f,
-            effectiveMinimumLocalZ: 0.5f,
-            negativeFrontLocalZ: true,
-            maxDepthFromTarget: 2f);
-
-        var fromPreset = PlacementBoundsCalculator.Compute(
-            new Vector3(1f, 1f, 1f),
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(0.2f, 0.28f, 1f),
             PlacementBoundaryPreset.WallDefault,
             constraintMinimumLocalZ: 0.5f,
             negativeFrontLocalZ: true);
 
-        Assert.AreEqual(legacy.x.min, fromPreset.x.min, Epsilon);
-        Assert.AreEqual(legacy.x.max, fromPreset.x.max, Epsilon);
-        Assert.AreEqual(legacy.y.min, fromPreset.y.min, Epsilon);
-        Assert.AreEqual(legacy.y.max, fromPreset.y.max, Epsilon);
-        Assert.AreEqual(legacy.z.min, fromPreset.z.min, Epsilon);
-        Assert.AreEqual(legacy.z.max, fromPreset.z.max, Epsilon);
+        Assert.AreEqual(-0.75f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.75f, bounds.x.max, Epsilon);
+        Assert.AreEqual(-0.5f, bounds.y.min, Epsilon);
+        Assert.AreEqual(0.5f, bounds.y.max, Epsilon);
+        Assert.AreEqual(-1f, bounds.z.min, Epsilon);
+        Assert.AreEqual(-0.05f, bounds.z.max, Epsilon);
     }
 
     [Test]
-    public void ResolveMinStandoffZ_NegativePresetValue_UsesConstraint()
+    public void Compute_WallDefaultPreset_IgnoresSmallTargetVisualScale()
+    {
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(0.1f, 0.1f, 1f),
+            PlacementBoundaryPreset.WallDefault,
+            constraintMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true);
+
+        Assert.AreEqual(-0.75f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.75f, bounds.x.max, Epsilon);
+    }
+
+    [Test]
+    public void ResolveMinStandoffZ_WallDefault_UsesFiveCmStandoff()
     {
         var preset = PlacementBoundaryPreset.WallDefault;
-        Assert.IsTrue(preset.UsesConstraintMinStandoff);
-        Assert.AreEqual(0.5f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
+        Assert.IsFalse(preset.UsesConstraintMinStandoff);
+        Assert.AreEqual(0.05f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
     }
 
     [Test]
@@ -217,6 +223,60 @@ public class PlacementBoundsServiceTests
         var preset = new PlacementBoundaryPreset(1f, 1f, 1.25f, 0.03f, 0.35f);
         Assert.IsFalse(preset.UsesConstraintMinStandoff);
         Assert.AreEqual(0.35f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
+    }
+
+    [Test]
+    public void Compute_WithTargetVisualOffset_CentersBoundsOnTarget()
+    {
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            edgeMargin: 0f,
+            effectiveMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true,
+            maxDepthFromTarget: 2f,
+            boundsCenterLocal: new Vector3(0.2f, -0.1f, 0.05f));
+
+        Assert.AreEqual(-0.3f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.7f, bounds.x.max, Epsilon);
+        Assert.AreEqual(-0.6f, bounds.y.min, Epsilon);
+        Assert.AreEqual(0.4f, bounds.y.max, Epsilon);
+        Assert.AreEqual(-1.95f, bounds.z.min, Epsilon);
+        Assert.AreEqual(-0.45f, bounds.z.max, Epsilon);
+        Assert.AreEqual(0.2f, bounds.LocalCenter.x, Epsilon);
+        Assert.AreEqual(-0.1f, bounds.LocalCenter.y, Epsilon);
+        Assert.AreEqual(-1.2f, bounds.LocalCenter.z, Epsilon);
+    }
+
+    [Test]
+    public void ConvertSnapshotLocalSpace_SiblingOffset_MatchesTargetVisualPosition()
+    {
+        var source = new GameObject("ContentRoot").transform;
+        var targetRoot = new GameObject("TargetRoot").transform;
+        var targetVisual = new GameObject("TargetVisual").transform;
+        targetVisual.SetParent(targetRoot, false);
+        source.SetParent(targetRoot, false);
+        targetVisual.localPosition = new Vector3(2f, -0.1f, -0.3f);
+        source.localPosition = Vector3.zero;
+
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(0.4f, 0.6f, 1f),
+            edgeMargin: 0f,
+            effectiveMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true,
+            maxDepthFromTarget: 1f,
+            boundsCenterLocal: new Vector3(2f, -0.1f, -0.3f));
+
+        PlacementBoundsCalculator.Snapshot targetRootBounds =
+            PlacementBoundsCalculator.ConvertSnapshotLocalSpace(source, targetRoot, bounds);
+
+        Assert.AreEqual(1.8f, targetRootBounds.x.min, Epsilon);
+        Assert.AreEqual(2.2f, targetRootBounds.x.max, Epsilon);
+        Assert.AreEqual(-0.4f, targetRootBounds.y.min, Epsilon);
+        Assert.AreEqual(-0.2f, targetRootBounds.y.max, Epsilon);
+
+        Object.DestroyImmediate(source.gameObject);
+        Object.DestroyImmediate(targetVisual.gameObject);
+        Object.DestroyImmediate(targetRoot.gameObject);
     }
 
     [Test]

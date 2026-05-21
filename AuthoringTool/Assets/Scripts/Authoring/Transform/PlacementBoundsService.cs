@@ -80,11 +80,48 @@ public sealed class PlacementBoundsService : MonoBehaviour
     public bool TryGetPlacementVolumeBounds(Transform contentRootTransform, out PlacementBoundsCalculator.Snapshot bounds)
     {
         bounds = default;
+        if (!TryComputePlacementVolumeBoundsInContentRoot(contentRootTransform, out bounds))
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Placement volume wireframe in target-root local space (aligned with TargetVisual in the scene).
+    /// Clamping still uses <see cref="TryGetPlacementVolumeBounds"/> in ContentRoot-local space.
+    /// </summary>
+    public bool TryGetPlacementVolumeVisualBounds(
+        Transform contentRootTransform,
+        out PlacementBoundsCalculator.Snapshot bounds,
+        out Transform visualParent)
+    {
+        bounds = default;
+        visualParent = null;
+        if (!TryComputePlacementVolumeBoundsInContentRoot(contentRootTransform, out PlacementBoundsCalculator.Snapshot contentRootBounds))
+            return false;
+
+        visualParent = contentRootTransform != null ? contentRootTransform.parent : targetRoot;
+        if (visualParent == null)
+            visualParent = contentRootTransform;
+
+        bounds = PlacementBoundsCalculator.ConvertSnapshotLocalSpace(
+            contentRootTransform,
+            visualParent,
+            contentRootBounds);
+
+        return true;
+    }
+
+    private bool TryComputePlacementVolumeBoundsInContentRoot(
+        Transform contentRootTransform,
+        out PlacementBoundsCalculator.Snapshot bounds)
+    {
+        bounds = default;
         Transform root = contentRootTransform != null ? contentRootTransform.parent : targetRoot;
         if (root == null)
             return false;
 
-        Transform targetVisual = root.Find("TargetVisual");
+        Transform targetVisual = ResolveTargetVisual(contentRootTransform);
         Vector3 targetVisualLocalScale = targetVisual != null && targetVisual.localScale.sqrMagnitude > 1e-8f
             ? targetVisual.localScale
             : Vector3.one * (fallbackHalfExtent * 2f);
@@ -96,11 +133,13 @@ public sealed class PlacementBoundsService : MonoBehaviour
         }
 
         PlacementBoundaryPreset preset = ResolveBoundaryPreset();
+        Vector3 boundsCenterLocal = ResolveTargetVisualCenterInContentRoot(contentRootTransform);
         bounds = PlacementBoundsCalculator.Compute(
             targetVisualLocalScale,
             preset,
             effectiveMinZ,
-            negativeFrontZ);
+            negativeFrontZ,
+            boundsCenterLocal);
 
         return true;
     }
@@ -121,11 +160,14 @@ public sealed class PlacementBoundsService : MonoBehaviour
         }
 
         PlacementBoundaryPreset preset = ResolveBoundaryPreset();
+        Transform contentRootTransform = ResolveContentRoot(content);
+        Vector3 boundsCenterLocal = ResolveTargetVisualCenterInContentRoot(contentRootTransform);
         bounds = PlacementBoundsCalculator.Compute(
             targetVisualLocalScale,
             preset,
             effectiveMinZ,
-            negativeFrontZ);
+            negativeFrontZ,
+            boundsCenterLocal);
 
         return true;
     }
@@ -173,16 +215,74 @@ public sealed class PlacementBoundsService : MonoBehaviour
         return localPosition;
     }
 
+    private Vector3 ResolveTargetVisualCenterInContentRoot(Transform contentRootTransform)
+    {
+        if (contentRootTransform == null)
+            return Vector3.zero;
+
+        Transform targetVisual = ResolveTargetVisual(contentRootTransform);
+        if (targetVisual == null)
+            return Vector3.zero;
+
+        if (targetVisual.parent == contentRootTransform.parent)
+            return targetVisual.localPosition - contentRootTransform.localPosition;
+
+        return contentRootTransform.InverseTransformPoint(targetVisual.position);
+    }
+
+    private static Transform ResolveTargetVisual(Transform contentRootTransform)
+    {
+        if (contentRootTransform == null)
+            return null;
+
+        Transform current = contentRootTransform;
+        while (current != null)
+        {
+            if (string.Equals(current.name, "TargetVisual", System.StringComparison.Ordinal))
+                return current;
+
+            Transform onParent = current.parent != null
+                ? current.parent.Find("TargetVisual")
+                : null;
+            if (onParent != null)
+                return onParent;
+
+            current = current.parent;
+        }
+
+        return null;
+    }
+
+    private static Transform ResolveContentRoot(Transform content)
+    {
+        if (content == null)
+            return null;
+
+        if (string.Equals(content.name, "ContentRoot", System.StringComparison.Ordinal))
+            return content;
+
+        Transform current = content;
+        while (current != null)
+        {
+            if (string.Equals(current.name, "ContentRoot", System.StringComparison.Ordinal))
+                return current;
+            current = current.parent;
+        }
+
+        return null;
+    }
+
     private bool TryResolveTargetVisualScale(Transform content, out Vector3 targetVisualLocalScale)
     {
         targetVisualLocalScale = default;
-        Transform root = ResolveTargetRoot(content);
-        if (root == null)
-            root = targetRoot;
-        if (root == null)
-            return false;
+        Transform contentRootTransform = ResolveContentRoot(content);
+        Transform targetVisual = ResolveTargetVisual(contentRootTransform);
+        if (targetVisual == null)
+        {
+            Transform root = ResolveTargetRoot(content) ?? targetRoot;
+            targetVisual = root != null ? root.Find("TargetVisual") : null;
+        }
 
-        Transform targetVisual = root.Find("TargetVisual");
         if (targetVisual == null)
             return false;
 

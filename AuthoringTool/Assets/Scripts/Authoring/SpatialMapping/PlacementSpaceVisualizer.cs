@@ -18,6 +18,7 @@ public sealed class PlacementSpaceVisualizer
     private readonly int _gridDivisions;
     private readonly float _dashTextureScale;
 
+    private Transform _lineSpaceRoot;
     private Transform _contentRoot;
     private Camera _camera;
     private GameObject _visualRoot;
@@ -30,6 +31,9 @@ public sealed class PlacementSpaceVisualizer
     private readonly List<LineRenderer> _cornerAccents = new List<LineRenderer>(CornerCount);
     private readonly Vector3[] _localCorners = new Vector3[8];
     private Vector3 _lastTargetVisualScale = Vector3.negativeInfinity;
+    private Vector3 _lastTargetVisualCenterLocal = Vector3.negativeInfinity;
+    private Vector3 _lastLineSpacePosition = Vector3.negativeInfinity;
+    private Quaternion _lastLineSpaceRotation = Quaternion.identity;
     private bool _isVisible;
 
     public PlacementSpaceVisualizer(
@@ -50,25 +54,28 @@ public sealed class PlacementSpaceVisualizer
         _dashTextureScale = dashTextureScale;
     }
 
-    public bool IsAttached => _contentRoot != null && _visualRoot != null;
+    public bool IsAttached => _lineSpaceRoot != null && _visualRoot != null;
 
     public void SetCamera(Camera camera) => _camera = camera;
 
-    public void AttachTo(Transform contentRoot)
+    /// <param name="lineSpaceRoot">Target root (or ContentRoot) whose local axes drive line positions.</param>
+    /// <param name="contentRootForSizing">Optional ContentRoot used for camera distance sizing.</param>
+    public void AttachTo(Transform lineSpaceRoot, Transform contentRootForSizing = null)
     {
-        if (contentRoot == null)
+        if (lineSpaceRoot == null)
         {
             Hide();
             return;
         }
 
-        if (_contentRoot == contentRoot && _visualRoot != null)
+        if (_lineSpaceRoot == lineSpaceRoot && _visualRoot != null)
             return;
 
         DisposeVisual();
-        _contentRoot = contentRoot;
+        _lineSpaceRoot = lineSpaceRoot;
+        _contentRoot = contentRootForSizing != null ? contentRootForSizing : lineSpaceRoot;
         _visualRoot = new GameObject("PlacementVolumeVisual");
-        _visualRoot.transform.SetParent(contentRoot, false);
+        _visualRoot.transform.SetParent(lineSpaceRoot, false);
         _visualRoot.transform.localPosition = Vector3.zero;
         _visualRoot.transform.localRotation = Quaternion.identity;
         _visualRoot.transform.localScale = Vector3.one;
@@ -99,13 +106,14 @@ public sealed class PlacementSpaceVisualizer
     public void Dispose()
     {
         DisposeVisual();
+        _lineSpaceRoot = null;
         _contentRoot = null;
         _isVisible = false;
     }
 
     public void Refresh(PlacementBoundsCalculator.Snapshot bounds)
     {
-        if (!_isVisible || _contentRoot == null || _visualRoot == null)
+        if (!_isVisible || _lineSpaceRoot == null || _visualRoot == null)
             return;
 
         PlacementBoundsCalculator.FillLocalBoxCorners(bounds, _localCorners);
@@ -118,7 +126,7 @@ public sealed class PlacementSpaceVisualizer
     /// <summary>Updates line width for camera distance without rebuilding geometry.</summary>
     public void ApplyDynamicSizing(PlacementBoundsCalculator.Snapshot bounds)
     {
-        if (!_isVisible || _contentRoot == null)
+        if (!_isVisible || _lineSpaceRoot == null)
             return;
 
         float edgeWidth = ResolveEdgeWidth(bounds.LocalCenter);
@@ -135,28 +143,51 @@ public sealed class PlacementSpaceVisualizer
         }
     }
 
-    public bool TryRefreshFromTargetVisualScale()
+    public bool TryRefreshFromTargetVisualLayout()
     {
-        if (_contentRoot == null)
+        if (_lineSpaceRoot == null)
             return false;
 
-        Transform targetVisual = _contentRoot.parent != null ? _contentRoot.parent.Find("TargetVisual") : null;
+        Transform targetVisual = _lineSpaceRoot.Find("TargetVisual");
+
         Vector3 scale = targetVisual != null ? targetVisual.localScale : Vector3.one;
-        if (scale == _lastTargetVisualScale)
+        Vector3 centerLocal = Vector3.zero;
+        if (targetVisual != null && _contentRoot != null)
+        {
+            centerLocal = targetVisual.parent == _contentRoot.parent
+                ? targetVisual.localPosition - _contentRoot.localPosition
+                : _contentRoot.InverseTransformPoint(targetVisual.position);
+        }
+
+        Vector3 rootPos = _lineSpaceRoot.position;
+        Quaternion rootRot = _lineSpaceRoot.rotation;
+        if (scale == _lastTargetVisualScale
+            && centerLocal == _lastTargetVisualCenterLocal
+            && rootPos == _lastLineSpacePosition
+            && rootRot == _lastLineSpaceRotation)
+        {
             return false;
+        }
 
         _lastTargetVisualScale = scale;
+        _lastTargetVisualCenterLocal = centerLocal;
+        _lastLineSpacePosition = rootPos;
+        _lastLineSpaceRotation = rootRot;
         return true;
     }
 
-    public void InvalidateTargetVisualScaleCache()
+    public void InvalidateTargetVisualLayoutCache()
     {
         _lastTargetVisualScale = Vector3.negativeInfinity;
+        _lastTargetVisualCenterLocal = Vector3.negativeInfinity;
+        _lastLineSpacePosition = Vector3.negativeInfinity;
+        _lastLineSpaceRotation = Quaternion.identity;
     }
 
     private float ResolveEdgeWidth(Vector3 localCenter)
     {
-        Vector3 worldCenter = _contentRoot.TransformPoint(localCenter);
+        Transform sizingRoot = _contentRoot != null ? _contentRoot : _lineSpaceRoot;
+        Vector3 worldCenter = sizingRoot.TransformPoint(localCenter);
         return AuthoringLineVisualUtility.ComputeDistanceScaledWidth(_camera, worldCenter, _baseEdgeWidth);
     }
 
@@ -295,13 +326,13 @@ public sealed class PlacementSpaceVisualizer
 
     private void SetWorldSegment(LineRenderer line, Vector3 localA, Vector3 localB)
     {
-        if (line == null || _contentRoot == null)
+        if (line == null || _lineSpaceRoot == null)
             return;
 
         line.enabled = true;
         line.positionCount = 2;
-        line.SetPosition(0, _contentRoot.TransformPoint(localA));
-        line.SetPosition(1, _contentRoot.TransformPoint(localB));
+        line.SetPosition(0, _lineSpaceRoot.TransformPoint(localA));
+        line.SetPosition(1, _lineSpaceRoot.TransformPoint(localB));
 
         if (line.textureMode == LineTextureMode.Tile)
         {
