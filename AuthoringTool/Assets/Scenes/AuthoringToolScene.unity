@@ -670,11 +670,11 @@ MonoBehaviour:
   placementBoundsService: {fileID: 188100008}
   frontSideConstraint: {fileID: 188100003}
   mainCamera: {fileID: 600757515}
-  volumeColor: {r: 0.45, g: 0.78, b: 0.92, a: 0.42}
-  edgeWidth: 0.006
-  showFrontPlaneGrid: 1
-  gridDivisions: 4
-  cornerTickLength: 0.04
+  volumeColor: {r: 0.4, g: 0.74, b: 0.86, a: 0.58}
+  edgeWidth: 0.0045
+  showFrontPlaneGrid: 0
+  gridDivisions: 3
+  cornerAccentLength: 0.022
   relationshipLineColor: {r: 0.98, g: 0.62, b: 0.18, a: 0.9}
   axisXColor: {r: 1, g: 0.38, b: 0.38, a: 0.75}
   axisYColor: {r: 0.38, g: 1, b: 0.42, a: 0.75}

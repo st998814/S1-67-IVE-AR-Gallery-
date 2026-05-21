@@ -82,10 +82,10 @@ public sealed class SpatialMappingIndicatorRenderer
         _visualRoot.transform.localRotation = Quaternion.identity;
         _visualRoot.transform.localScale = Vector3.one;
 
-        _relationshipMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(_relationshipColor);
-        _axisXMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(_axisXColor);
-        _axisYMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(_axisYColor);
-        _axisZMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(_axisZColor);
+        _relationshipMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_relationshipColor);
+        _axisXMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisXColor);
+        _axisYMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisYColor);
+        _axisZMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisZColor);
 
         float width = ResolveEdgeWidth();
         _relationshipLine = AuthoringLineVisualUtility.CreateLineRenderer(

@@ -2,44 +2,57 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Lightweight wireframe placement volume drawn in ContentRoot-local space (authoring-only).
+/// Subtle dashed wireframe placement volume in ContentRoot-local space (authoring-only guide).
 /// </summary>
 public sealed class PlacementSpaceVisualizer
 {
     private const int BoxEdgeCount = 12;
+    private const int CornerCount = 8;
 
-    private readonly Color _volumeColor;
-    private readonly float _edgeWidth;
+    private readonly Color _edgeColor;
+    private readonly Color _cornerColor;
+    private readonly Color _gridColor;
+    private readonly float _baseEdgeWidth;
+    private readonly float _cornerAccentLength;
     private readonly bool _showFrontPlaneGrid;
     private readonly int _gridDivisions;
-    private readonly float _cornerTickLength;
+    private readonly float _dashTextureScale;
 
     private Transform _contentRoot;
+    private Camera _camera;
     private GameObject _visualRoot;
-    private Material _lineMaterial;
+    private Material _edgeMaterial;
+    private Material _cornerMaterial;
     private Material _gridMaterial;
+    private Texture2D _dashTexture;
     private readonly List<LineRenderer> _boxEdges = new List<LineRenderer>(BoxEdgeCount);
     private readonly List<LineRenderer> _gridLines = new List<LineRenderer>();
-    private readonly List<LineRenderer> _cornerTicks = new List<LineRenderer>();
+    private readonly List<LineRenderer> _cornerAccents = new List<LineRenderer>(CornerCount);
     private readonly Vector3[] _localCorners = new Vector3[8];
     private Vector3 _lastTargetVisualScale = Vector3.negativeInfinity;
     private bool _isVisible;
 
     public PlacementSpaceVisualizer(
-        Color volumeColor,
-        float edgeWidth = 0.006f,
-        bool showFrontPlaneGrid = true,
-        int gridDivisions = 4,
-        float cornerTickLength = 0.04f)
+        Color edgeColor,
+        float baseEdgeWidth = 0.0045f,
+        bool showFrontPlaneGrid = false,
+        int gridDivisions = 3,
+        float cornerAccentLength = 0.022f,
+        float dashTextureScale = 2.8f)
     {
-        _volumeColor = volumeColor;
-        _edgeWidth = edgeWidth;
+        _edgeColor = edgeColor;
+        _cornerColor = ScaleAlpha(edgeColor, Mathf.Min(1f, edgeColor.a + 0.2f));
+        _gridColor = ScaleAlpha(edgeColor, edgeColor.a * 0.7f);
+        _baseEdgeWidth = baseEdgeWidth;
         _showFrontPlaneGrid = showFrontPlaneGrid;
-        _gridDivisions = Mathf.Clamp(gridDivisions, 2, 8);
-        _cornerTickLength = Mathf.Max(0.01f, cornerTickLength);
+        _gridDivisions = Mathf.Clamp(gridDivisions, 2, 6);
+        _cornerAccentLength = Mathf.Max(0.008f, cornerAccentLength);
+        _dashTextureScale = dashTextureScale;
     }
 
     public bool IsAttached => _contentRoot != null && _visualRoot != null;
+
+    public void SetCamera(Camera camera) => _camera = camera;
 
     public void AttachTo(Transform contentRoot)
     {
@@ -60,11 +73,18 @@ public sealed class PlacementSpaceVisualizer
         _visualRoot.transform.localRotation = Quaternion.identity;
         _visualRoot.transform.localScale = Vector3.one;
 
-        _lineMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(_volumeColor);
+        _edgeMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_edgeColor);
+        _cornerMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_cornerColor);
+        if (_showFrontPlaneGrid)
+        {
+            _dashTexture = AuthoringLineVisualUtility.GetOrCreateDashTexture();
+            _gridMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_gridColor, _dashTexture);
+        }
+
         BuildBoxEdges();
         if (_showFrontPlaneGrid)
             BuildFrontPlaneGrid();
-        BuildCornerTicks();
+        BuildCornerAccents();
         _isVisible = true;
         _visualRoot.SetActive(true);
     }
@@ -83,9 +103,6 @@ public sealed class PlacementSpaceVisualizer
         _isVisible = false;
     }
 
-    /// <summary>
-    /// Updates wireframe geometry from a ContentRoot-local bounds snapshot.
-    /// </summary>
     public void Refresh(PlacementBoundsCalculator.Snapshot bounds)
     {
         if (!_isVisible || _contentRoot == null || _visualRoot == null)
@@ -95,7 +112,27 @@ public sealed class PlacementSpaceVisualizer
         UpdateBoxEdges();
         if (_showFrontPlaneGrid)
             UpdateFrontPlaneGrid(bounds);
-        UpdateCornerTicks();
+        ApplyDynamicSizing(bounds);
+    }
+
+    /// <summary>Updates line width for camera distance without rebuilding geometry.</summary>
+    public void ApplyDynamicSizing(PlacementBoundsCalculator.Snapshot bounds)
+    {
+        if (!_isVisible || _contentRoot == null)
+            return;
+
+        float edgeWidth = ResolveEdgeWidth(bounds.LocalCenter);
+        ApplyEdgeWidths(edgeWidth);
+        UpdateCornerAccents(edgeWidth);
+    }
+
+    public void SetFrontPlaneGridVisible(bool isVisible)
+    {
+        for (int i = 0; i < _gridLines.Count; i++)
+        {
+            if (_gridLines[i] != null)
+                _gridLines[i].enabled = isVisible && _showFrontPlaneGrid;
+        }
     }
 
     public bool TryRefreshFromTargetVisualScale()
@@ -117,6 +154,22 @@ public sealed class PlacementSpaceVisualizer
         _lastTargetVisualScale = Vector3.negativeInfinity;
     }
 
+    private float ResolveEdgeWidth(Vector3 localCenter)
+    {
+        Vector3 worldCenter = _contentRoot.TransformPoint(localCenter);
+        return AuthoringLineVisualUtility.ComputeDistanceScaledWidth(_camera, worldCenter, _baseEdgeWidth);
+    }
+
+    private void ApplyEdgeWidths(float edgeWidth)
+    {
+        for (int i = 0; i < _boxEdges.Count; i++)
+            AuthoringLineVisualUtility.ApplyWidth(_boxEdges[i], edgeWidth);
+
+        float gridWidth = edgeWidth * 0.85f;
+        for (int i = 0; i < _gridLines.Count; i++)
+            AuthoringLineVisualUtility.ApplyWidth(_gridLines[i], gridWidth);
+    }
+
     private void BuildBoxEdges()
     {
         _boxEdges.Clear();
@@ -125,8 +178,8 @@ public sealed class PlacementSpaceVisualizer
             LineRenderer line = AuthoringLineVisualUtility.CreateLineRenderer(
                 _visualRoot.transform,
                 $"VolumeEdge_{i:00}",
-                _lineMaterial,
-                _edgeWidth);
+                _edgeMaterial,
+                _baseEdgeWidth);
             _boxEdges.Add(line);
         }
     }
@@ -134,10 +187,6 @@ public sealed class PlacementSpaceVisualizer
     private void BuildFrontPlaneGrid()
     {
         _gridLines.Clear();
-        Color gridColor = _volumeColor;
-        gridColor.a *= 0.45f;
-        _gridMaterial = AuthoringLineVisualUtility.CreateTransparentLineMaterial(gridColor);
-
         int lineCount = (_gridDivisions + 1) * 2;
         for (int i = 0; i < lineCount; i++)
         {
@@ -145,25 +194,25 @@ public sealed class PlacementSpaceVisualizer
                 _visualRoot.transform,
                 $"VolumeGrid_{i:00}",
                 _gridMaterial,
-                _edgeWidth * 0.65f);
+                _baseEdgeWidth * 0.85f,
+                useDashedTexture: true,
+                dashTextureScale: _dashTextureScale * 1.15f);
             _gridLines.Add(line);
         }
     }
 
-    private void BuildCornerTicks()
+    private void BuildCornerAccents()
     {
-        _cornerTicks.Clear();
-        for (int corner = 0; corner < 8; corner++)
+        _cornerAccents.Clear();
+        for (int i = 0; i < CornerCount; i++)
         {
-            for (int axis = 0; axis < 3; axis++)
-            {
-                LineRenderer line = AuthoringLineVisualUtility.CreateLineRenderer(
-                    _visualRoot.transform,
-                    $"VolumeCorner_{corner}_{axis}",
-                    _lineMaterial,
-                    _edgeWidth * 0.85f);
-                _cornerTicks.Add(line);
-            }
+            LineRenderer line = AuthoringLineVisualUtility.CreateLineRenderer(
+                _visualRoot.transform,
+                $"VolumeCorner_{i:00}",
+                _cornerMaterial,
+                _baseEdgeWidth * 1.1f,
+                useDashedTexture: false);
+            _cornerAccents.Add(line);
         }
     }
 
@@ -200,7 +249,7 @@ public sealed class PlacementSpaceVisualizer
             float t = i / (float)_gridDivisions;
             float y = Mathf.Lerp(y0, y1, t);
             if (lineIndex < _gridLines.Count)
-                SetWorldEdge(_gridLines[lineIndex++], new Vector3(x0, y, z), new Vector3(x1, y, z));
+                SetWorldSegment(_gridLines[lineIndex++], new Vector3(x0, y, z), new Vector3(x1, y, z));
         }
 
         for (int i = 0; i <= _gridDivisions; i++)
@@ -208,33 +257,31 @@ public sealed class PlacementSpaceVisualizer
             float t = i / (float)_gridDivisions;
             float x = Mathf.Lerp(x0, x1, t);
             if (lineIndex < _gridLines.Count)
-                SetWorldEdge(_gridLines[lineIndex++], new Vector3(x, y0, z), new Vector3(x, y1, z));
+                SetWorldSegment(_gridLines[lineIndex++], new Vector3(x, y0, z), new Vector3(x, y1, z));
         }
 
         for (; lineIndex < _gridLines.Count; lineIndex++)
             _gridLines[lineIndex].enabled = false;
     }
 
-    private void UpdateCornerTicks()
+    private void UpdateCornerAccents(float edgeWidth)
     {
-        if (_cornerTicks.Count < 24)
+        if (_cornerAccents.Count < CornerCount)
             return;
 
-        int lineIndex = 0;
-        for (int corner = 0; corner < 8; corner++)
+        float accentLen = _cornerAccentLength;
+        for (int corner = 0; corner < CornerCount; corner++)
         {
-            Vector3 cornerLocal = _localCorners[corner];
-            float signX = cornerLocal.x >= 0f ? -1f : 1f;
-            float signY = cornerLocal.y >= 0f ? -1f : 1f;
-            float signZ = cornerLocal.z >= 0f ? -1f : 1f;
+            Vector3 c = _localCorners[corner];
+            float signX = c.x >= 0f ? -1f : 1f;
+            float signY = c.y >= 0f ? -1f : 1f;
+            float signZ = c.z >= 0f ? -1f : 1f;
+            Vector3 accentEnd = c + new Vector3(signX, signY, signZ).normalized * accentLen;
 
-            Vector3 tickXEnd = cornerLocal + new Vector3(signX * _cornerTickLength, 0f, 0f);
-            Vector3 tickYEnd = cornerLocal + new Vector3(0f, signY * _cornerTickLength, 0f);
-            Vector3 tickZEnd = cornerLocal + new Vector3(0f, 0f, signZ * _cornerTickLength);
-
-            SetWorldEdge(_cornerTicks[lineIndex++], cornerLocal, tickXEnd);
-            SetWorldEdge(_cornerTicks[lineIndex++], cornerLocal, tickYEnd);
-            SetWorldEdge(_cornerTicks[lineIndex++], cornerLocal, tickZEnd);
+            LineRenderer line = _cornerAccents[corner];
+            line.enabled = true;
+            AuthoringLineVisualUtility.ApplyWidth(line, edgeWidth * 1.15f);
+            SetWorldSegment(line, c, accentEnd);
         }
     }
 
@@ -243,25 +290,44 @@ public sealed class PlacementSpaceVisualizer
         if (edgeIndex < 0 || edgeIndex >= edges.Count)
             return;
 
-        SetWorldEdge(edges[edgeIndex], _localCorners[cornerA], _localCorners[cornerB]);
+        SetWorldSegment(edges[edgeIndex], _localCorners[cornerA], _localCorners[cornerB]);
     }
 
-    private void SetWorldEdge(LineRenderer line, Vector3 localA, Vector3 localB)
+    private void SetWorldSegment(LineRenderer line, Vector3 localA, Vector3 localB)
     {
         if (line == null || _contentRoot == null)
             return;
 
         line.enabled = true;
+        line.positionCount = 2;
         line.SetPosition(0, _contentRoot.TransformPoint(localA));
         line.SetPosition(1, _contentRoot.TransformPoint(localB));
+
+        if (line.textureMode == LineTextureMode.Tile)
+        {
+            float length = Vector3.Distance(line.GetPosition(0), line.GetPosition(1));
+            line.textureScale = new Vector2(Mathf.Max(0.35f, length * _dashTextureScale * 0.65f), 1f);
+        }
+    }
+
+    private static Color ScaleAlpha(Color color, float alpha)
+    {
+        color.a = Mathf.Clamp01(alpha);
+        return color;
     }
 
     private void DisposeVisual()
     {
-        if (_lineMaterial != null)
+        if (_edgeMaterial != null)
         {
-            Object.Destroy(_lineMaterial);
-            _lineMaterial = null;
+            Object.Destroy(_edgeMaterial);
+            _edgeMaterial = null;
+        }
+
+        if (_cornerMaterial != null)
+        {
+            Object.Destroy(_cornerMaterial);
+            _cornerMaterial = null;
         }
 
         if (_gridMaterial != null)
@@ -278,6 +344,6 @@ public sealed class PlacementSpaceVisualizer
 
         _boxEdges.Clear();
         _gridLines.Clear();
-        _cornerTicks.Clear();
+        _cornerAccents.Clear();
     }
 }

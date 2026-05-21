@@ -18,11 +18,11 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     [SerializeField] private Camera mainCamera;
 
     [Header("Placement Volume")]
-    [SerializeField] private Color volumeColor = new Color(0.45f, 0.78f, 0.92f, 0.42f);
-    [SerializeField] private float edgeWidth = 0.006f;
-    [SerializeField] private bool showFrontPlaneGrid = true;
-    [SerializeField] private int gridDivisions = 4;
-    [SerializeField] private float cornerTickLength = 0.04f;
+    [SerializeField] private Color volumeColor = new Color(0.4f, 0.74f, 0.86f, 0.58f);
+    [SerializeField] private float edgeWidth = 0.0045f;
+    [SerializeField] private bool showFrontPlaneGrid = false;
+    [SerializeField] private int gridDivisions = 3;
+    [SerializeField] private float cornerAccentLength = 0.022f;
 
     [Header("Mapping Indicators")]
     [SerializeField] private Color relationshipLineColor = new Color(0.98f, 0.62f, 0.18f, 0.9f);
@@ -65,7 +65,8 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
             edgeWidth,
             showFrontPlaneGrid,
             gridDivisions,
-            cornerTickLength);
+            cornerAccentLength);
+        _placementVolume.SetCamera(mainCamera);
 
         _mappingIndicators = new SpatialMappingIndicatorRenderer(
             relationshipLineColor,
@@ -115,8 +116,19 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (_placementVolume != null && _placementVolume.IsAttached && _placementVolume.TryRefreshFromTargetVisualScale())
-            RefreshPlacementVolume();
+        if (_placementVolume != null && _placementVolume.IsAttached)
+        {
+            if (_placementVolume.TryRefreshFromTargetVisualScale())
+            {
+                RefreshPlacementVolume();
+            }
+            else if (_activeContentRoot != null && placementBoundsService != null
+                && placementBoundsService.TryGetPlacementVolumeBounds(_activeContentRoot, out PlacementBoundsCalculator.Snapshot bounds))
+            {
+                _placementVolume.SetCamera(mainCamera != null ? mainCamera : Camera.main);
+                _placementVolume.ApplyDynamicSizing(bounds);
+            }
+        }
 
         if (_mappingIndicators != null && _trackedSelectedContent != null && _mappingIndicators.IsAttached)
             _mappingIndicators.Refresh();
@@ -179,6 +191,7 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
             return;
         }
 
+        _placementVolume.SetCamera(mainCamera != null ? mainCamera : Camera.main);
         _placementVolume.Refresh(bounds);
         RefreshMappingIndicators();
     }
