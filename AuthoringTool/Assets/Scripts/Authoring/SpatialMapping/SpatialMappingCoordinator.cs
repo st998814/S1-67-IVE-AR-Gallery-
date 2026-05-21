@@ -24,18 +24,12 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     [SerializeField] private int gridDivisions = 3;
     [SerializeField] private float cornerAccentLength = 0.022f;
 
-    [Header("Mapping Indicators")]
+    [Header("Holographic Projection")]
     [SerializeField] private Color hologramProjectionColor = new Color(0.52f, 0.78f, 0.9f, 0.32f);
     [SerializeField] private float hologramEdgeWidth = 0.006f;
-    [SerializeField] private Color axisXColor = new Color(1f, 0.38f, 0.38f, 0.75f);
-    [SerializeField] private Color axisYColor = new Color(0.38f, 1f, 0.42f, 0.75f);
-    [SerializeField] private Color axisZColor = new Color(0.4f, 0.65f, 1f, 0.75f);
-    [SerializeField] private float indicatorEdgeWidth = 0.007f;
-    [SerializeField] private float indicatorArrowHeadLength = 0.035f;
 
     private PlacementSpaceVisualizer _placementVolume;
     private HolographicProjectionIndicator _holographicProjection;
-    private SpatialMappingIndicatorRenderer _mappingIndicators;
     private Transform _activeContentRoot;
     private Transform _activeVolumeParent;
     private int _syncedTargetIndex = int.MinValue;
@@ -75,14 +69,6 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
             hologramProjectionColor,
             hologramEdgeWidth);
         _holographicProjection.SetCamera(mainCamera);
-
-        _mappingIndicators = new SpatialMappingIndicatorRenderer(
-            axisXColor,
-            axisYColor,
-            axisZColor,
-            indicatorEdgeWidth,
-            indicatorArrowHeadLength);
-        _mappingIndicators.SetCamera(mainCamera);
     }
 
     private void OnEnable()
@@ -105,14 +91,12 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
             contentTransformManipulator.ContentTransformChanged -= OnContentTransformChanged;
         _placementVolume?.Hide();
         _holographicProjection?.Hide();
-        _mappingIndicators?.Hide();
     }
 
     private void OnDestroy()
     {
         _placementVolume?.Dispose();
         _holographicProjection?.Dispose();
-        _mappingIndicators?.Dispose();
     }
 
     private void Start()
@@ -141,9 +125,6 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
 
         if (_holographicProjection != null && _trackedSelectedContent != null && _holographicProjection.IsAttached)
             _holographicProjection.Refresh();
-
-        if (_mappingIndicators != null && _trackedSelectedContent != null && _mappingIndicators.IsAttached)
-            _mappingIndicators.Refresh();
     }
 
     private void OnActiveTargetChanged(int newTargetIndex)
@@ -228,7 +209,6 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
         if (contentRoot == null || selected == null || !IsContentUnderRoot(selected, contentRoot))
         {
             _holographicProjection?.Hide();
-            _mappingIndicators?.Hide();
             return;
         }
 
@@ -241,13 +221,6 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
             _holographicProjection.SetCamera(camera);
             _holographicProjection.AttachTo(anchorRoot, targetRoot, targetVisual, contentRoot);
             _holographicProjection.SetSelectedContent(selected);
-        }
-
-        if (_mappingIndicators != null)
-        {
-            _mappingIndicators.SetCamera(camera);
-            _mappingIndicators.AttachTo(contentRoot);
-            _mappingIndicators.SetSelectedContent(selected);
         }
     }
 

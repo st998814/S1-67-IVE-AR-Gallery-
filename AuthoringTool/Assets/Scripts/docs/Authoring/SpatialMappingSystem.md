@@ -39,7 +39,7 @@ flowchart TB
   subgraph visuals [Authoring visuals]
     Coord[SpatialMappingCoordinator]
     Volume[PlacementSpaceVisualizer]
-    Indicators[SpatialMappingIndicatorRenderer]
+    Hologram[HolographicProjectionIndicator]
   end
 
   subgraph ui [UI]
@@ -57,7 +57,7 @@ flowchart TB
   PBS --> Sliders
   Formatter --> Sliders
   Coord --> Volume
-  Coord --> Indicators
+  Coord --> Hologram
   PBS --> Coord
 ```
 
@@ -94,15 +94,13 @@ Parent: `ContentRoot/PlacementVolumeVisual`. Does not use content meshes or coll
 | `Authoring/SpatialMapping/HolographicProjectionIndicator.cs` | Subtle holographic frustum from target face to content (dashed edges + scan-line fill) |
 | `Authoring/SpatialMapping/Shaders/AuthoringHologramProjection.shader` | URP hologram fill: scrolling stripe alpha mask, rim, scan lines (glitch off by default) |
 | `Authoring/SpatialMapping/AuthoringHologramMaterialUtility.cs` | Runtime stripe mask + material setup |
-| `Authoring/SpatialMapping/SpatialMappingIndicatorRenderer.cs` | RGB axis projection legs and arrow heads (no direct target line) |
-
 Shown only when content is selected. Updates on:
 
 - `AuthoringTransformCoordinator.ContentSelectionChanged`
 - `ContentTransformManipulator.ContentTransformChanged`
 - `LateUpdate` while selection is active
 
-Parents: `{TargetRoot}/HolographicProjection`, `ContentRoot/SpatialMappingIndicators`.
+Parent: `{TargetRoot}/HolographicProjection`.
 
 ---
 
@@ -171,7 +169,7 @@ Run: Unity **Window → General → Test Runner → EditMode**.
 ## Manual acceptance checklist
 
 1. Open `AuthoringToolScene` with a Wall workspace — cyan placement box visible around target.
-2. Select content — amber relationship line + RGB axis guides; slider labels show cm/m phrases.
+2. Select content — holographic projection frustum from target to content; slider labels show cm/m phrases.
 3. Switch Floor/Ceiling mock workspace — box depth/size and camera angle change; floor/ceiling show orientation axes.
 4. Move content with bottom sliders — box unchanged, guides and labels update live.
 5. Save/reload — `localPosition` in snapshot unchanged; guides reappear after reconstruct.

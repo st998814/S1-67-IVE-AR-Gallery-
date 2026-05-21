@@ -677,11 +677,6 @@ MonoBehaviour:
   cornerAccentLength: 0.022
   hologramProjectionColor: {r: 0.52, g: 0.78, b: 0.9, a: 0.32}
   hologramEdgeWidth: 0.006
-  axisXColor: {r: 1, g: 0.38, b: 0.38, a: 0.75}
-  axisYColor: {r: 0.38, g: 1, b: 0.42, a: 0.75}
-  axisZColor: {r: 0.4, g: 0.65, b: 1, a: 0.75}
-  indicatorEdgeWidth: 0.007
-  indicatorArrowHeadLength: 0.035
 --- !u!1 &1480848357
 GameObject:
   m_ObjectHideFlags: 0
