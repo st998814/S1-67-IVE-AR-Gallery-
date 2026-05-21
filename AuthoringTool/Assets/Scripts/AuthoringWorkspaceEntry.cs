@@ -23,6 +23,10 @@ namespace ARGallery.AppFlow
         [SerializeField] private float ceilingTargetHeightOffset = 1.2f;
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
+        private WorkspaceDomain.WorkspacePosture _appliedPosture = WorkspaceDomain.WorkspacePosture.Wall;
+
+        /// <summary>Last workspace posture applied in the authoring scene (for placement bounds and coordinator sync).</summary>
+        public WorkspaceDomain.WorkspacePosture AppliedPosture => _appliedPosture;
 
         private void Start()
         {
@@ -357,10 +361,19 @@ namespace ARGallery.AppFlow
 
             EnsureTargetHierarchyCompatibility(targetRootObject.transform);
 
+            _appliedPosture = posture;
             WorkspacePresets.WorkspacePreset preset = WorkspacePresets.WorkspacePresetLibrary.GetPreset(posture);
             Transform targetRoot = targetRootObject.transform;
             targetRoot.localPosition = ResolveTargetLocalPositionForPosture(posture);
             targetRoot.localRotation = Quaternion.Euler(preset.target.targetLocalEuler);
+
+            PlacementBoundsService placementBounds = FindFirstObjectByType<PlacementBoundsService>();
+            if (placementBounds != null)
+                placementBounds.SetPosture(posture);
+
+            SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+            if (spatialMapping != null)
+                spatialMapping.RefreshPlacementVolume();
             WorkspacePresets.WorkspaceOrientationHelper.Apply(
                 targetRoot,
                 showOrientationHelper,

@@ -37,11 +37,28 @@
                         <ui:Button name="InspectorTargetTabButton" text="Target" class="button button--active" style="flex-grow: 1; height: 24px; font-size: 10px;"/>
                         <ui:Button name="InspectorContentTabButton" text="Content" class="button" style="flex-grow: 1; height: 24px; font-size: 10px;"/>
                     </ui:VisualElement>
-                    <ui:Label text="Local position (read-only):" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 2px; font-size: 11px;"/>
-                    <ui:FloatField name="PosXInput" label="Local X" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
-                    <ui:FloatField name="PosYInput" label="Local Y" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
-                    <ui:FloatField name="PosZInput" label="Local Z" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
-                    <ui:FloatField name="ScaleInput" label="Local scale" value="1" class="input-field" style="display: none; margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
+                    <ui:VisualElement name="ContentPlacementOffsetSection">
+                        <ui:Label text="Placement offset (read-only):" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 4px; font-size: 11px;"/>
+                        <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 3px;">
+                            <ui:Label text="Left / Right" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosLeftRightOffsetLabel" text="Centered horizontally" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 3px;">
+                            <ui:Label text="Up / Down" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosUpDownOffsetLabel" text="At target height" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 6px;">
+                            <ui:Label text="Closer / Further" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosCloserFurtherOffsetLabel" text="On target plane" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="TargetPositionSection" style="display: none;">
+                        <ui:Label text="Target position (read-only):" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 4px; font-size: 11px;"/>
+                        <ui:Label name="TargetPosXLabel" text="X: at origin" class="text-primary" style="font-size: 11px; margin-bottom: 2px;"/>
+                        <ui:Label name="TargetPosYLabel" text="Y: at origin" class="text-primary" style="font-size: 11px; margin-bottom: 2px;"/>
+                        <ui:Label name="TargetPosZLabel" text="Z: at origin" class="text-primary" style="font-size: 11px; margin-bottom: 6px;"/>
+                    </ui:VisualElement>
+                    <ui:FloatField name="ScaleInput" label="Scale" value="1" class="input-field" style="display: none; margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
                     <ui:VisualElement name="TargetReferenceContainer" style="display: none; flex-direction: column; margin-top: 10px;">
                         <ui:Label text="Target Reference (optional):" class="text-secondary" style="-unity-font-style: bold; margin-top: 0px; margin-bottom: 6px; font-size: 11px;"/>
                         <ui:Button name="BrowseTargetReferenceButton" text="Upload Reference" class="button" style="height: 26px; width: 100%; -unity-font-style: bold; font-size: 11px; margin-bottom: 6px;"/>
@@ -72,17 +89,17 @@
                 <ui:VisualElement class="manipulator-bottom-panel__row">
                     <ui:Label text="Left / Right" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveLeftRightSlider" low-value="-0.5" high-value="0.5" value="0" class="manipulator-bottom-panel__slider"/>
-                    <ui:Label name="MoveLeftRightValueLabel" text="0.00" class="manipulator-bottom-panel__value"/>
+                    <ui:Label name="MoveLeftRightValueLabel" text="Centered horizontally" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
                     <ui:Label text="Up / Down" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveUpDownSlider" low-value="-0.5" high-value="0.5" value="0" class="manipulator-bottom-panel__slider"/>
-                    <ui:Label name="MoveUpDownValueLabel" text="0.00" class="manipulator-bottom-panel__value"/>
+                    <ui:Label name="MoveUpDownValueLabel" text="At target height" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
                     <ui:Label text="Closer / Further" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveCloserFurtherSlider" low-value="-2" high-value="-0.5" value="-0.5" class="manipulator-bottom-panel__slider"/>
-                    <ui:Label name="MoveCloserFurtherValueLabel" text="0.00" class="manipulator-bottom-panel__value"/>
+                    <ui:Label name="MoveCloserFurtherValueLabel" text="On target plane" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement name="ScaleControlsGroup" class="manipulator-bottom-panel__group" style="display: none;">
@@ -90,7 +107,7 @@
                 <ui:VisualElement class="manipulator-bottom-panel__row">
                     <ui:Label text="Uniform scale" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="UniformScaleSlider" low-value="0.05" high-value="8" value="1" class="manipulator-bottom-panel__slider"/>
-                    <ui:Label name="UniformScaleValueLabel" text="1.00" class="manipulator-bottom-panel__value"/>
+                    <ui:Label name="UniformScaleValueLabel" text="1× size" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

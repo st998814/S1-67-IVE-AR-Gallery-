@@ -33,8 +33,8 @@ Legacy **`ContentTransformController`** keyboard nudges are **not** used on **`A
 
 **`PlacementBoundsService`** resolves limits per content instance:
 
-- **XY** — half-extents from active target’s **`TargetVisual.localScale`**, minus configurable **`edgeMargin`** (ContentRoot-local).
-- **Z** — from **`FrontSideConstraint`** (`EffectiveMinimumLocalZ`, negative-front convention) and **`maxDepthFromTarget`**.
+- **XY (wall)** — absolute target-relative safe zone: **±0.75 m** left/right, **±0.50 m** up/down (anchor at **`TargetVisual`**, not card size). Floor/ceiling presets still scale from **`TargetVisual`**.
+- **Z (wall)** — **0.05 m–1.00 m** in front of target plane (negative local Z: **-1.00** to **-0.05**). Uses posture **`minStandoffZ`** / **`depthMeters`**; aligns with **`FrontSideConstraint`** standoff.
 - **Pure math** — **`PlacementBoundsCalculator`** in assembly **`ARGallery.Authoring.Core`** for EditMode tests without referencing `Assembly-CSharp`.
 
 Sliders and manipulator calls clamp through the same service so UI and runtime rules stay aligned.

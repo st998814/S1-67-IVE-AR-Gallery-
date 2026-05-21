@@ -1,3 +1,5 @@
+using ARGallery.AppFlow;
+using ARGallery.Workspace;
 using UnityEngine;
 
 /// <summary>
@@ -79,6 +81,7 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
         {
             placementBoundsService.Configure(frontSideConstraint);
             placementBoundsService.SetTargetContext(targetRoot, contentRoot);
+            placementBoundsService.SetPosture(ResolveWorkspacePostureForSandbox());
         }
 
         if (contentTransformManipulator == null && frontSideConstraint != null)
@@ -99,5 +102,14 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
 
         if (targetMovementController != null)
             targetMovementController.ConfigureDependencies(targetRoot, contentRoot, mainCamera, gizmoController, targetPlaneAnchor);
+    }
+
+    private static WorkspacePosture ResolveWorkspacePostureForSandbox()
+    {
+        AuthoringWorkspaceEntry entry = FindFirstObjectByType<AuthoringWorkspaceEntry>();
+        if (entry != null)
+            return entry.AppliedPosture;
+
+        return WorkspacePosture.Wall;
     }
 }

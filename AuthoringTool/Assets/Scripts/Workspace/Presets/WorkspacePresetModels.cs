@@ -1,7 +1,21 @@
+using ARGallery.Workspace;
 using UnityEngine;
 
 namespace ARGallery.Workspace.Presets
 {
+    /// <summary>
+    /// Target-relative placement boundary overrides for a workspace posture.
+    /// </summary>
+    public readonly struct WorkspacePlacementBoundaryPreset
+    {
+        public readonly PlacementBoundaryPreset boundary;
+
+        public WorkspacePlacementBoundaryPreset(PlacementBoundaryPreset boundary)
+        {
+            this.boundary = boundary;
+        }
+    }
+
     /// <summary>
     /// Target orientation preset driven by workspace posture.
     /// </summary>
@@ -54,17 +68,20 @@ namespace ARGallery.Workspace.Presets
         public readonly WorkspaceTargetPreset target;
         public readonly WorkspaceCameraPreset camera;
         public readonly WorkspaceInteractionPreset interaction;
+        public readonly WorkspacePlacementBoundaryPreset placementBoundary;
 
         public WorkspacePreset(
             WorkspacePosture posture,
             WorkspaceTargetPreset target,
             WorkspaceCameraPreset camera,
-            WorkspaceInteractionPreset interaction)
+            WorkspaceInteractionPreset interaction,
+            WorkspacePlacementBoundaryPreset placementBoundary)
         {
             this.posture = posture;
             this.target = target;
             this.camera = camera;
             this.interaction = interaction;
+            this.placementBoundary = placementBoundary;
         }
     }
 }
