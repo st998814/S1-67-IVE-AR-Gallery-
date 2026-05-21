@@ -675,7 +675,8 @@ MonoBehaviour:
   showFrontPlaneGrid: 0
   gridDivisions: 3
   cornerAccentLength: 0.022
-  relationshipLineColor: {r: 0.98, g: 0.62, b: 0.18, a: 0.9}
+  hologramProjectionColor: {r: 0.52, g: 0.78, b: 0.9, a: 0.32}
+  hologramEdgeWidth: 0.006
   axisXColor: {r: 1, g: 0.38, b: 0.38, a: 0.75}
   axisYColor: {r: 0.38, g: 1, b: 0.42, a: 0.75}
   axisZColor: {r: 0.4, g: 0.65, b: 1, a: 0.75}

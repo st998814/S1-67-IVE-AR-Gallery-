@@ -8,7 +8,6 @@ public sealed class SpatialMappingIndicatorRenderer
     private const int AxisCount = 3;
     private const int ArrowLinesPerAxis = 2;
 
-    private readonly Color _relationshipColor;
     private readonly Color _axisXColor;
     private readonly Color _axisYColor;
     private readonly Color _axisZColor;
@@ -23,17 +22,14 @@ public sealed class SpatialMappingIndicatorRenderer
     private Transform _selectedContent;
     private GameObject _visualRoot;
     private Camera _camera;
-    private Material _relationshipMaterial;
     private Material _axisXMaterial;
     private Material _axisYMaterial;
     private Material _axisZMaterial;
-    private LineRenderer _relationshipLine;
     private readonly LineRenderer[] _axisLines = new LineRenderer[AxisCount];
     private readonly LineRenderer[] _arrowLines = new LineRenderer[AxisCount * ArrowLinesPerAxis];
     private bool _isVisible;
 
     public SpatialMappingIndicatorRenderer(
-        Color relationshipColor,
         Color axisXColor,
         Color axisYColor,
         Color axisZColor,
@@ -44,7 +40,6 @@ public sealed class SpatialMappingIndicatorRenderer
         float maxWidthScale = 2.5f,
         float widthDistanceReference = 1.4f)
     {
-        _relationshipColor = relationshipColor;
         _axisXColor = axisXColor;
         _axisYColor = axisYColor;
         _axisZColor = axisZColor;
@@ -82,18 +77,11 @@ public sealed class SpatialMappingIndicatorRenderer
         _visualRoot.transform.localRotation = Quaternion.identity;
         _visualRoot.transform.localScale = Vector3.one;
 
-        _relationshipMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_relationshipColor);
         _axisXMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisXColor);
         _axisYMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisYColor);
         _axisZMaterial = AuthoringLineVisualUtility.CreateLineMaterial(_axisZColor);
 
         float width = ResolveEdgeWidth();
-        _relationshipLine = AuthoringLineVisualUtility.CreateLineRenderer(
-            _visualRoot.transform,
-            "RelationshipLine",
-            _relationshipMaterial,
-            width * 1.15f);
-
         _axisLines[0] = CreateAxisLine("AxisXProjection", _axisXMaterial, width);
         _axisLines[1] = CreateAxisLine("AxisYProjection", _axisYMaterial, width);
         _axisLines[2] = CreateAxisLine("AxisZProjection", _axisZMaterial, width);
@@ -147,11 +135,10 @@ public sealed class SpatialMappingIndicatorRenderer
 
     public void Refresh()
     {
-        if (!_isVisible || _contentRoot == null || _selectedContent == null || _relationshipLine == null)
+        if (!_isVisible || _contentRoot == null || _selectedContent == null)
             return;
 
         float width = ResolveEdgeWidth();
-        ApplyWidth(_relationshipLine, width * 1.15f);
         for (int i = 0; i < AxisCount; i++)
             ApplyWidth(_axisLines[i], width);
 
@@ -161,8 +148,6 @@ public sealed class SpatialMappingIndicatorRenderer
         Vector3 xEnd = new Vector3(localPosition.x, 0f, 0f);
         Vector3 yEnd = new Vector3(0f, localPosition.y, 0f);
         Vector3 zEnd = new Vector3(0f, 0f, localPosition.z);
-
-        SetWorldSegment(_relationshipLine, originLocal, localPosition);
 
         UpdateAxisProjection(0, originLocal, xEnd, localPosition.x);
         UpdateAxisProjection(1, originLocal, yEnd, localPosition.y);
@@ -281,7 +266,6 @@ public sealed class SpatialMappingIndicatorRenderer
 
     private void DisposeVisual()
     {
-        DestroyMaterial(ref _relationshipMaterial);
         DestroyMaterial(ref _axisXMaterial);
         DestroyMaterial(ref _axisYMaterial);
         DestroyMaterial(ref _axisZMaterial);
@@ -292,7 +276,6 @@ public sealed class SpatialMappingIndicatorRenderer
             _visualRoot = null;
         }
 
-        _relationshipLine = null;
         for (int i = 0; i < _axisLines.Length; i++)
             _axisLines[i] = null;
         for (int i = 0; i < _arrowLines.Length; i++)
