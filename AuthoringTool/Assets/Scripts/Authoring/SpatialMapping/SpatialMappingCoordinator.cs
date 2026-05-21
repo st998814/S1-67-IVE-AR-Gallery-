@@ -17,12 +17,10 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     [SerializeField] private FrontSideConstraint frontSideConstraint;
     [SerializeField] private Camera mainCamera;
 
-    [Header("Placement Volume")]
-    [SerializeField] private Color volumeColor = new Color(0.4f, 0.74f, 0.86f, 0.58f);
-    [SerializeField] private float edgeWidth = 0.0045f;
-    [SerializeField] private bool showFrontPlaneGrid = false;
-    [SerializeField] private int gridDivisions = 3;
-    [SerializeField] private float cornerAccentLength = 0.022f;
+    [Header("Placement Boundary")]
+    [SerializeField] private Color boundaryCornerColor = new Color(0.95f, 0.32f, 0.32f, 0.22f);
+    [SerializeField] private float boundaryEdgeWidth = 0.003f;
+    [SerializeField] private float boundaryCornerLegLength = 0.035f;
 
     [Header("Holographic Projection")]
     [SerializeField] private Color hologramProjectionColor = new Color(0.52f, 0.78f, 0.9f, 0.32f);
@@ -58,11 +56,9 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
         }
 
         _placementVolume = new PlacementSpaceVisualizer(
-            volumeColor,
-            edgeWidth,
-            showFrontPlaneGrid,
-            gridDivisions,
-            cornerAccentLength);
+            boundaryCornerColor,
+            boundaryEdgeWidth,
+            boundaryCornerLegLength);
         _placementVolume.SetCamera(mainCamera);
 
         _holographicProjection = new HolographicProjectionIndicator(

@@ -76,14 +76,14 @@ Content movement is still written only through `ContentTransformManipulator`; bo
 
 ---
 
-## 2. Placement space visualization
+## 2. Placement boundary visualization
 
 | File | Role |
 |------|------|
-| `Authoring/SpatialMapping/PlacementSpaceVisualizer.cs` | Cyan wireframe box, front-plane grid, corner ticks |
+| `Authoring/SpatialMapping/PlacementSpaceVisualizer.cs` | Low-opacity red corner brackets at placement limits (no full box) |
 | `Authoring/SpatialMapping/AuthoringLineVisualUtility.cs` | Shared transparent `LineRenderer` materials |
 
-Parent: `ContentRoot/PlacementVolumeVisual`. Does not use content meshes or colliders.
+Parent: `{TargetRoot}/PlacementBoundaryVisual`. Does not use content meshes or colliders.
 
 ---
 

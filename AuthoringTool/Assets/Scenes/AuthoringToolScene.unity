@@ -670,11 +670,9 @@ MonoBehaviour:
   placementBoundsService: {fileID: 188100008}
   frontSideConstraint: {fileID: 188100003}
   mainCamera: {fileID: 600757515}
-  volumeColor: {r: 0.4, g: 0.74, b: 0.86, a: 0.58}
-  edgeWidth: 0.0045
-  showFrontPlaneGrid: 0
-  gridDivisions: 3
-  cornerAccentLength: 0.022
+  boundaryCornerColor: {r: 0.95, g: 0.32, b: 0.32, a: 0.22}
+  boundaryEdgeWidth: 0.003
+  boundaryCornerLegLength: 0.035
   hologramProjectionColor: {r: 0.52, g: 0.78, b: 0.9, a: 0.32}
   hologramEdgeWidth: 0.006
 --- !u!1 &1480848357
