@@ -32,7 +32,15 @@ public class AuthoringUIController : MonoBehaviour
     
     // --- UI Fields ---
     private TextField contentTypeInput;
-    private FloatField posXInput, posYInput, posZInput, scaleInput;
+    private FloatField scaleInput;
+    private VisualElement contentPlacementOffsetSection;
+    private VisualElement targetPositionSection;
+    private Label posLeftRightOffsetLabel;
+    private Label posUpDownOffsetLabel;
+    private Label posCloserFurtherOffsetLabel;
+    private Label targetPosXLabel;
+    private Label targetPosYLabel;
+    private Label targetPosZLabel;
     private TextField filePathInput;
     private TextField youtubeUrlInput;
     private DropdownField imageTargetDropdown;
@@ -214,9 +222,14 @@ public class AuthoringUIController : MonoBehaviour
 
         // Basic Fields
         contentTypeInput = root.Q<TextField>("ContentTypeInput");
-        posXInput = root.Q<FloatField>("PosXInput");
-        posYInput = root.Q<FloatField>("PosYInput");
-        posZInput = root.Q<FloatField>("PosZInput");
+        contentPlacementOffsetSection = root.Q<VisualElement>("ContentPlacementOffsetSection");
+        targetPositionSection = root.Q<VisualElement>("TargetPositionSection");
+        posLeftRightOffsetLabel = root.Q<Label>("PosLeftRightOffsetLabel");
+        posUpDownOffsetLabel = root.Q<Label>("PosUpDownOffsetLabel");
+        posCloserFurtherOffsetLabel = root.Q<Label>("PosCloserFurtherOffsetLabel");
+        targetPosXLabel = root.Q<Label>("TargetPosXLabel");
+        targetPosYLabel = root.Q<Label>("TargetPosYLabel");
+        targetPosZLabel = root.Q<Label>("TargetPosZLabel");
         scaleInput = root.Q<FloatField>("ScaleInput");
         filePathInput = root.Q<TextField>("FilePathInput");
         youtubeUrlInput = root.Q<TextField>("YoutubeUrlInput");
@@ -835,7 +848,7 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         // If the panel elements are missing (right panel trimmed), do nothing.
-        if (posXInput == null || posYInput == null || posZInput == null)
+        if (!HasPlacementOffsetInspectorUi())
             return;
 
         // Content mode: refresh from selected content transform.
@@ -859,9 +872,6 @@ public class AuthoringUIController : MonoBehaviour
 
         var panel = uiDocument.rootVisualElement.panel;
         var focusedElement = panel != null && panel.focusController != null ? panel.focusController.focusedElement : null;
-
-        if (focusedElement == posXInput || focusedElement == posYInput || focusedElement == posZInput)
-            return true;
 
         return _manipulatorPanel.IsManipulatorSliderFocused(focusedElement);
     }
@@ -1557,45 +1567,14 @@ public class AuthoringUIController : MonoBehaviour
 
     private void RegisterSpatialFieldCallbacks()
     {
-        if (posXInput != null) posXInput.RegisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (posYInput != null) posYInput.RegisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (posZInput != null) posZInput.RegisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (scaleInput != null) scaleInput.RegisterValueChangedCallback(OnScaleFloatFieldChanged);
+        if (scaleInput != null)
+            scaleInput.RegisterValueChangedCallback(OnScaleFloatFieldChanged);
     }
 
     private void UnregisterSpatialFieldCallbacks()
     {
-        if (posXInput != null) posXInput.UnregisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (posYInput != null) posYInput.UnregisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (posZInput != null) posZInput.UnregisterValueChangedCallback(OnPositionFloatFieldChanged);
-        if (scaleInput != null) scaleInput.UnregisterValueChangedCallback(OnScaleFloatFieldChanged);
-    }
-
-    private void OnPositionFloatFieldChanged(ChangeEvent<float> _)
-    {
-        if (suppressSpatialUiCallbacks)
-            return;
-
-        // Content position is edited via bottom sliders (ContentTransformManipulator).
-        if (authoringSpatialTarget != null)
-            return;
-
-        // Target inspector: edit active target local position (info + optional edit).
-        if (targetSelectionManager == null)
-            targetSelectionManager = ResolveTargetSelectionManager();
-
-        if (targetSelectionManager == null || TargetMovementController.IsTargetDragActive)
-            return;
-
-        GameObject activeTarget = targetSelectionManager.GetActiveTarget();
-        if (activeTarget == null)
-            return;
-
-        Vector3 targetLp = activeTarget.transform.localPosition;
-        targetLp.x = posXInput.value;
-        targetLp.y = posYInput.value;
-        targetLp.z = posZInput.value;
-        activeTarget.transform.localPosition = targetLp;
+        if (scaleInput != null)
+            scaleInput.UnregisterValueChangedCallback(OnScaleFloatFieldChanged);
     }
 
     private void OnScaleFloatFieldChanged(ChangeEvent<float> _)
@@ -1616,22 +1595,26 @@ public class AuthoringUIController : MonoBehaviour
     /// <summary>用于场景点击选中 / Gizmo 拖拽后，把 Transform 写回面板（位置 + 均匀缩放）。</summary>
     public void SyncTransformToInspector(Transform target)
     {
-        if (target == null || posXInput == null)
+        if (target == null || !HasPlacementOffsetInspectorUi())
             return;
 
-        suppressSpatialUiCallbacks = true;
-        try
+        Vector3 lp = target.localPosition;
+        SemanticDistanceFormatter.FormatOffsets(lp, out string leftRight, out string upDown, out string closerFurther);
+        SetLabelText(posLeftRightOffsetLabel, leftRight);
+        SetLabelText(posUpDownOffsetLabel, upDown);
+        SetLabelText(posCloserFurtherOffsetLabel, closerFurther);
+
+        if (scaleInput != null)
         {
-            Vector3 lp = target.localPosition;
-            posXInput.value = (float)System.Math.Round(lp.x, 2);
-            posYInput.value = (float)System.Math.Round(lp.y, 2);
-            posZInput.value = (float)System.Math.Round(lp.z, 2);
-            if (scaleInput != null)
+            suppressSpatialUiCallbacks = true;
+            try
+            {
                 scaleInput.value = (float)System.Math.Round(target.localScale.x, 2);
-        }
-        finally
-        {
-            suppressSpatialUiCallbacks = false;
+            }
+            finally
+            {
+                suppressSpatialUiCallbacks = false;
+            }
         }
 
         _manipulatorPanel.RefreshVisibilityAndValues();
@@ -1642,6 +1625,7 @@ public class AuthoringUIController : MonoBehaviour
         inspectorMode = InspectorMode.Content;
         if (targetReferenceContainer != null)
             targetReferenceContainer.style.display = DisplayStyle.None;
+        UpdatePlacementInspectorSectionVisibility();
         UpdateInspectorModeTabVisualState();
         _manipulatorPanel.RefreshVisibilityAndValues();
     }
@@ -1652,6 +1636,7 @@ public class AuthoringUIController : MonoBehaviour
         if (targetReferenceContainer != null)
             targetReferenceContainer.style.display = DisplayStyle.Flex;
 
+        UpdatePlacementInspectorSectionVisibility();
         SyncTargetToInspector();
         RefreshTargetReferenceUiForActiveTarget();
         UpdateTargetReferenceStatusLabel(showUploadingText: false);
@@ -1670,31 +1655,60 @@ public class AuthoringUIController : MonoBehaviour
 
     private void SyncTargetToInspector()
     {
-        if (posXInput == null || posYInput == null || posZInput == null)
+        if (!HasTargetPositionInspectorUi())
             return;
 
         if (targetSelectionManager == null)
             targetSelectionManager = ResolveTargetSelectionManager();
 
-        suppressSpatialUiCallbacks = true;
-        try
+        Vector3 lp = Vector3.zero;
+        GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        if (activeTarget != null)
+            lp = activeTarget.transform.localPosition;
+
+        SetLabelText(targetPosXLabel, SemanticDistanceFormatter.FormatTargetAxisComponent('X', lp.x));
+        SetLabelText(targetPosYLabel, SemanticDistanceFormatter.FormatTargetAxisComponent('Y', lp.y));
+        SetLabelText(targetPosZLabel, SemanticDistanceFormatter.FormatTargetAxisComponent('Z', lp.z));
+
+        if (scaleInput != null)
         {
-            Vector3 lp = Vector3.zero;
-            GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
-            if (activeTarget != null)
-                lp = activeTarget.transform.localPosition;
-
-            posXInput.value = (float)System.Math.Round(lp.x, 2);
-            posYInput.value = (float)System.Math.Round(lp.y, 2);
-            posZInput.value = (float)System.Math.Round(lp.z, 2);
-
-            if (scaleInput != null)
+            suppressSpatialUiCallbacks = true;
+            try
+            {
                 scaleInput.value = 1;
+            }
+            finally
+            {
+                suppressSpatialUiCallbacks = false;
+            }
         }
-        finally
-        {
-            suppressSpatialUiCallbacks = false;
-        }
+    }
+
+    private void UpdatePlacementInspectorSectionVisibility()
+    {
+        bool isTarget = inspectorMode == InspectorMode.Target;
+        if (contentPlacementOffsetSection != null)
+            contentPlacementOffsetSection.style.display = isTarget ? DisplayStyle.None : DisplayStyle.Flex;
+        if (targetPositionSection != null)
+            targetPositionSection.style.display = isTarget ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    private bool HasPlacementOffsetInspectorUi()
+    {
+        return posLeftRightOffsetLabel != null
+            && posUpDownOffsetLabel != null
+            && posCloserFurtherOffsetLabel != null;
+    }
+
+    private bool HasTargetPositionInspectorUi()
+    {
+        return targetPosXLabel != null && targetPosYLabel != null && targetPosZLabel != null;
+    }
+
+    private static void SetLabelText(Label label, string text)
+    {
+        if (label != null)
+            label.text = text;
     }
 
     private void UpdateTargetReferenceStatusLabel(bool showUploadingText)
@@ -2714,23 +2728,9 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         if (authoringSpatialTarget == null)
             return;
 
-        suppressSpatialUiCallbacks = true;
-        try
-        {
-            posXInput.value = (float)System.Math.Round(newPosition.x, 2);
-            posYInput.value = (float)System.Math.Round(newPosition.y, 2);
-            posZInput.value = (float)System.Math.Round(newPosition.z, 2);
-            if (scaleInput != null)
-                scaleInput.value = (float)System.Math.Round(authoringSpatialTarget.localScale.x, 2);
-        }
-        finally
-        {
-            suppressSpatialUiCallbacks = false;
-        }
-
+        SyncTransformToInspector(authoringSpatialTarget);
         MarkActiveDraftDirty();
         NotifyWorkspacePersistenceChanged();
-        _manipulatorPanel.RefreshVisibilityAndValues();
     }
 
     private void BindManipulatorBottomPanel(VisualElement root)

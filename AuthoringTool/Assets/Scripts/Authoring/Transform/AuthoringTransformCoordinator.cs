@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using ARGallery.AppFlow;
+using ARGallery.Workspace;
 using ARGallery.Workspace.Persistence;
 using ARGallery.Workspace.Presets;
 using RTG;
@@ -142,7 +144,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         if (frontSideConstraint != null)
             frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
         if (placementBoundsService != null)
+        {
             placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
+            placementBoundsService.SetPosture(ResolveActiveWorkspacePosture());
+        }
 
         if (targetRootTransform != null)
             WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
@@ -350,6 +355,15 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             return null;
 
         return activeTarget.transform.Find("ContentRoot");
+    }
+
+    private static WorkspacePosture ResolveActiveWorkspacePosture()
+    {
+        AuthoringWorkspaceEntry entry = FindFirstObjectByType<AuthoringWorkspaceEntry>();
+        if (entry != null)
+            return entry.AppliedPosture;
+
+        return WorkspacePosture.Wall;
     }
 
     private void UpdateSelectionVisual()

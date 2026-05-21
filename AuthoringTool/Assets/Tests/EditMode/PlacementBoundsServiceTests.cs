@@ -151,4 +151,72 @@ public class PlacementBoundsServiceTests
         Assert.AreEqual(-1f, result.z, Epsilon);
     }
 
+    // -----------------------------------------------------------------------
+    // PlacementBoundaryPreset — posture multipliers
+    // -----------------------------------------------------------------------
+
+    [Test]
+    public void Compute_WithFloorPreset_ScalesHorizontalVerticalAndDepth()
+    {
+        var preset = new PlacementBoundaryPreset(
+            horizontalScale: 1.15f,
+            verticalScale: 1.1f,
+            depthMeters: 1.25f,
+            edgeMargin: 0.03f,
+            minStandoffZ: 0.35f);
+
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            preset,
+            constraintMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true);
+
+        Assert.AreEqual(-0.545f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.545f, bounds.x.max, Epsilon);
+        Assert.AreEqual(-0.52f, bounds.y.min, Epsilon);
+        Assert.AreEqual(0.52f, bounds.y.max, Epsilon);
+        Assert.AreEqual(-1.25f, bounds.z.min, Epsilon);
+        Assert.AreEqual(-0.35f, bounds.z.max, Epsilon);
+    }
+
+    [Test]
+    public void Compute_WallDefaultPreset_MatchesLegacyCompute()
+    {
+        var legacy = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            edgeMargin: 0.02f,
+            effectiveMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true,
+            maxDepthFromTarget: 2f);
+
+        var fromPreset = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            PlacementBoundaryPreset.WallDefault,
+            constraintMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true);
+
+        Assert.AreEqual(legacy.x.min, fromPreset.x.min, Epsilon);
+        Assert.AreEqual(legacy.x.max, fromPreset.x.max, Epsilon);
+        Assert.AreEqual(legacy.y.min, fromPreset.y.min, Epsilon);
+        Assert.AreEqual(legacy.y.max, fromPreset.y.max, Epsilon);
+        Assert.AreEqual(legacy.z.min, fromPreset.z.min, Epsilon);
+        Assert.AreEqual(legacy.z.max, fromPreset.z.max, Epsilon);
+    }
+
+    [Test]
+    public void ResolveMinStandoffZ_NegativePresetValue_UsesConstraint()
+    {
+        var preset = PlacementBoundaryPreset.WallDefault;
+        Assert.IsTrue(preset.UsesConstraintMinStandoff);
+        Assert.AreEqual(0.5f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
+    }
+
+    [Test]
+    public void ResolveMinStandoffZ_PositivePresetValue_UsesPreset()
+    {
+        var preset = new PlacementBoundaryPreset(1f, 1f, 1.25f, 0.03f, 0.35f);
+        Assert.IsFalse(preset.UsesConstraintMinStandoff);
+        Assert.AreEqual(0.35f, preset.ResolveMinStandoffZ(0.5f), Epsilon);
+    }
+
 }

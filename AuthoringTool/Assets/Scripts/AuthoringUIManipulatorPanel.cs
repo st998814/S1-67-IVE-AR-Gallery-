@@ -156,7 +156,7 @@ public sealed class AuthoringUIManipulatorPanel
             return;
 
         _manipulator.SetUniformScale(content, evt.newValue);
-        UpdateValueLabel(_uniformScaleValueLabel, content.localScale.x);
+        UpdateScaleValueLabel(_uniformScaleValueLabel, content.localScale.x);
         _onTransformEdited?.Invoke();
     }
 
@@ -184,9 +184,9 @@ public sealed class AuthoringUIManipulatorPanel
             if (_moveCloserFurtherSlider != null)
                 _moveCloserFurtherSlider.value = lp.z;
 
-            UpdateValueLabel(_moveLeftRightValueLabel, lp.x);
-            UpdateValueLabel(_moveUpDownValueLabel, lp.y);
-            UpdateValueLabel(_moveCloserFurtherValueLabel, lp.z);
+            UpdateSemanticValueLabel(_moveLeftRightValueLabel, PlacementBoundsCalculator.SemanticAxis.LeftRight, lp.x);
+            UpdateSemanticValueLabel(_moveUpDownValueLabel, PlacementBoundsCalculator.SemanticAxis.UpDown, lp.y);
+            UpdateSemanticValueLabel(_moveCloserFurtherValueLabel, PlacementBoundsCalculator.SemanticAxis.CloserFurther, lp.z);
         }
         finally
         {
@@ -209,7 +209,7 @@ public sealed class AuthoringUIManipulatorPanel
                 _uniformScaleSlider.value = content.localScale.x;
             }
 
-            UpdateValueLabel(_uniformScaleValueLabel, content.localScale.x);
+            UpdateScaleValueLabel(_uniformScaleValueLabel, content.localScale.x);
         }
         finally
         {
@@ -233,13 +233,25 @@ public sealed class AuthoringUIManipulatorPanel
             return;
 
         int i = PlacementBoundsCalculator.GetLocalPositionComponentIndex(axis);
-        UpdateValueLabel(label, content.localPosition[i]);
+        UpdateSemanticValueLabel(label, axis, content.localPosition[i]);
     }
 
-    private static void UpdateValueLabel(Label label, float value)
+    private static void UpdateSemanticValueLabel(
+        Label label,
+        PlacementBoundsCalculator.SemanticAxis axis,
+        float metres)
     {
         if (label == null)
             return;
-        label.text = value.ToString("0.00");
+
+        label.text = SemanticDistanceFormatter.FormatOffset(axis, metres);
+    }
+
+    private static void UpdateScaleValueLabel(Label label, float scale)
+    {
+        if (label == null)
+            return;
+
+        label.text = SemanticDistanceFormatter.FormatUniformScale(scale);
     }
 }

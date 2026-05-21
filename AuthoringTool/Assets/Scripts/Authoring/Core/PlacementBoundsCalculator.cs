@@ -70,8 +70,30 @@ public static class PlacementBoundsCalculator
         bool negativeFrontLocalZ,
         float maxDepthFromTarget)
     {
-        float halfX = Mathf.Max(0f, targetVisualLocalScale.x * 0.5f - edgeMargin);
-        float halfY = Mathf.Max(0f, targetVisualLocalScale.y * 0.5f - edgeMargin);
+        return Compute(
+            targetVisualLocalScale,
+            new PlacementBoundaryPreset(1f, 1f, maxDepthFromTarget, edgeMargin, effectiveMinimumLocalZ),
+            effectiveMinimumLocalZ,
+            negativeFrontLocalZ);
+    }
+
+    /// <summary>
+    /// Builds axis ranges using a posture-specific <see cref="PlacementBoundaryPreset"/>.
+    /// </summary>
+    public static Snapshot Compute(
+        Vector3 targetVisualLocalScale,
+        PlacementBoundaryPreset preset,
+        float constraintMinimumLocalZ,
+        bool negativeFrontLocalZ)
+    {
+        float edgeMargin = Mathf.Max(0f, preset.edgeMargin);
+        float horizontalScale = Mathf.Max(0f, preset.horizontalScale);
+        float verticalScale = Mathf.Max(0f, preset.verticalScale);
+        float effectiveMinimumLocalZ = preset.ResolveMinStandoffZ(constraintMinimumLocalZ);
+        float maxDepthFromTarget = Mathf.Max(0f, preset.depthMeters);
+
+        float halfX = Mathf.Max(0f, targetVisualLocalScale.x * 0.5f * horizontalScale - edgeMargin);
+        float halfY = Mathf.Max(0f, targetVisualLocalScale.y * 0.5f * verticalScale - edgeMargin);
 
         GetLocalZRange(effectiveMinimumLocalZ, negativeFrontLocalZ, maxDepthFromTarget, out float minZ, out float maxZ);
 

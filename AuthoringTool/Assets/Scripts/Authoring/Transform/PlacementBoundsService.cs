@@ -1,15 +1,18 @@
+using ARGallery.Workspace;
+using ARGallery.Workspace.Presets;
 using UnityEngine;
 
 /// <summary>
 /// Resolves placement boundary limits for content on an AR target and clamps local positions.
-/// XY extents come from <see cref="TargetVisual"/> scale; Z from <see cref="FrontSideConstraint"/>.
+/// XY extents come from <see cref="TargetVisual"/> scale and active <see cref="PlacementBoundaryPreset"/>;
+/// Z from preset depth and <see cref="FrontSideConstraint"/>.
 /// </summary>
 public sealed class PlacementBoundsService : MonoBehaviour
 {
     [SerializeField] private FrontSideConstraint frontSideConstraint;
-    [Tooltip("Inset from TargetVisual edges along X and Y (ContentRoot-local).")]
+    [Tooltip("Fallback inset when no posture preset is applied (metres).")]
     [SerializeField] private float edgeMargin = 0.02f;
-    [Tooltip("Maximum distance content may extend from the target plane along local Z (meters).")]
+    [Tooltip("Fallback max depth when no posture preset is applied (metres).")]
     [SerializeField] private float maxDepthFromTarget = 2f;
     [Tooltip("Fallback half-extent when TargetVisual is missing (meters).")]
     [SerializeField] private float fallbackHalfExtent = 0.1f;
@@ -17,8 +20,12 @@ public sealed class PlacementBoundsService : MonoBehaviour
     [SerializeField] private Transform targetRoot;
     [SerializeField] private Transform contentRoot;
 
-    public float EdgeMargin => edgeMargin;
-    public float MaxDepthFromTarget => maxDepthFromTarget;
+    private PlacementBoundaryPreset _activeBoundaryPreset = PlacementBoundaryPreset.WallDefault;
+    private bool _hasActiveBoundaryPreset;
+
+    public PlacementBoundaryPreset ActiveBoundaryPreset => _activeBoundaryPreset;
+    public float EdgeMargin => _activeBoundaryPreset.edgeMargin;
+    public float MaxDepthFromTarget => _activeBoundaryPreset.depthMeters;
 
     public void Configure(FrontSideConstraint frontConstraintRef)
     {
@@ -33,6 +40,33 @@ public sealed class PlacementBoundsService : MonoBehaviour
     {
         targetRoot = newTargetRoot;
         contentRoot = newContentRoot;
+    }
+
+    /// <summary>
+    /// Applies placement boundary parameters from the workspace posture preset table.
+    /// </summary>
+    public void SetPosture(WorkspacePosture posture)
+    {
+        WorkspacePreset workspacePreset = WorkspacePresetLibrary.GetPreset(posture);
+        SetPlacementBoundaryPreset(workspacePreset.placementBoundary.boundary);
+    }
+
+    /// <summary>
+    /// Applies an explicit placement boundary preset (e.g. from <see cref="WorkspacePresetLibrary"/>).
+    /// </summary>
+    public void SetPlacementBoundaryPreset(PlacementBoundaryPreset preset)
+    {
+        _activeBoundaryPreset = preset;
+        _hasActiveBoundaryPreset = true;
+    }
+
+    /// <summary>
+    /// Clears posture preset; bounds fall back to serialized fallback fields on this component.
+    /// </summary>
+    public void ClearPlacementBoundaryPreset()
+    {
+        _hasActiveBoundaryPreset = false;
+        _activeBoundaryPreset = BuildFallbackBoundaryPreset();
     }
 
     public bool TryGetBoundsForContent(Transform content, out PlacementBoundsCalculator.Snapshot bounds)
@@ -50,14 +84,27 @@ public sealed class PlacementBoundsService : MonoBehaviour
             negativeFrontZ = true;
         }
 
+        PlacementBoundaryPreset preset = ResolveBoundaryPreset();
         bounds = PlacementBoundsCalculator.Compute(
             targetVisualLocalScale,
-            edgeMargin,
+            preset,
             effectiveMinZ,
-            negativeFrontZ,
-            maxDepthFromTarget);
+            negativeFrontZ);
 
         return true;
+    }
+
+    private PlacementBoundaryPreset ResolveBoundaryPreset()
+    {
+        if (_hasActiveBoundaryPreset)
+            return _activeBoundaryPreset;
+
+        return BuildFallbackBoundaryPreset();
+    }
+
+    private PlacementBoundaryPreset BuildFallbackBoundaryPreset()
+    {
+        return new PlacementBoundaryPreset(1f, 1f, maxDepthFromTarget, edgeMargin);
     }
 
     public PlacementBoundsCalculator.AxisRange GetAxisRange(Transform content, PlacementBoundsCalculator.SemanticAxis axis)
