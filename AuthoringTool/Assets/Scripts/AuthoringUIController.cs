@@ -1693,7 +1693,7 @@ public class AuthoringUIController : MonoBehaviour
 
         pendingUploadPurpose = UploadPurpose.Content;
         #if UNITY_WEBGL || UNITY_EDITOR
-        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov", false);
+        WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg,.glb,.mp4,.mov,.webm", false);
         #endif
     }
 
@@ -2014,17 +2014,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         contentDraftsByTransform[draggableObject.transform] = draft;
     }
 
-    private static string GuessMimeTypeFromExtension(string extension)
-    {
-        string lower = string.IsNullOrWhiteSpace(extension) ? "" : extension.Trim().ToLowerInvariant();
-        if (lower == ".png" || lower == "png")
-            return "image/png";
-        if (lower == ".jpg" || lower == "jpg" || lower == ".jpeg" || lower == "jpeg")
-            return "image/jpeg";
-        if (lower == ".glb" || lower == "glb")
-            return "model/gltf-binary";
-        return "application/octet-stream";
-    }
+    private static string GuessMimeTypeFromExtension(string extension) =>
+        UploadWorkflowService.GuessMimeTypeFromExtension(extension);
 
     private void MarkActiveDraftDirty()
     {
@@ -2226,6 +2217,9 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         draft.uploadPending = true;
         draft.lastError = "";
 
+        EnsureStableServerContentIdForDraft(draft);
+        string contentIdForUpload = ResolveServerContentIdForDraft(draft);
+
         // Fully qualified to prevent System.IO conflicts
         var file = new FrostweepGames.Plugins.WebGLFileBrowser.File
         {
@@ -2274,12 +2268,27 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                 }
                 done = true;
             },
-            uploadTimeoutSeconds);
+            uploadTimeoutSeconds,
+            contentIdForUpload);
 
         while (!done)
             yield return null;
 
         onCompleted?.Invoke(success);
+    }
+
+    private static string ResolveServerContentIdForDraft(ContentDraftState draft)
+    {
+        if (draft?.contentTransform == null)
+            return null;
+
+        AuthoredContentInstance ac = draft.contentTransform.GetComponent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInParent<AuthoredContentInstance>()
+            ?? draft.contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+        if (ac == null || string.IsNullOrWhiteSpace(ac.ServerContentId))
+            return null;
+
+        return ac.ServerContentId.Trim();
     }
 
     private IEnumerator SyncDraftRoutine(ContentDraftState draft, Action<bool> onCompleted)
