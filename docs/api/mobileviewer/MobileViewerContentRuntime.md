@@ -91,9 +91,10 @@ Persisted content in backend is validated against the strict set:
 
 Current MobileViewer runtime behavior:
 
-- image plane renderer
-- video surface/player renderer: **stub for next step**
-- `.glb` model renderer: **stub for next step**
+- **image** — textured quad on target (authored surface transforms; meter scale when enabled)
+- **video** — quad + `VideoPlayer` over http(s) `mediaUrl` (muted, looped; surface transforms match image)
+- **model** — remote `.glb` via glTFast under target (volumetric transforms from API)
+- **Failures** — tinted mock primitive + toast via `MobileViewerStatusUI` (unsupported type, bad URL, download/import/playback errors). YouTube URLs are rejected. Legacy demo types (`cube`, `sphere`, `capsule`) still use the normal mock color.
 
 **Example — success response**
 
@@ -143,7 +144,7 @@ Current MobileViewer runtime behavior:
 | Recognized target | `vuforiaTargetId` | `VuforiaCloudTargetController` emits Vuforia id string. |
 | Canonical target | `targetId`, `displayLabel` | Passed into the content service as lookup key and used in status UI text. |
 | Content choice | first item in `GET /api/content?targetId=...` | Mapped into `ContentData` (`targetName`, `title`, `description`, `contentType`, etc.). |
-| Rendered primitive | `contentType` | `ContentRenderer` picks primitive type (`cube`/`capsule`/`sphere`/future). |
+| Rendered content | `contentType`, `mediaUrl`, transforms | `ContentRenderer`: `image` / `video` / `model`; legacy mock primitives for demo `cube`/`sphere`/`capsule` types only. |
 
 The exact Unity C# DTOs and services are defined under `MobileViewer/Assets/Scripts/Content/` and `MobileViewer/Assets/Scripts/AR/`.
 

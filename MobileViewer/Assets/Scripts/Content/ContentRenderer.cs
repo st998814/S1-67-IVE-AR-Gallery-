@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.Video;
+using MobileViewer.UI;
 
 namespace MobileViewer.Content
 {
@@ -55,6 +56,11 @@ namespace MobileViewer.Content
         [Header("Model Content")]
         [SerializeField] private bool showModelContent = true;
 
+        [Header("Failure Feedback")]
+        [SerializeField] private MobileViewerStatusUI statusUI;
+        [SerializeField] private Color failureMediaTint = new(0.95f, 0.45f, 0.1f, 1f);
+        [SerializeField] private Color failureUnsupportedTint = new(0.55f, 0.55f, 0.55f, 1f);
+
         private GameObject previewObject;
         private Renderer previewRenderer;
         private GameObject imageObject;
@@ -75,6 +81,17 @@ namespace MobileViewer.Content
         private Transform modelAttachTransform;
         private string activeModelUrl;
         private int modelLoadGeneration;
+
+        private ContentData currentContentData;
+        private Transform currentTargetTransform;
+
+        private void Awake()
+        {
+            if (statusUI == null)
+            {
+                statusUI = GetComponent<MobileViewerStatusUI>();
+            }
+        }
 
         public void Hide()
         {
@@ -115,6 +132,9 @@ namespace MobileViewer.Content
                 Debug.LogWarning("ContentRenderer.Render called with null ContentData.");
                 return;
             }
+
+            currentContentData = contentData;
+            currentTargetTransform = targetTransform;
 
             if (panelRoot != null)
             {
@@ -180,6 +200,7 @@ namespace MobileViewer.Content
             }
 
             StopModelLoad();
+            StopVideoPlayback();
 
             if (imageObject != null)
             {
@@ -191,7 +212,17 @@ namespace MobileViewer.Content
                 videoObject.SetActive(false);
             }
 
-            RenderMockObject(contentData, targetTransform);
+            if (IsLegacyMockContentType(normalizedType))
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            RenderFailureFallback(
+                contentData,
+                targetTransform,
+                ContentRenderFailureReason.UnsupportedContentType,
+                $"Unsupported contentType '{contentData.contentType}'.");
         }
 
         private void RenderImageObject(ContentData contentData, Transform targetTransform)
@@ -199,16 +230,30 @@ namespace MobileViewer.Content
             StopModelLoad();
             StopVideoPlayback();
 
-            if (!showImageContent || string.IsNullOrWhiteSpace(contentData.mediaUrl))
+            if (!showImageContent)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.UnsupportedContentType,
+                    "Image rendering is disabled in ContentRenderer.");
+                return;
+            }
+
+            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out _, out var urlReason, out var urlDetail))
+            {
+                RenderFailureFallback(contentData, targetTransform, urlReason, urlDetail);
                 return;
             }
 
             EnsureImageObject();
             if (imageObject == null)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.MediaLoadFailed,
+                    "Failed to create image plane.");
                 return;
             }
 
@@ -219,7 +264,11 @@ namespace MobileViewer.Content
 
             if (!TryApplySurfaceTransform(imageObject.transform, contentData, targetTransform))
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.MediaLoadFailed,
+                    "No target transform or camera for image placement.");
                 return;
             }
 
@@ -256,23 +305,29 @@ namespace MobileViewer.Content
 
             if (!showVideoContent)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.UnsupportedContentType,
+                    "Video rendering is disabled in ContentRenderer.");
                 return;
             }
 
-            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var playbackUrl, out var urlFailure))
+            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var playbackUrl, out var urlReason, out var urlDetail))
             {
-                Debug.LogWarning(
-                    $"ContentRenderer: Video playback unavailable for target '{contentData.targetName}': {urlFailure}");
                 StopVideoPlayback();
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(contentData, targetTransform, urlReason, urlDetail);
                 return;
             }
 
             EnsureVideoObject();
             if (videoObject == null || videoPlayer == null || videoRenderer == null)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.MediaPlaybackFailed,
+                    "Failed to create video surface.");
                 return;
             }
 
@@ -283,7 +338,12 @@ namespace MobileViewer.Content
 
             if (!TryApplySurfaceTransform(videoObject.transform, contentData, targetTransform))
             {
-                RenderMockObject(contentData, targetTransform);
+                StopVideoPlayback();
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.MediaPlaybackFailed,
+                    "No target transform or camera for video placement.");
                 return;
             }
 
@@ -325,7 +385,12 @@ namespace MobileViewer.Content
 
         private void OnVideoPlayerError(VideoPlayer source, string message)
         {
-            Debug.LogWarning($"ContentRenderer: VideoPlayer error for '{activeVideoUrl}': {message}");
+            StopVideoPlayback();
+            RenderFailureFallback(
+                currentContentData,
+                currentTargetTransform,
+                ContentRenderFailureReason.MediaPlaybackFailed,
+                string.IsNullOrWhiteSpace(message) ? "VideoPlayer reported an error." : message);
         }
 
         private IEnumerator PrepareAndPlayVideoRoutine(string playbackUrl, ContentData contentData, Transform targetTransform)
@@ -353,10 +418,12 @@ namespace MobileViewer.Content
 
             if (!videoPlayer.isPrepared)
             {
-                Debug.LogWarning(
-                    $"ContentRenderer: Video prepare timed out for target '{contentData?.targetName}' url '{playbackUrl}'.");
                 StopVideoPlayback();
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.MediaPlaybackFailed,
+                    $"Video prepare timed out ({videoPrepareTimeoutSeconds:0}s).");
                 videoPrepareCoroutine = null;
                 yield break;
             }
@@ -409,14 +476,20 @@ namespace MobileViewer.Content
             return true;
         }
 
-        private static bool TryResolveHttpMediaUrl(string mediaUrl, out string resolvedUrl, out string failureReason)
+        private static bool TryResolveHttpMediaUrl(
+            string mediaUrl,
+            out string resolvedUrl,
+            out ContentRenderFailureReason failureReason,
+            out string failureDetail)
         {
             resolvedUrl = null;
-            failureReason = null;
+            failureReason = ContentRenderFailureReason.None;
+            failureDetail = null;
 
             if (string.IsNullOrWhiteSpace(mediaUrl))
             {
-                failureReason = "mediaUrl is missing.";
+                failureReason = ContentRenderFailureReason.MissingMediaUrl;
+                failureDetail = "mediaUrl is missing.";
                 return false;
             }
 
@@ -424,19 +497,96 @@ namespace MobileViewer.Content
             if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
                 || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
-                failureReason = "mediaUrl must be an absolute http(s) URL.";
+                failureReason = ContentRenderFailureReason.InvalidMediaUrl;
+                failureDetail = "mediaUrl must be an absolute http(s) URL.";
                 return false;
             }
 
             var host = uri.Host.ToLowerInvariant();
             if (host.Contains("youtube.com") || host == "youtu.be")
             {
-                failureReason = "YouTube streaming URLs are not supported in mobile runtime.";
+                failureReason = ContentRenderFailureReason.UnsupportedStreamingUrl;
+                failureDetail = "YouTube streaming URLs are not supported in mobile runtime.";
                 return false;
             }
 
             resolvedUrl = trimmed;
             return true;
+        }
+
+        private void RenderFailureFallback(
+            ContentData contentData,
+            Transform targetTransform,
+            ContentRenderFailureReason reason,
+            string detail)
+        {
+            var targetName = contentData?.targetName ?? "unknown";
+            var contentType = contentData?.contentType ?? string.Empty;
+            var url = contentData?.mediaUrl ?? string.Empty;
+            Debug.LogWarning(
+                $"[ContentRenderer] {reason}: {detail} (target={targetName}, type={contentType}, url={url})");
+
+            statusUI?.ShowContentRenderFailed(ContentRenderFailureMessages.ToastFor(reason));
+            AppendFailureSuffixToPanel(contentData, reason);
+
+            if (imageObject != null)
+            {
+                imageObject.SetActive(false);
+            }
+
+            if (imageBackObject != null)
+            {
+                imageBackObject.SetActive(false);
+            }
+
+            StopVideoPlayback();
+            StopModelLoad();
+            RenderMockObject(contentData, targetTransform, ResolveFailureTint(reason));
+        }
+
+        private void AppendFailureSuffixToPanel(ContentData contentData, ContentRenderFailureReason reason)
+        {
+            if (!showContentPanel || contentData == null)
+            {
+                return;
+            }
+
+            var suffix = ContentRenderFailureMessages.PanelSuffixFor(reason);
+            var baseDescription = contentData.description ?? string.Empty;
+            if (baseDescription.Contains(suffix, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var combined = string.IsNullOrWhiteSpace(baseDescription) ? suffix : $"{baseDescription} {suffix}";
+            if (descriptionTmpText != null)
+            {
+                descriptionTmpText.text = combined;
+            }
+
+            if (descriptionText != null)
+            {
+                descriptionText.text = combined;
+            }
+        }
+
+        private Color ResolveFailureTint(ContentRenderFailureReason reason)
+        {
+            return reason == ContentRenderFailureReason.UnsupportedContentType
+                ? failureUnsupportedTint
+                : failureMediaTint;
+        }
+
+        private static bool IsLegacyMockContentType(string normalizedType)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedType))
+            {
+                return false;
+            }
+
+            return normalizedType.Contains("cube")
+                || normalizedType.Contains("sphere")
+                || normalizedType.Contains("capsule");
         }
 
         private void RenderModelObject(ContentData contentData, Transform targetTransform)
@@ -455,16 +605,18 @@ namespace MobileViewer.Content
 
             if (!showModelContent)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.UnsupportedContentType,
+                    "Model rendering is disabled in ContentRenderer.");
                 return;
             }
 
-            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var modelUrl, out var urlFailure))
+            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var modelUrl, out var urlReason, out var urlDetail))
             {
-                Debug.LogWarning(
-                    $"ContentRenderer: Model load unavailable for target '{contentData.targetName}': {urlFailure}");
                 StopModelLoad();
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(contentData, targetTransform, urlReason, urlDetail);
                 return;
             }
 
@@ -477,7 +629,11 @@ namespace MobileViewer.Content
             EnsureModelRoot();
             if (modelRoot == null || modelAttachTransform == null)
             {
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.ModelImportFailed,
+                    "Failed to create model root.");
                 return;
             }
 
@@ -489,7 +645,11 @@ namespace MobileViewer.Content
             if (!TryApplyVolumetricTransform(modelRoot.transform, contentData, targetTransform))
             {
                 StopModelLoad();
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.ModelImportFailed,
+                    "No target transform or camera for model placement.");
                 return;
             }
 
@@ -525,10 +685,12 @@ namespace MobileViewer.Content
 
             if (!outcome.success)
             {
-                Debug.LogWarning(
-                    $"ContentRenderer: GLB load failed for target '{contentData?.targetName}': {outcome.message}");
                 StopModelLoad();
-                RenderMockObject(contentData, targetTransform);
+                RenderFailureFallback(
+                    contentData,
+                    targetTransform,
+                    ContentRenderFailureReason.ModelImportFailed,
+                    outcome.message);
                 return;
             }
 
@@ -679,7 +841,7 @@ namespace MobileViewer.Content
             videoAudioSource.mute = true;
         }
 
-        private void RenderMockObject(ContentData contentData, Transform targetTransform)
+        private void RenderMockObject(ContentData contentData, Transform targetTransform, Color? tintOverride = null)
         {
             if (!showMock3DObject)
             {
@@ -731,7 +893,7 @@ namespace MobileViewer.Content
 
             if (previewRenderer != null)
             {
-                previewRenderer.material.color = contentData.mockColor;
+                previewRenderer.material.color = tintOverride ?? contentData.mockColor;
             }
         }
 
@@ -829,7 +991,15 @@ namespace MobileViewer.Content
 #endif
             if (failed)
             {
-                Debug.LogWarning($"ContentRenderer: Failed to download image '{imageUrl}'. {request.error}");
+                if (string.Equals(activeImageUrl, imageUrl, StringComparison.Ordinal))
+                {
+                    RenderFailureFallback(
+                        currentContentData,
+                        currentTargetTransform,
+                        ContentRenderFailureReason.NetworkError,
+                        string.IsNullOrWhiteSpace(request.error) ? "Image download failed." : request.error);
+                }
+
                 imageLoadCoroutine = null;
                 yield break;
             }
@@ -837,6 +1007,15 @@ namespace MobileViewer.Content
             var texture = DownloadHandlerTexture.GetContent(request);
             if (texture == null || imageRenderer == null)
             {
+                if (string.Equals(activeImageUrl, imageUrl, StringComparison.Ordinal))
+                {
+                    RenderFailureFallback(
+                        currentContentData,
+                        currentTargetTransform,
+                        ContentRenderFailureReason.MediaLoadFailed,
+                        "Image texture is empty or renderer is missing.");
+                }
+
                 imageLoadCoroutine = null;
                 yield break;
             }
