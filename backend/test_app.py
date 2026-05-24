@@ -373,6 +373,86 @@ def test_content_success(client):
     assert body["targetId"] == "poster-a"
 
 
+
+
+@pytest.mark.parametrize(
+    "content_type,media_url,render_kind,asset_format,content_id",
+    [
+        pytest.param(
+            "video",
+            "http://example.com/demo.mp4",
+            "surface",
+            "mp4",
+            "content-video-001",
+            id="video",
+        ),
+        pytest.param(
+            "model",
+            "http://example.com/demo.glb",
+            "volumetric",
+            "glb",
+            "content-model-001",
+            id="model",
+        ),
+    ],
+)
+def test_content_create_video_and_model_success(client, content_type, media_url, render_kind, asset_format, content_id):
+    mock_cur = MagicMock()
+    now = datetime(2026, 4, 18, 12, 5, 1, tzinfo=timezone.utc)
+    mock_cur.fetchone.side_effect = [
+        (1,),
+        None,
+        (content_id, "poster-a", "created", now),
+    ]
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": content_id,
+        "contentType": content_type,
+        "mediaUrl": media_url,
+        "renderKind": render_kind,
+        "assetFormat": asset_format,
+    }
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 201
+    body = res.get_json()
+    assert body["contentId"] == content_id
+    assert body["targetId"] == "poster-a"
+
+
+@pytest.mark.parametrize("content_type", ["video", "model"])
+def test_content_video_and_model_require_media_url(client, content_type):
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": f"content-{content_type}-missing-media",
+        "contentType": content_type,
+        "mediaUrl": "",
+    }
+
+    res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["errorCode"] == "VALIDATION_ERROR"
+    assert "mediaUrl" in body["message"]
+
+
+def test_content_invalid_content_type(client):
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": "content-invalid-type",
+        "contentType": "text",
+    }
+
+    res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["errorCode"] == "VALIDATION_ERROR"
+    assert "contentType" in body["message"]
+
 def test_list_content_success(client):
     mock_cur = MagicMock()
     now = datetime(2026, 4, 18, 12, 5, 1, tzinfo=timezone.utc)
