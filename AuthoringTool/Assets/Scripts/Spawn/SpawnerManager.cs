@@ -306,6 +306,11 @@ namespace ARGallery.Spawning
             return new SpawnTargetResult { success = result.success, targetId = result.targetId, targetObject = result.targetObject, message = result.message };
         }
 
+        public bool ReleaseSpawnedContent(GameObject instance)
+        {
+            return contentCoordinator.ReleaseSpawnedContent(instance);
+        }
+
         public IApiRequestHandle BeginSyncCreateTarget(IApiClient apiClient, SpawnTargetRequest request, GameObject targetObject, Action<ApiResult<CreateTargetResponseDto>> onCompleted = null, float timeoutSeconds = 20f)
         {
             return targetWorkflowService.SyncCreateTarget(
