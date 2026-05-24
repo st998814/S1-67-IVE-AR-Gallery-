@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-import os
 import sys
 from pathlib import Path
-
-import psycopg2
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 DB_DIR = BACKEND_DIR / "db"
 INIT_FILE = DB_DIR / "001_init.sql"
 MIGRATIONS_DIR = DB_DIR / "migrations"
+sys.path.insert(0, str(BACKEND_DIR))
+
+from config import get_config
+from db_pool import connect_for_cli
+
+
+CONFIG = get_config(str(BACKEND_DIR))
 
 
 def connect():
-    return psycopg2.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        port=int(os.environ.get("DB_PORT", "5432")),
-        database=os.environ.get("DB_NAME", "ive_ar_gallery"),
-        user=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASS", "postgres"),
-    )
+    return connect_for_cli(CONFIG)
 
 
 def ensure_schema_migrations(cur):

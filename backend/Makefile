@@ -1,7 +1,7 @@
 SHELL := /bin/zsh
 COMPOSE_ENV := $(shell test -f ../.env && echo "--env-file ../.env")
 
-.PHONY: up down logs backend-logs db-up db-down db-logs db-reset migrate migrate-status
+.PHONY: up down logs backend-logs db-up db-down db-logs db-reset migrate migrate-status test test-integration
 
 up:
 	docker compose $(COMPOSE_ENV) up -d --build backend
@@ -34,3 +34,9 @@ migrate:
 
 migrate-status:
 	python3 scripts/migrate.py status
+
+test:
+	python3 -m pytest test_app.py
+
+test-integration:
+	RUN_BACKEND_INTEGRATION=1 python3 -m pytest test_integration.py
