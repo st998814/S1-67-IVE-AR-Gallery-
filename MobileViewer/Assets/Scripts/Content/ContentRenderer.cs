@@ -52,6 +52,9 @@ namespace MobileViewer.Content
         [SerializeField] private bool showVideoContent = true;
         [SerializeField] private float videoPrepareTimeoutSeconds = 12f;
 
+        [Header("Model Content")]
+        [SerializeField] private bool showModelContent = true;
+
         private GameObject previewObject;
         private Renderer previewRenderer;
         private GameObject imageObject;
@@ -67,6 +70,11 @@ namespace MobileViewer.Content
         private AudioSource videoAudioSource;
         private Coroutine videoPrepareCoroutine;
         private string activeVideoUrl;
+
+        private GameObject modelRoot;
+        private Transform modelAttachTransform;
+        private string activeModelUrl;
+        private int modelLoadGeneration;
 
         public void Hide()
         {
@@ -97,6 +105,7 @@ namespace MobileViewer.Content
             }
 
             StopVideoPlayback();
+            StopModelLoad();
         }
 
         public void Render(ContentData contentData, Transform targetTransform)
@@ -166,8 +175,11 @@ namespace MobileViewer.Content
 
             if (normalizedType == "model")
             {
-                Debug.Log($"ContentRenderer: '{normalizedType}' runtime renderer is not implemented yet; showing mock primitive fallback.");
+                RenderModelObject(contentData, targetTransform);
+                return;
             }
+
+            StopModelLoad();
 
             if (imageObject != null)
             {
@@ -184,16 +196,8 @@ namespace MobileViewer.Content
 
         private void RenderImageObject(ContentData contentData, Transform targetTransform)
         {
-            if (videoObject != null)
-            {
-                videoObject.SetActive(false);
-            }
-
-            if (videoPrepareCoroutine != null)
-            {
-                StopCoroutine(videoPrepareCoroutine);
-                videoPrepareCoroutine = null;
-            }
+            StopModelLoad();
+            StopVideoPlayback();
 
             if (!showImageContent || string.IsNullOrWhiteSpace(contentData.mediaUrl))
             {
@@ -238,6 +242,8 @@ namespace MobileViewer.Content
 
         private void RenderVideoObject(ContentData contentData, Transform targetTransform)
         {
+            StopModelLoad();
+
             if (imageObject != null)
             {
                 imageObject.SetActive(false);
@@ -430,6 +436,191 @@ namespace MobileViewer.Content
             }
 
             resolvedUrl = trimmed;
+            return true;
+        }
+
+        private void RenderModelObject(ContentData contentData, Transform targetTransform)
+        {
+            StopVideoPlayback();
+
+            if (imageObject != null)
+            {
+                imageObject.SetActive(false);
+            }
+
+            if (imageBackObject != null)
+            {
+                imageBackObject.SetActive(false);
+            }
+
+            if (!showModelContent)
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var modelUrl, out var urlFailure))
+            {
+                Debug.LogWarning(
+                    $"ContentRenderer: Model load unavailable for target '{contentData.targetName}': {urlFailure}");
+                StopModelLoad();
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (!modelUrl.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogWarning(
+                    $"ContentRenderer: Model mediaUrl does not end with .glb ('{modelUrl}'); attempting load anyway.");
+            }
+
+            EnsureModelRoot();
+            if (modelRoot == null || modelAttachTransform == null)
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (previewObject != null)
+            {
+                previewObject.SetActive(false);
+            }
+
+            if (!TryApplyVolumetricTransform(modelRoot.transform, contentData, targetTransform))
+            {
+                StopModelLoad();
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            modelRoot.SetActive(true);
+
+            if (string.Equals(activeModelUrl, modelUrl, StringComparison.Ordinal)
+                && modelAttachTransform.childCount > 0)
+            {
+                return;
+            }
+
+            ClearModelChildren();
+            int generation = ++modelLoadGeneration;
+            activeModelUrl = modelUrl;
+
+            MobileGlbLoadService.BeginLoadGlb(
+                this,
+                modelUrl,
+                modelAttachTransform,
+                outcome => OnModelLoadCompleted(outcome, generation, contentData, targetTransform));
+        }
+
+        private void OnModelLoadCompleted(
+            MobileGlbLoadService.LoadOutcome outcome,
+            int generation,
+            ContentData contentData,
+            Transform targetTransform)
+        {
+            if (generation != modelLoadGeneration)
+            {
+                return;
+            }
+
+            if (!outcome.success)
+            {
+                Debug.LogWarning(
+                    $"ContentRenderer: GLB load failed for target '{contentData?.targetName}': {outcome.message}");
+                StopModelLoad();
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (previewObject != null)
+            {
+                previewObject.SetActive(false);
+            }
+
+            if (modelRoot != null)
+            {
+                modelRoot.SetActive(true);
+            }
+        }
+
+        private void EnsureModelRoot()
+        {
+            if (modelRoot != null)
+            {
+                return;
+            }
+
+            modelRoot = new GameObject("RuntimeModelRoot");
+            var attachObject = new GameObject("ModelAttach");
+            attachObject.transform.SetParent(modelRoot.transform, false);
+            modelAttachTransform = attachObject.transform;
+        }
+
+        private void ClearModelChildren()
+        {
+            if (modelAttachTransform == null)
+            {
+                return;
+            }
+
+            for (var i = modelAttachTransform.childCount - 1; i >= 0; i--)
+            {
+                Destroy(modelAttachTransform.GetChild(i).gameObject);
+            }
+        }
+
+        private void StopModelLoad()
+        {
+            modelLoadGeneration++;
+            ClearModelChildren();
+
+            if (modelRoot != null)
+            {
+                modelRoot.SetActive(false);
+            }
+
+            activeModelUrl = null;
+        }
+
+        private bool TryApplyVolumetricTransform(Transform contentTransform, ContentData contentData, Transform targetTransform)
+        {
+            if (contentTransform == null)
+            {
+                return false;
+            }
+
+            if (targetTransform != null)
+            {
+                contentTransform.SetParent(targetTransform, false);
+                contentTransform.localPosition = contentData.localPosition;
+                contentTransform.localRotation = ResolveRuntimeLocalRotation(contentData);
+                var resolvedScale = contentData.localScale;
+                if (resolvedScale == Vector3.zero)
+                {
+                    resolvedScale = Vector3.one * previewScale;
+                }
+
+                contentTransform.localScale = resolvedScale;
+                return true;
+            }
+
+            if (previewCamera == null)
+            {
+                previewCamera = Camera.main;
+            }
+
+            if (previewCamera == null)
+            {
+                return false;
+            }
+
+            contentTransform.SetParent(null);
+            var forward = previewCamera.transform.forward;
+            var position = previewCamera.transform.position + forward * previewDistance;
+            position.y += previewVerticalOffset;
+            contentTransform.position = position;
+            contentTransform.rotation = Quaternion.LookRotation(-forward, Vector3.up);
+            contentTransform.localScale = Vector3.one * previewScale;
             return true;
         }
 
