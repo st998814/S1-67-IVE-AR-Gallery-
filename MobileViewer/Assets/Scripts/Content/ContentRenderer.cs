@@ -1,8 +1,10 @@
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 namespace MobileViewer.Content
 {
@@ -46,6 +48,10 @@ namespace MobileViewer.Content
         [SerializeField] private Vector3 floorRotationCorrectionEuler = Vector3.zero;
         [SerializeField] private Vector3 ceilingRotationCorrectionEuler = new(-90f, 0f, 0f);
 
+        [Header("Video Content")]
+        [SerializeField] private bool showVideoContent = true;
+        [SerializeField] private float videoPrepareTimeoutSeconds = 12f;
+
         private GameObject previewObject;
         private Renderer previewRenderer;
         private GameObject imageObject;
@@ -54,6 +60,13 @@ namespace MobileViewer.Content
         private Renderer imageBackRenderer;
         private Coroutine imageLoadCoroutine;
         private string activeImageUrl;
+
+        private GameObject videoObject;
+        private Renderer videoRenderer;
+        private VideoPlayer videoPlayer;
+        private AudioSource videoAudioSource;
+        private Coroutine videoPrepareCoroutine;
+        private string activeVideoUrl;
 
         public void Hide()
         {
@@ -82,6 +95,8 @@ namespace MobileViewer.Content
                 StopCoroutine(imageLoadCoroutine);
                 imageLoadCoroutine = null;
             }
+
+            StopVideoPlayback();
         }
 
         public void Render(ContentData contentData, Transform targetTransform)
@@ -143,7 +158,13 @@ namespace MobileViewer.Content
                 return;
             }
 
-            if (normalizedType == "video" || normalizedType == "model")
+            if (normalizedType == "video")
+            {
+                RenderVideoObject(contentData, targetTransform);
+                return;
+            }
+
+            if (normalizedType == "model")
             {
                 Debug.Log($"ContentRenderer: '{normalizedType}' runtime renderer is not implemented yet; showing mock primitive fallback.");
             }
@@ -153,11 +174,27 @@ namespace MobileViewer.Content
                 imageObject.SetActive(false);
             }
 
+            if (videoObject != null)
+            {
+                videoObject.SetActive(false);
+            }
+
             RenderMockObject(contentData, targetTransform);
         }
 
         private void RenderImageObject(ContentData contentData, Transform targetTransform)
         {
+            if (videoObject != null)
+            {
+                videoObject.SetActive(false);
+            }
+
+            if (videoPrepareCoroutine != null)
+            {
+                StopCoroutine(videoPrepareCoroutine);
+                videoPrepareCoroutine = null;
+            }
+
             if (!showImageContent || string.IsNullOrWhiteSpace(contentData.mediaUrl))
             {
                 RenderMockObject(contentData, targetTransform);
@@ -176,36 +213,10 @@ namespace MobileViewer.Content
                 previewObject.SetActive(false);
             }
 
-            if (targetTransform != null)
+            if (!TryApplySurfaceTransform(imageObject.transform, contentData, targetTransform))
             {
-                imageObject.transform.SetParent(targetTransform, false);
-                imageObject.transform.localPosition = ResolveImageLocalPosition(contentData);
-                imageObject.transform.localRotation = ResolveRuntimeLocalRotation(contentData);
-                imageObject.transform.localScale = ResolveImageLocalScale(contentData);
-
-                if (imageForwardOffset > 0f)
-                {
-                    imageObject.transform.localPosition += Vector3.forward * imageForwardOffset;
-                }
-            }
-            else
-            {
-                if (previewCamera == null)
-                {
-                    previewCamera = Camera.main;
-                }
-
-                if (previewCamera == null)
-                {
-                    RenderMockObject(contentData, targetTransform);
-                    return;
-                }
-
-                imageObject.transform.SetParent(null);
-                var forward = previewCamera.transform.forward;
-                imageObject.transform.position = previewCamera.transform.position + forward * previewDistance;
-                imageObject.transform.rotation = Quaternion.LookRotation(-forward, Vector3.up);
-                imageObject.transform.localScale = ResolveImageLocalScale(contentData);
+                RenderMockObject(contentData, targetTransform);
+                return;
             }
 
             imageObject.SetActive(true);
@@ -223,6 +234,258 @@ namespace MobileViewer.Content
 
                 imageLoadCoroutine = StartCoroutine(LoadImageTexture(contentData.mediaUrl));
             }
+        }
+
+        private void RenderVideoObject(ContentData contentData, Transform targetTransform)
+        {
+            if (imageObject != null)
+            {
+                imageObject.SetActive(false);
+            }
+
+            if (imageBackObject != null)
+            {
+                imageBackObject.SetActive(false);
+            }
+
+            if (!showVideoContent)
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (!TryResolveHttpMediaUrl(contentData.mediaUrl, out var playbackUrl, out var urlFailure))
+            {
+                Debug.LogWarning(
+                    $"ContentRenderer: Video playback unavailable for target '{contentData.targetName}': {urlFailure}");
+                StopVideoPlayback();
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            EnsureVideoObject();
+            if (videoObject == null || videoPlayer == null || videoRenderer == null)
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            if (previewObject != null)
+            {
+                previewObject.SetActive(false);
+            }
+
+            if (!TryApplySurfaceTransform(videoObject.transform, contentData, targetTransform))
+            {
+                RenderMockObject(contentData, targetTransform);
+                return;
+            }
+
+            videoObject.SetActive(true);
+            videoPlayer.targetTexture = null;
+            videoPlayer.renderMode = VideoRenderMode.MaterialOverride;
+            videoPlayer.targetMaterialRenderer = videoRenderer;
+            videoPlayer.targetMaterialProperty = "_MainTex";
+            videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
+            videoPlayer.SetTargetAudioSource(0, videoAudioSource);
+            if (videoAudioSource != null)
+            {
+                videoAudioSource.mute = true;
+            }
+
+            if (!string.Equals(activeVideoUrl, playbackUrl, StringComparison.Ordinal))
+            {
+                if (videoPrepareCoroutine != null)
+                {
+                    StopCoroutine(videoPrepareCoroutine);
+                    videoPrepareCoroutine = null;
+                }
+
+                videoPlayer.errorReceived -= OnVideoPlayerError;
+                videoPlayer.errorReceived += OnVideoPlayerError;
+                videoPlayer.Stop();
+                videoPlayer.source = VideoSource.Url;
+                videoPlayer.url = playbackUrl;
+                videoPlayer.isLooping = true;
+                videoPlayer.playOnAwake = true;
+                activeVideoUrl = playbackUrl;
+                videoPrepareCoroutine = StartCoroutine(PrepareAndPlayVideoRoutine(playbackUrl, contentData, targetTransform));
+            }
+            else if (!videoPlayer.isPlaying && videoPlayer.isPrepared)
+            {
+                videoPlayer.Play();
+            }
+        }
+
+        private void OnVideoPlayerError(VideoPlayer source, string message)
+        {
+            Debug.LogWarning($"ContentRenderer: VideoPlayer error for '{activeVideoUrl}': {message}");
+        }
+
+        private IEnumerator PrepareAndPlayVideoRoutine(string playbackUrl, ContentData contentData, Transform targetTransform)
+        {
+            if (videoPlayer == null)
+            {
+                videoPrepareCoroutine = null;
+                yield break;
+            }
+
+            videoPlayer.Prepare();
+            var timeout = Mathf.Max(1f, videoPrepareTimeoutSeconds);
+            var elapsed = 0f;
+            while (!videoPlayer.isPrepared && elapsed < timeout)
+            {
+                if (!string.Equals(activeVideoUrl, playbackUrl, StringComparison.Ordinal))
+                {
+                    videoPrepareCoroutine = null;
+                    yield break;
+                }
+
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            if (!videoPlayer.isPrepared)
+            {
+                Debug.LogWarning(
+                    $"ContentRenderer: Video prepare timed out for target '{contentData?.targetName}' url '{playbackUrl}'.");
+                StopVideoPlayback();
+                RenderMockObject(contentData, targetTransform);
+                videoPrepareCoroutine = null;
+                yield break;
+            }
+
+            if (!videoPlayer.isPlaying)
+            {
+                videoPlayer.Play();
+            }
+
+            videoPrepareCoroutine = null;
+        }
+
+        private bool TryApplySurfaceTransform(Transform surfaceTransform, ContentData contentData, Transform targetTransform)
+        {
+            if (surfaceTransform == null)
+            {
+                return false;
+            }
+
+            if (targetTransform != null)
+            {
+                surfaceTransform.SetParent(targetTransform, false);
+                surfaceTransform.localPosition = ResolveImageLocalPosition(contentData);
+                surfaceTransform.localRotation = ResolveRuntimeLocalRotation(contentData);
+                surfaceTransform.localScale = ResolveImageLocalScale(contentData);
+
+                if (imageForwardOffset > 0f)
+                {
+                    surfaceTransform.localPosition += Vector3.forward * imageForwardOffset;
+                }
+
+                return true;
+            }
+
+            if (previewCamera == null)
+            {
+                previewCamera = Camera.main;
+            }
+
+            if (previewCamera == null)
+            {
+                return false;
+            }
+
+            surfaceTransform.SetParent(null);
+            var forward = previewCamera.transform.forward;
+            surfaceTransform.position = previewCamera.transform.position + forward * previewDistance;
+            surfaceTransform.rotation = Quaternion.LookRotation(-forward, Vector3.up);
+            surfaceTransform.localScale = ResolveImageLocalScale(contentData);
+            return true;
+        }
+
+        private static bool TryResolveHttpMediaUrl(string mediaUrl, out string resolvedUrl, out string failureReason)
+        {
+            resolvedUrl = null;
+            failureReason = null;
+
+            if (string.IsNullOrWhiteSpace(mediaUrl))
+            {
+                failureReason = "mediaUrl is missing.";
+                return false;
+            }
+
+            var trimmed = mediaUrl.Trim();
+            if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                failureReason = "mediaUrl must be an absolute http(s) URL.";
+                return false;
+            }
+
+            var host = uri.Host.ToLowerInvariant();
+            if (host.Contains("youtube.com") || host == "youtu.be")
+            {
+                failureReason = "YouTube streaming URLs are not supported in mobile runtime.";
+                return false;
+            }
+
+            resolvedUrl = trimmed;
+            return true;
+        }
+
+        private void StopVideoPlayback()
+        {
+            if (videoPrepareCoroutine != null)
+            {
+                StopCoroutine(videoPrepareCoroutine);
+                videoPrepareCoroutine = null;
+            }
+
+            if (videoPlayer != null)
+            {
+                videoPlayer.errorReceived -= OnVideoPlayerError;
+                videoPlayer.Stop();
+                videoPlayer.url = string.Empty;
+            }
+
+            if (videoObject != null)
+            {
+                videoObject.SetActive(false);
+            }
+
+            activeVideoUrl = null;
+        }
+
+        private void EnsureVideoObject()
+        {
+            if (videoObject != null)
+            {
+                return;
+            }
+
+            videoObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            videoObject.name = "RuntimeVideoPlane";
+
+            var collider = videoObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
+
+            videoRenderer = videoObject.GetComponent<Renderer>();
+            if (videoRenderer != null)
+            {
+                var shader = Shader.Find("Unlit/Texture") ?? Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Standard");
+                if (shader != null)
+                {
+                    videoRenderer.material = new Material(shader);
+                }
+            }
+
+            videoPlayer = videoObject.AddComponent<VideoPlayer>();
+            videoAudioSource = videoObject.AddComponent<AudioSource>();
+            videoAudioSource.playOnAwake = false;
+            videoAudioSource.mute = true;
         }
 
         private void RenderMockObject(ContentData contentData, Transform targetTransform)
