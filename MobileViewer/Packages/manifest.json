@@ -1,5 +1,6 @@
 {
-    "dependencies": {
+  "dependencies": {
+    "com.atteneder.gltfast": "6.18.0",
     "com.ptc.vuforia.engine": "file:com.ptc.vuforia.engine-11.4.4.tgz",
     "com.unity.feature.development": "1.0.2",
     "com.unity.inputsystem": "1.19.0",
@@ -47,5 +48,15 @@
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0"
-  }
+  },
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.atteneder",
+        "com.atteneder.gltfast"
+      ]
+    }
+  ]
 }
