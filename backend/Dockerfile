@@ -12,10 +12,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ./app.py
-COPY vuforia_service.py ./vuforia_service.py
-COPY scripts ./scripts
-COPY db ./db
+COPY . .
 
 RUN mkdir -p uploads
 
