@@ -63,6 +63,8 @@ See also: [`docs/api/mobileviewer/MobileViewerContentRuntime.md`](../../../../..
 
 Package: `MobileViewer/Packages/manifest.json` — `com.atteneder.gltfast` + scoped registry (matches AuthoringTool version).
 
+**Default GLB scale:** New model content starts at root local scale `0.05`. Authoring applies this on first spawn and when replacing surface content with a model. MobileViewer uses the same `modelDefaultLocalScale` and treats legacy `(1,1,1)` model scale as missing/default so previously saved GLBs do not render at raw asset size.
+
 ### 4. MobileViewer — failure and fallback
 
 Failures use `ContentRenderFailureReason` + `RenderFailureFallback`:
@@ -99,13 +101,14 @@ Paths below are repo-relative unless noted.
 | **Api/Services/UploadWorkflowService.cs** | MIME map (incl. `.mov`, `.webm`, `.glb`); optional `contentId` on upload; extension-aware default filenames; `uploadCategory = content`. |
 | **AuthoringUIController.cs** | Browse filter includes `.webm`; draft upload passes `contentId`; `GuessMimeTypeFromExtension` delegates to upload service. |
 | **Workspace/Persistence/WorkspaceRemoteSyncService.cs** | `GuessMimeTypeFromName` uses shared MIME helper. |
-| **Content/Services/ContentReplacementService.cs** | One content per target; pool release; transform/identity rules on replace (DEV-133 authoring companion). |
+| **Content/Services/ContentReplacementService.cs** | One content per target; pool release; transform/identity rules on replace; surface→model resets to GLB default scale `0.05`. |
+| **Spawn/SpawnerManager.cs** | Applies model default local scale `0.05` on first GLB spawn before persistence. |
 
 ### 2. MobileViewer — `Assets/Scripts/`
 
 | File | Description |
 |------|-------------|
-| **Content/ContentRenderer.cs** | Video and model branches; surface/volumetric placement; failure fallback; `Hide()` cleanup for all media types. |
+| **Content/ContentRenderer.cs** | Video and model branches; surface/volumetric placement; model default scale `0.05`; failure fallback; `Hide()` cleanup for all media types. |
 | **Content/MobileGlbLoadService.cs** | Remote GLB download + glTFast import. |
 | **Content/ContentRenderFailure.cs** | Failure enum + toast/panel message helpers. |
 | **UI/MobileViewerStatusUI.cs** | `ShowContentRenderFailed` for danger toasts. |

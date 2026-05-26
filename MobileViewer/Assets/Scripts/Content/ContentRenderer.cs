@@ -55,6 +55,9 @@ namespace MobileViewer.Content
 
         [Header("Model Content")]
         [SerializeField] private bool showModelContent = true;
+        [SerializeField] private float modelDefaultLocalScale = 0.05f;
+        [Tooltip("Treat legacy model payload scale (1,1,1) as missing so old saved GLBs do not render at raw asset size.")]
+        [SerializeField] private bool treatUnitModelScaleAsDefault = true;
 
         [Header("Failure Feedback")]
         [SerializeField] private MobileViewerStatusUI statusUI;
@@ -756,13 +759,7 @@ namespace MobileViewer.Content
                 contentTransform.SetParent(targetTransform, false);
                 contentTransform.localPosition = contentData.localPosition;
                 contentTransform.localRotation = ResolveRuntimeLocalRotation(contentData);
-                var resolvedScale = contentData.localScale;
-                if (resolvedScale == Vector3.zero)
-                {
-                    resolvedScale = Vector3.one * previewScale;
-                }
-
-                contentTransform.localScale = resolvedScale;
+                contentTransform.localScale = ResolveModelLocalScale(contentData);
                 return true;
             }
 
@@ -782,8 +779,30 @@ namespace MobileViewer.Content
             position.y += previewVerticalOffset;
             contentTransform.position = position;
             contentTransform.rotation = Quaternion.LookRotation(-forward, Vector3.up);
-            contentTransform.localScale = Vector3.one * previewScale;
+            contentTransform.localScale = Vector3.one * Mathf.Max(0.001f, modelDefaultLocalScale);
             return true;
+        }
+
+        private Vector3 ResolveModelLocalScale(ContentData contentData)
+        {
+            var scale = contentData != null ? contentData.localScale : Vector3.zero;
+            if (scale == Vector3.zero || (treatUnitModelScaleAsDefault && IsApproximatelyUnitScale(scale)))
+            {
+                return Vector3.one * Mathf.Max(0.001f, modelDefaultLocalScale);
+            }
+
+            return new Vector3(
+                Mathf.Max(0.001f, scale.x),
+                Mathf.Max(0.001f, scale.y),
+                Mathf.Max(0.001f, scale.z));
+        }
+
+        private static bool IsApproximatelyUnitScale(Vector3 scale)
+        {
+            const float epsilon = 0.0001f;
+            return Mathf.Abs(scale.x - 1f) <= epsilon
+                && Mathf.Abs(scale.y - 1f) <= epsilon
+                && Mathf.Abs(scale.z - 1f) <= epsilon;
         }
 
         private void StopVideoPlayback()

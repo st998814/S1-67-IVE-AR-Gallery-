@@ -30,6 +30,8 @@ namespace ARGallery.Content
     /// </summary>
     public static class ContentReplacementService
     {
+        private const float DefaultModelLocalScale = 0.05f;
+
         public static ContentReplacementContext ClearActiveTargetContent(
             AuthoringTransformCoordinator coordinator,
             ISpawnerManager spawner,
@@ -95,7 +97,7 @@ namespace ARGallery.Content
             {
                 localPosition = ctx.localPosition,
                 localEuler = ctx.localEuler,
-                localScale = sameRenderKind ? ctx.localScale : Vector3.one
+                localScale = sameRenderKind ? ctx.localScale : ResolveDefaultScaleForNewContent(newContentType)
             };
 
             if (!string.IsNullOrWhiteSpace(ctx.serverContentId))
@@ -185,5 +187,12 @@ namespace ARGallery.Content
 
         private static SpawnRenderKind ToSpawnRenderKind(ContentReplacementRenderKind kind) =>
             kind == ContentReplacementRenderKind.Volumetric ? SpawnRenderKind.Volumetric : SpawnRenderKind.Surface;
+
+        private static Vector3 ResolveDefaultScaleForNewContent(SpawnContentType type)
+        {
+            return type == SpawnContentType.Model
+                ? Vector3.one * DefaultModelLocalScale
+                : Vector3.one;
+        }
     }
 }
