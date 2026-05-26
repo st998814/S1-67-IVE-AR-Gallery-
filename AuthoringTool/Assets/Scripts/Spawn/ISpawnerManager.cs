@@ -23,5 +23,8 @@ namespace ARGallery.Spawning
             GameObject targetObject,
             Action<ApiResult<CreateTargetResponseDto>> onCompleted = null,
             float timeoutSeconds = 20f);
+
+        /// <summary>Returns pooled shells to the runtime pool; destroys non-pooled instances.</summary>
+        bool ReleaseSpawnedContent(GameObject instance);
     }
 }

@@ -12,7 +12,7 @@ This document describes how **MobileViewer** on a physical iPhone talks to the *
 |--------|----------|
 | **Recognition** | Vuforia Cloud → `VuforiaCloudTargetController` → `TargetContentCoordinator` (unchanged flow). |
 | **Content** | `HttpContentService` implements `IContentService` and calls `GET /api/mobileviewer/content/by-target/{targetKey}`. |
-| **Rendering** | `ContentRenderer` shows authored **image** content (and legacy mock primitives where the API still returns them). Video/model paths are stubs per API doc. |
+| **Rendering** | `ContentRenderer` shows **image**, **video** (http URL), and **model** (GLB) content; failures show a tinted mock + status toast. Legacy `cube`/`sphere` demo types use the normal mock primitive. |
 | **Authoring** | **AuthoringTool** on the same Mac uses `http://127.0.0.1:5050` against the backend; workspaces and targets you save there are what MobileViewer loads at runtime. |
 | **Demo network** | **iPhone Personal Hotspot** is the recommended setup: Mac joins the phone’s Wi‑Fi, both sit on `172.20.10.x`, and the phone uses the **Mac’s hotspot IP** (not `127.0.0.1`). |
 

@@ -86,8 +86,10 @@ namespace ARGallery.Workspace.Persistence
         public IReadOnlyList<AuthoredContentInstance> GetContentsOrdered()
         {
             return contents
-                .Where(c => c != null)
-                .OrderBy(c => c.LocalContentId ?? "")
+                .Where(c => c != null && c.gameObject != null && c.gameObject.activeInHierarchy)
+                .OrderBy(c => c.TargetId ?? "")
+                .ThenBy(c => c.ServerContentId ?? "")
+                .ThenBy(c => c.LocalContentId ?? "")
                 .ToList();
         }
     }

@@ -47,7 +47,44 @@ def test_health_uses_real_database(client):
     assert body["postgresDatabase"]
 
 
-def test_target_content_mobileviewer_round_trip(client, integration_ids):
+@pytest.mark.parametrize(
+    "content_type,initial_media_url,asset_format,render_kind,updated_media_url",
+    [
+        pytest.param(
+            "image",
+            "http://example.com/integration-content.jpg",
+            "jpg",
+            "surface",
+            "http://example.com/updated.jpg",
+            id="image",
+        ),
+        pytest.param(
+            "video",
+            "http://example.com/integration-video.mp4",
+            "mp4",
+            "surface",
+            "http://example.com/updated-video.mp4",
+            id="video",
+        ),
+        pytest.param(
+            "model",
+            "http://example.com/integration-model.glb",
+            "glb",
+            "volumetric",
+            "http://example.com/updated-model.glb",
+            id="model",
+        ),
+    ],
+)
+def test_target_content_mobileviewer_round_trip(
+    client,
+    integration_ids,
+    content_type,
+    initial_media_url,
+    asset_format,
+    render_kind,
+    updated_media_url,
+):
     workspace_id, target_id, content_id = integration_ids
 
     target_res = client.post(
@@ -74,14 +111,14 @@ def test_target_content_mobileviewer_round_trip(client, integration_ids):
         json={
             "contentId": content_id,
             "targetId": target_id,
-            "contentType": "image",
-            "mediaUrl": "http://example.com/integration-content.jpg",
+            "contentType": content_type,
+            "mediaUrl": initial_media_url,
             "localPosition": {"x": 0.1, "y": 0.2, "z": 0.3},
             "localEuler": {"x": 1, "y": 2, "z": 3},
             "localScale": {"x": 1, "y": 1, "z": 1},
-            "renderKind": "surface",
-            "assetFormat": "jpg",
-            "meta": {"title": "Integration Content", "description": "Round trip test"},
+            "renderKind": render_kind,
+            "assetFormat": asset_format,
+            "meta": {"title": "Integration Content", "description": f"Round trip test ({content_type})"},
         },
     )
     assert content_res.status_code == 201, content_res.get_data(as_text=True)
@@ -91,9 +128,14 @@ def test_target_content_mobileviewer_round_trip(client, integration_ids):
     assert detail_res.status_code == 200
     detail = detail_res.get_json()
     assert detail["targetId"] == target_id
+    assert detail["contentType"] == content_type
+    assert detail["mediaUrl"] == initial_media_url
     assert detail["meta"]["title"] == "Integration Content"
 
-    patch_res = client.patch(f"/api/content/{content_id}", json={"mediaUrl": "http://example.com/updated.jpg"})
+    patch_res = client.patch(
+        f"/api/content/{content_id}",
+        json={"mediaUrl": updated_media_url, "contentType": content_type.upper()},
+    )
     assert patch_res.status_code == 200
     assert patch_res.get_json()["status"] == "accepted"
 
@@ -101,8 +143,8 @@ def test_target_content_mobileviewer_round_trip(client, integration_ids):
     assert mobile_res.status_code == 200
     mobile = mobile_res.get_json()
     assert mobile["targetName"] == "Integration Target"
-    assert mobile["contentType"] == "image"
-    assert mobile["mediaUrl"] == "http://example.com/updated.jpg"
+    assert mobile["contentType"] == content_type
+    assert mobile["mediaUrl"] == updated_media_url
 
     delete_res = client.delete(f"/api/workspaces/{workspace_id}")
     assert delete_res.status_code == 200

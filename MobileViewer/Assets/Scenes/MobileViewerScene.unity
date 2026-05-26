@@ -334,6 +334,14 @@ MonoBehaviour:
   wallRotationCorrectionEuler: {x: 90, y: 0, z: 0}
   floorRotationCorrectionEuler: {x: 0, y: 0, z: 0}
   ceilingRotationCorrectionEuler: {x: -90, y: 0, z: 0}
+  showVideoContent: 1
+  videoPrepareTimeoutSeconds: 12
+  showModelContent: 1
+  modelDefaultLocalScale: 0.05
+  treatUnitModelScaleAsDefault: 1
+  statusUI: {fileID: 9001004}
+  failureMediaTint: {r: 0.95, g: 0.45, b: 0.1, a: 1}
+  failureUnsupportedTint: {r: 0.55, g: 0.55, b: 0.55, a: 1}
 --- !u!114 &9001004
 MonoBehaviour:
   m_ObjectHideFlags: 0

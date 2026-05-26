@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ARGallery.Spawning;
 using UnityEngine;
 
@@ -76,14 +77,67 @@ namespace ARGallery.Workspace.Persistence
         private static ContentSnapshot[] BuildContentSnapshots(AuthoredObjectRegistry registry)
         {
             IReadOnlyList<AuthoredContentInstance> list = registry.GetContentsOrdered();
-            var arr = new ContentSnapshot[list.Count];
+            var byTarget = new Dictionary<string, ContentSnapshot>(StringComparer.OrdinalIgnoreCase);
+            var byContentId = new Dictionary<string, ContentSnapshot>(StringComparer.OrdinalIgnoreCase);
+            var unkeyed = new List<ContentSnapshot>();
             for (int i = 0; i < list.Count; i++)
             {
                 AuthoredContentInstance c = list[i];
-                arr[i] = ToContentSnapshot(c);
+                if (!IsPersistableContent(c))
+                    continue;
+
+                ContentSnapshot snapshot = ToContentSnapshot(c);
+                string targetKey = NormalizeKey(snapshot.targetId);
+                string contentKey = NormalizeKey(!string.IsNullOrWhiteSpace(snapshot.serverContentId)
+                    ? snapshot.serverContentId
+                    : snapshot.localContentId);
+
+                if (!string.IsNullOrWhiteSpace(targetKey))
+                {
+                    byTarget[targetKey] = snapshot;
+                    if (!string.IsNullOrWhiteSpace(contentKey))
+                        byContentId[contentKey] = snapshot;
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(contentKey))
+                {
+                    byContentId[contentKey] = snapshot;
+                    continue;
+                }
+
+                unkeyed.Add(snapshot);
             }
 
-            return arr;
+            var merged = new List<ContentSnapshot>(byTarget.Values);
+            foreach (ContentSnapshot snapshot in byContentId.Values)
+            {
+                if (snapshot == null)
+                    continue;
+                string targetKey = NormalizeKey(snapshot.targetId);
+                if (!string.IsNullOrWhiteSpace(targetKey) && byTarget.ContainsKey(targetKey))
+                    continue;
+                merged.Add(snapshot);
+            }
+
+            merged.AddRange(unkeyed);
+            return merged
+                .OrderBy(c => c.targetId ?? "", StringComparer.OrdinalIgnoreCase)
+                .ThenBy(c => c.serverContentId ?? "", StringComparer.OrdinalIgnoreCase)
+                .ThenBy(c => c.localContentId ?? "", StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static bool IsPersistableContent(AuthoredContentInstance content)
+        {
+            return content != null
+                && content.gameObject != null
+                && content.gameObject.activeInHierarchy;
+        }
+
+        private static string NormalizeKey(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
         }
 
         public static TargetSnapshot ToTargetSnapshot(AuthoredTargetInstance t)
