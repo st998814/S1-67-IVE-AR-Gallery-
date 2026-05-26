@@ -211,6 +211,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         RefreshContentList();
         _selectedListIndex = _contentObjects.IndexOf(selected);
         UpdateSelectionVisual();
+        ContentSelectionChanged?.Invoke(selected);
 
         if (_suppressAuthoringSyncFromSelection)
         {
@@ -220,8 +221,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         if (authoringUI != null)
             authoringUI.OnContentSelectedInScene(selected);
-
-        ContentSelectionChanged?.Invoke(selected);
     }
 
     private void OnGizmoContentTransformChanged(Transform contentTransform)

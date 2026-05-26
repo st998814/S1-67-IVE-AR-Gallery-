@@ -103,7 +103,8 @@ namespace ARGallery.Workspace.Persistence
             byte[] bytes,
             string sourcePath,
             out string relativePathOut,
-            out string errorMessage)
+            out string errorMessage,
+            string stableFileNameStem = "")
         {
             relativePathOut = null;
             string workspaceRoot = WorkspacePersistencePaths.GetWorkspaceRoot(workspaceId);
@@ -123,7 +124,10 @@ namespace ARGallery.Workspace.Persistence
                 Directory.CreateDirectory(contentsDir);
 
                 string ext = GetExtension(originalFileName, sourcePath);
-                string fileName = $"{Guid.NewGuid():N}{ext}";
+                string stem = SanitizeFileNameStem(stableFileNameStem);
+                string fileName = string.IsNullOrWhiteSpace(stem)
+                    ? $"{Guid.NewGuid():N}{ext}"
+                    : $"{stem}{ext}";
                 string absoluteFile = Path.Combine(contentsDir, fileName);
                 File.WriteAllBytes(absoluteFile, data);
 
@@ -148,6 +152,62 @@ namespace ARGallery.Workspace.Persistence
         public bool Exists(string workspaceId, string relativePathWithForwardSlashes)
         {
             return WorkspacePersistencePaths.ExistsRelative(workspaceId, relativePathWithForwardSlashes);
+        }
+
+        public void PruneUnreferencedContentAssets(string workspaceId, ContentSnapshot[] referencedContents)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return;
+
+            string contentsDir = WorkspacePersistencePaths.GetContentsAssetsDirectory(workspaceId);
+            if (!Directory.Exists(contentsDir))
+                return;
+
+            var referenced = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (referencedContents != null)
+            {
+                for (int i = 0; i < referencedContents.Length; i++)
+                {
+                    string rel = referencedContents[i]?.assetLocalPath;
+                    if (string.IsNullOrWhiteSpace(rel))
+                        continue;
+
+                    string full = ResolveFullPath(workspaceId, rel);
+                    if (!string.IsNullOrWhiteSpace(full))
+                        referenced.Add(Path.GetFullPath(full));
+                }
+            }
+
+            foreach (string file in Directory.GetFiles(contentsDir))
+            {
+                string full = Path.GetFullPath(file);
+                if (referenced.Contains(full))
+                    continue;
+
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[WorkspacePersistence] Failed to prune unreferenced content asset '{file}': {ex.Message}");
+                }
+            }
+        }
+
+        private static string SanitizeFileNameStem(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+
+            string fileName = Path.GetFileNameWithoutExtension(value.Trim());
+            if (string.IsNullOrWhiteSpace(fileName))
+                return "";
+
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                fileName = fileName.Replace(invalid, '_');
+
+            return fileName.Trim('_');
         }
     }
 }

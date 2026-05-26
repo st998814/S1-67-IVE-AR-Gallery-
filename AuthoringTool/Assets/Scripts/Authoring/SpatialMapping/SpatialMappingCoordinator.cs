@@ -220,6 +220,11 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
         }
     }
 
+    public void RefreshForCurrentSelection()
+    {
+        RefreshMappingIndicators();
+    }
+
     private Transform ResolveSelectedContent()
     {
         if (authoringTransformCoordinator != null)

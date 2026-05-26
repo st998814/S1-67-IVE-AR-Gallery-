@@ -24,6 +24,7 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] [Min(0.5f)] private float debounceSeconds = 3f;
 
         private readonly WorkspaceSnapshotRepository snapshotRepository = new WorkspaceSnapshotRepository();
+        private readonly WorkspaceAssetRepository assetRepository = new WorkspaceAssetRepository();
         private Coroutine debounceCoroutine;
         private float debounceQuietAfterRealtime;
         private bool saveInProgress;
@@ -120,6 +121,8 @@ namespace ARGallery.Workspace.Persistence
                     Debug.LogWarning($"{LogPrefix}TrySaveSnapshot failed: {err}");
                     return;
                 }
+
+                assetRepository.PruneUnreferencedContentAssets(workspaceId, snapshot.contents);
 
                 if (!suppressSnapshotSaved)
                     SnapshotSaved?.Invoke(snapshot);

@@ -532,6 +532,7 @@ public class AuthoringUIController : MonoBehaviour
 
         ContentReplacementService.ApplyAuthoredIdentityAfterReplace(outcome.spawnedObject.transform, ctx);
         authoringTransformCoordinator?.SelectContentTransform(outcome.spawnedObject.transform, syncAuthoringUi: false);
+        FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
         NotifyWorkspacePersistenceChanged();
         UpdateAddContentButtonIcon();
         return outcome;

@@ -499,6 +499,7 @@ namespace ARGallery.Workspace.Persistence
             }
             else
             {
+                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
                 // One line after upload (avoids duplicate TrySaveSnapshot OK in the same frame as completion).
                 Debug.Log($"[WorkspacePersistence] Remote sync completed successfully for workspace '{workspaceId}' | path={snapshotPath}");
             }
@@ -532,6 +533,8 @@ namespace ARGallery.Workspace.Persistence
 
             if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
                 Debug.LogWarning($"{LogPrefix}Failed-state snapshot save error: {err}");
+            else
+                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
         }
 
         private IApiClient ResolveApiClient()
