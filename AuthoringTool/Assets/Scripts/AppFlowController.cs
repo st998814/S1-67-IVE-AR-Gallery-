@@ -5,11 +5,10 @@ namespace ARGallery.AppFlow
 {
     /// <summary>
     /// Minimal app-level scene flow coordinator for:
-    /// Landing -> WorkspaceSwitcher -> AuthoringToolScene.
+    /// WorkspaceSwitcher -> AuthoringToolScene.
     /// </summary>
     public static class AppFlowController
     {
-        public const string LandingSceneName = "LandingScene";
         public const string WorkspaceSwitcherSceneName = "WorkspaceSwitcherScene";
         public const string TargetInstantiationSceneName = "TargetInstantiationScene";
         public const string AuthoringSceneName = "AuthoringToolScene";
@@ -47,11 +46,6 @@ namespace ARGallery.AppFlow
 
             context = currentWorkspace.Clone();
             return true;
-        }
-
-        public static void GoToLanding()
-        {
-            SceneManager.LoadScene(LandingSceneName);
         }
 
         public static void GoToWorkspaceSwitcher()

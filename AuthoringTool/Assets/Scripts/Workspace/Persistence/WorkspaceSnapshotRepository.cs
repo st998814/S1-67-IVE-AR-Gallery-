@@ -63,7 +63,8 @@ namespace ARGallery.Workspace.Persistence
                 string json = JsonUtility.ToJson(snapshot, prettyPrint: true);
                 File.WriteAllText(path, json);
 
-                UpsertIndexEntry(id, snapshot.workspaceName ?? id, snapshot.updatedAtUtc, thumbnailKey: "");
+                string preservedThumbnailKey = LoadThumbnailKeyForWorkspace(id);
+                UpsertIndexEntry(id, snapshot.workspaceName ?? id, snapshot.updatedAtUtc, preservedThumbnailKey);
                 if (logSuccess)
                     Debug.Log($"[WorkspacePersistence] TrySaveSnapshot OK | path={path} | bytes≈{System.Text.Encoding.UTF8.GetByteCount(json)}");
                 return true;
@@ -156,6 +157,24 @@ namespace ARGallery.Workspace.Persistence
             string indexPath = WorkspacePersistencePaths.GetIndexPath();
             string json = JsonUtility.ToJson(file, prettyPrint: true);
             File.WriteAllText(indexPath, json);
+        }
+
+        private string LoadThumbnailKeyForWorkspace(string workspaceId)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return "";
+
+            WorkspaceIndexFile file = LoadOrCreateIndexFile();
+            if (file.entries == null || file.entries.Length == 0)
+                return "";
+
+            foreach (WorkspaceIndexEntry entry in file.entries)
+            {
+                if (entry != null && string.Equals(entry.workspaceId, workspaceId.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return entry.thumbnailKey ?? "";
+            }
+
+            return "";
         }
 
         public bool TrySaveIndex(out string errorMessage)

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using ARGallery.Workspace;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
@@ -30,6 +31,7 @@ namespace ARGallery.AppFlow
         private readonly List<float> cardScaleTarget = new List<float>();
         private readonly List<float> cardOpacityCurrent = new List<float>();
         private readonly List<float> cardOpacityTarget = new List<float>();
+        private readonly Dictionary<string, Texture2D> thumbnailTextureCache = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         private int selectedIndex;
         private float stripOffsetCurrent;
         private float stripOffsetTarget;
@@ -86,6 +88,16 @@ namespace ARGallery.AppFlow
             if (newButton != null) newButton.clicked -= OnNewButtonClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
             if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
+        }
+
+        private void OnDestroy()
+        {
+            foreach (Texture2D texture in thumbnailTextureCache.Values)
+            {
+                if (texture != null)
+                    Destroy(texture);
+            }
+            thumbnailTextureCache.Clear();
         }
 
         private void Update()
@@ -322,6 +334,70 @@ namespace ARGallery.AppFlow
             return ts.localTargetId != null ? ts.localTargetId.Trim() : "";
         }
 
+        private string ResolveWorkspaceThumbnailPath(WorkspaceSessionContext session)
+        {
+            if (session == null || string.IsNullOrWhiteSpace(session.workspaceId))
+                return null;
+
+            string filePath = ResolveWorkspaceRelativePath(session.workspaceId, session.thumbnailKey);
+            if (!string.IsNullOrWhiteSpace(filePath))
+                return filePath;
+
+            filePath = ResolveWorkspaceRelativePath(session.workspaceId, session.targetImageRelativePath);
+            if (!string.IsNullOrWhiteSpace(filePath))
+                return filePath;
+
+            return null;
+        }
+
+        private string ResolveWorkspaceRelativePath(string workspaceId, string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath) || string.IsNullOrWhiteSpace(workspaceId))
+                return null;
+
+            string trimmed = relativePath.Trim();
+            if (File.Exists(trimmed))
+                return trimmed;
+
+            string resolved = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(workspaceId.Trim(), trimmed);
+            if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved))
+                return resolved;
+
+            return null;
+        }
+
+        private Texture2D GetWorkspaceThumbnailTexture(WorkspaceSessionContext session)
+        {
+            string path = ResolveWorkspaceThumbnailPath(session);
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            if (thumbnailTextureCache.TryGetValue(path, out Texture2D cached) && cached != null)
+                return cached;
+
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(path);
+                if (bytes == null || bytes.Length == 0)
+                    return null;
+
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!texture.LoadImage(bytes, markNonReadable: false))
+                {
+                    Destroy(texture);
+                    return null;
+                }
+
+                thumbnailTextureCache[path] = texture;
+                return texture;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"WorkspaceSwitcherController: failed to load thumbnail '{path}' for '{session.workspaceId}': {ex.Message}");
+                return null;
+            }
+        }
+
         private void RebuildCards()
         {
             if (workspaceCardsRow == null)
@@ -339,12 +415,32 @@ namespace ARGallery.AppFlow
                 WorkspaceSessionContext ws = mockWorkspaces[i];
                 var card = new VisualElement { name = "WorkspaceCard" + i };
                 card.AddToClassList("card");
+                card.AddToClassList("workspace-card");
                 card.AddToClassList("card--inactive");
 
-                var label = new Label(ws.workspaceName);
-                label.style.color = Color.white;
-                label.style.fontSize = 18;
-                label.style.unityFontStyleAndWeight = FontStyle.Bold;
+                Texture2D thumbnail = GetWorkspaceThumbnailTexture(ws);
+                var thumbnailLayer = new VisualElement { name = "WorkspaceCardThumbnail" };
+                thumbnailLayer.AddToClassList("workspace-card__thumbnail");
+                if (thumbnail != null)
+                {
+                    thumbnailLayer.style.backgroundImage = new StyleBackground(thumbnail);
+                }
+                else
+                {
+                    thumbnailLayer.AddToClassList("workspace-card__thumbnail--placeholder");
+                    var placeholderLabel = new Label("No preview");
+                    placeholderLabel.AddToClassList("workspace-card__thumbnail-placeholder-label");
+                    thumbnailLayer.Add(placeholderLabel);
+                }
+
+                var overlay = new VisualElement { name = "WorkspaceCardScrim" };
+                overlay.AddToClassList("workspace-card__scrim");
+
+                var label = new Label(ws.workspaceName) { name = "WorkspaceCardLabel" };
+                label.AddToClassList("workspace-card__label");
+
+                card.Add(thumbnailLayer);
+                card.Add(overlay);
                 card.Add(label);
 
                 int idx = i;

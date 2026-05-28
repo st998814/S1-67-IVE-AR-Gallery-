@@ -78,6 +78,63 @@
     background-color: rgb(153, 27, 27);
 }
 
+.workspace-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.workspace-card__thumbnail {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.workspace-card__thumbnail--placeholder {
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    background-color: rgba(20, 26, 33, 1);
+}
+
+.workspace-card__thumbnail-placeholder-label {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.workspace-card__scrim {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, 0.24);
+}
+
+.workspace-card__label {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0.64);
+    color: rgb(255, 255, 255);
+    font-size: 14px;
+    font-weight: bold;
+    unity-font-style: bold;
+    unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .workspace-add-card {
     width: 240px;
     height: 150px;
