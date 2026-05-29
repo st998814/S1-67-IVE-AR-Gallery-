@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="../USS/AppTheme.uss" />
+    <ui:Style src="../USS/LandingUI.uss" />
+
+    <ui:VisualElement name="LandingRoot" class="app-root layout-full layout-centered-column landing-root">
+        <ui:VisualElement class="landing-stack">
+            <ui:Label name="TitleLabel" text="AR Authoring Tool Beta" class="text-title landing-title" />
+            <ui:Label text="Build immersive AR content workflows." class="text-muted landing-subtitle" />
+            <ui:Button name="StartButton" text="Start" class="btn btn-primary landing-start-btn" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
