@@ -43,6 +43,7 @@ namespace ARGallery.Workspace.Persistence
         private bool _pendingSyncRequested;
 
         private string _lastUploadUrl;
+        private string _lastFailReason;
         private bool _lastStepOk;
 
         private float EffectiveDebounceSeconds => Mathf.Max(5f, remoteSyncDebounceSeconds);
@@ -211,7 +212,8 @@ namespace ARGallery.Workspace.Persistence
                 yield return StartCoroutine(SyncTargetToBackend(api, workspaceId, workspaceName, target));
                 if (!_lastStepOk)
                 {
-                    PersistRemoteStateFailed($"Target sync failed for '{target.LocalTargetId}'.");
+                    string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
+                    PersistRemoteStateFailed($"Target sync failed for '{target.LocalTargetId}'.{detail}");
                     yield break;
                 }
             }
@@ -223,7 +225,8 @@ namespace ARGallery.Workspace.Persistence
                 yield return StartCoroutine(SyncContentToBackend(api, workspaceId, content));
                 if (!_lastStepOk)
                 {
-                    PersistRemoteStateFailed($"Content sync failed for '{content.LocalContentId}'.");
+                    string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
+                    PersistRemoteStateFailed($"Content sync failed for '{content.LocalContentId}'.{detail}");
                     yield break;
                 }
             }
@@ -278,6 +281,7 @@ namespace ARGallery.Workspace.Persistence
             }
 
             bool apiOk = false;
+            _lastFailReason = null;
             IApiRequestHandle handle = _targetWorkflow.SyncCreateTarget(
                 api,
                 target.gameObject,
@@ -287,7 +291,12 @@ namespace ARGallery.Workspace.Persistence
                 imageUrl,
                 workspaceId,
                 workspaceName,
-                result => apiOk = result != null && result.success,
+                result =>
+                {
+                    apiOk = result != null && result.success;
+                    if (!apiOk && result != null)
+                        _lastFailReason = BuildHttpFailDetail(result.statusCode, result.errorCode, result.message);
+                },
                 apiTimeoutSeconds);
 
             yield return WaitForRequest(handle);
@@ -408,6 +417,7 @@ namespace ARGallery.Workspace.Persistence
             }
 
             bool apiOk = false;
+            _lastFailReason = null;
             IApiRequestHandle handle = _contentWorkflow.SyncCreateContent(
                 api,
                 contentType,
@@ -416,7 +426,12 @@ namespace ARGallery.Workspace.Persistence
                 scale,
                 mediaUrl ?? "",
                 targetId,
-                result => apiOk = result != null && result.success,
+                result =>
+                {
+                    apiOk = result != null && result.success;
+                    if (!apiOk && result != null)
+                        _lastFailReason = BuildHttpFailDetail(result.statusCode, result.errorCode, result.message);
+                },
                 apiTimeoutSeconds,
                 c.ServerContentId,
                 c.Title,
@@ -471,6 +486,8 @@ namespace ARGallery.Workspace.Persistence
                 {
                     if (result != null && result.success && result.payload != null && !string.IsNullOrWhiteSpace(result.payload.url))
                         _lastUploadUrl = result.payload.url.Trim();
+                    else if (result != null && !result.success)
+                        _lastFailReason = BuildHttpFailDetail(result.statusCode, result.errorCode, result.message);
                 },
                 apiTimeoutSeconds);
 
@@ -537,6 +554,22 @@ namespace ARGallery.Workspace.Persistence
 
             Debug.LogWarning($"{LogPrefix}apiClientBehaviour must implement IApiClient.");
             return null;
+        }
+
+        private static string BuildHttpFailDetail(int statusCode, string errorCode, string message)
+        {
+            var sb = new System.Text.StringBuilder();
+            if (statusCode > 0) sb.Append($"HTTP {statusCode}");
+            if (!string.IsNullOrWhiteSpace(errorCode))
+            {
+                if (sb.Length > 0) sb.Append(" · ");
+                sb.Append(errorCode);
+            }
+            string header = sb.ToString();
+            string body = string.IsNullOrWhiteSpace(message) ? "" : message.Trim();
+            if (string.IsNullOrWhiteSpace(header)) return body;
+            if (string.IsNullOrWhiteSpace(body)) return header;
+            return $"{header}\n{body}";
         }
 
         private static string StableTargetDiskFileName(string targetId, string originalNameForExt)

@@ -41,6 +41,7 @@
                     <ui:FloatField name="PosXInput" label="X Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
                     <ui:FloatField name="PosYInput" label="Y Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
                     <ui:FloatField name="PosZInput" label="Z Position" value="0" class="input-field" style="margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+                    <ui:Label name="PhysicalSizeLabel" text="" class="text-secondary" picking-mode="Ignore" style="font-size: 10px; margin-top: 6px; white-space: normal;"/>
                     <ui:VisualElement name="TargetReferenceContainer" style="display: none; flex-direction: column; margin-top: 10px;">
                         <ui:Label text="Target Reference (optional):" class="text-secondary" style="-unity-font-style: bold; margin-top: 0px; margin-bottom: 6px; font-size: 11px;"/>
                         <ui:Button name="BrowseTargetReferenceButton" text="Upload Reference" class="button" style="height: 26px; width: 100%; -unity-font-style: bold; font-size: 11px; margin-bottom: 6px;"/>
