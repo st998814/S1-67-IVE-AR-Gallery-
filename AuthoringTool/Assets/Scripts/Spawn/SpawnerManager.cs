@@ -13,6 +13,7 @@ namespace ARGallery.Spawning
     {
         private const float DefaultForwardOffsetFromWall = 0.008f;
         private const float MinimumSurfaceClearance = 0.06f;
+        private const float DefaultModelLocalScale = 0.05f;
 
         private readonly MonoBehaviour runner;
         private readonly GameObject picturePrefab;
@@ -177,7 +178,7 @@ namespace ARGallery.Spawning
             }
 
             spawnedObject.transform.SetParent(contentRoot, false);
-            ApplyDefaultPlacement(spawnedObject, contentRoot, alignToTargetFrame);
+            ApplyDefaultPlacement(spawnedObject, contentRoot, alignToTargetFrame, request?.contentType ?? SpawnContentType.Image);
 
             if (request != null && request.hasTransformOverride)
             {
@@ -189,14 +190,14 @@ namespace ARGallery.Spawning
             return true;
         }
 
-        private void ApplyDefaultPlacement(GameObject instance, Transform contentRoot, bool alignToTargetFrame)
+        private void ApplyDefaultPlacement(GameObject instance, Transform contentRoot, bool alignToTargetFrame, SpawnContentType contentType)
         {
             Transform targetVisual = contentRoot.parent?.Find("TargetVisual");
             if (alignToTargetFrame && targetVisual != null)
             {
                 instance.transform.localPosition = targetVisual.localPosition;
                 instance.transform.localRotation = targetVisual.localRotation;
-                instance.transform.localScale = targetVisual.localScale;
+                instance.transform.localScale = ResolveDefaultLocalScale(contentType, targetVisual.localScale);
 
                 // Align spawn direction with FrontSideConstraint axis (+/- local Z).
                 float frontSign = ResolveFrontDirectionSign(contentRoot);
@@ -224,8 +225,15 @@ namespace ARGallery.Spawning
             {
                 instance.transform.localPosition = Vector3.zero;
                 instance.transform.localRotation = Quaternion.identity;
-                instance.transform.localScale = Vector3.one;
+                instance.transform.localScale = ResolveDefaultLocalScale(contentType, Vector3.one);
             }
+        }
+
+        private static Vector3 ResolveDefaultLocalScale(SpawnContentType contentType, Vector3 surfaceScale)
+        {
+            return contentType == SpawnContentType.Model
+                ? Vector3.one * DefaultModelLocalScale
+                : surfaceScale;
         }
 
         private float ResolveFrontDirectionSign(Transform contentRoot)
@@ -302,8 +310,13 @@ namespace ARGallery.Spawning
 
         public SpawnTargetResult CreateTarget(SpawnTargetRequest request)
         {
-            var result = targetWorkflowService.CreateAndRegisterLocal(runner, request.targetName, request.targetId, request.displayLabel);
+            var result = targetWorkflowService.CreateAndRegisterLocal(runner, request.targetName, request.targetId, request.displayLabel, request.physicalWidthMeters);
             return new SpawnTargetResult { success = result.success, targetId = result.targetId, targetObject = result.targetObject, message = result.message };
+        }
+
+        public bool ReleaseSpawnedContent(GameObject instance)
+        {
+            return contentCoordinator.ReleaseSpawnedContent(instance);
         }
 
         public IApiRequestHandle BeginSyncCreateTarget(IApiClient apiClient, SpawnTargetRequest request, GameObject targetObject, Action<ApiResult<CreateTargetResponseDto>> onCompleted = null, float timeoutSeconds = 20f)

@@ -71,12 +71,15 @@ public class RuntimeContentFactory
         GameObject instance = RuntimeContentPool.Shared.Acquire(shellType, prefab);
         RuntimeContentPoolResetter.ResetForAcquire(instance, shellType);
 
+        DraggableObject draggable = instance.GetComponent<DraggableObject>();
+        DraggableObject.ConfigureForContentShell(draggable);
+
         return new ContentCreateResult
         {
             success = true,
             message = "Content instance created.",
             instance = instance,
-            draggable = instance.GetComponent<DraggableObject>()
+            draggable = draggable
         };
     }
 }
@@ -210,6 +213,8 @@ public static class RuntimeContentPoolResetter
         instance.transform.localPosition = Vector3.zero;
         instance.transform.localRotation = Quaternion.identity;
         instance.transform.localScale = Vector3.one;
+
+        DraggableObject.ConfigureForContentShell(instance.GetComponent<DraggableObject>());
 
         if (shellType == RuntimeContentShellType.ModelShell)
             ClearModelChildren(instance); // defensive reset for model shell

@@ -139,11 +139,13 @@ public class ContentTransformController : MonoBehaviour
         {
             authoringUI.SyncTransformToInspector(sel);
             _wasDraggingUniversalGizmo = true;
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(sel);
         }
         else if (RTGizmosEngine.Get.JustReleasedDrag && _wasDraggingUniversalGizmo)
         {
             authoringUI.SyncTransformToInspector(sel);
             _wasDraggingUniversalGizmo = false;
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(sel);
             WorkspaceAutoSaveService autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
             if (autoSave != null)
                 autoSave.NotifyWorkspaceChanged();
@@ -172,9 +174,21 @@ public class ContentTransformController : MonoBehaviour
         if (IsRuntimeGizmoDragging())
             return;
 
+        Vector3 lp = selected.localPosition;
+        Vector3 le = selected.localEulerAngles;
+        Vector3 ls = selected.localScale;
         HandlePositionInput(selected);
         HandleRotationInput(selected);
         HandleScaleInput(selected);
+        if (selected.localPosition != lp || selected.localEulerAngles != le || selected.localScale != ls)
+        {
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(selected);
+            if (authoringUI != null)
+                authoringUI.SyncTransformToInspector(selected);
+            WorkspaceAutoSaveService autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
+            if (autoSave != null)
+                autoSave.NotifyWorkspaceChanged();
+        }
     }
 
     private void TryClickSelectContent()

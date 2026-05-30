@@ -27,7 +27,7 @@ __pycache__/
 *.mdb
 *.opendb
 *.VC.db
-
+*.env
 *.venv
 
 .utmp/

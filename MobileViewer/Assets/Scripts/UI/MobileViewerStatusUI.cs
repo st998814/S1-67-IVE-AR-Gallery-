@@ -61,6 +61,8 @@ namespace MobileViewer.UI
         public void SetLoadingContent() => EnqueueToast("Loading content...", AlertTone.Warning);
         public void SetContentLoaded() => EnqueueToast("Content loaded", AlertTone.Success);
 
+        public void ShowContentRenderFailed(string message) => EnqueueToast(message, AlertTone.Danger);
+
         private void EnqueueToast(string message, AlertTone tone)
         {
             if (string.IsNullOrWhiteSpace(message))

@@ -28,7 +28,8 @@ public class TargetWorkflowService
         MonoBehaviour context,
         string targetName,
         string targetId,
-        string displayLabel)
+        string displayLabel,
+        float physicalWidthMeters = 0.2f)
     {
         runtimeImageTargetFactory = ResolveRuntimeImageTargetFactory(context);
         targetSelectionManager = ResolveTargetSelectionManager();
@@ -55,7 +56,7 @@ public class TargetWorkflowService
             };
         }
 
-        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(targetName, targetId, displayLabel);
+        GameObject newTarget = runtimeImageTargetFactory.CreateTarget(targetName, targetId, displayLabel, physicalWidthMeters);
         if (newTarget == null)
         {
             return new LocalCreateResult
@@ -69,6 +70,9 @@ public class TargetWorkflowService
         targetSelectionManager.AddTarget(newTarget, setActive: true);
 
         WorkspaceAuthoredAttach.EnsureTarget(newTarget, targetId, targetName);
+        var authoredTarget = newTarget.GetComponent<AuthoredTargetInstance>();
+        if (authoredTarget != null)
+            authoredTarget.PhysicalWidthM = Mathf.Max(0.001f, physicalWidthMeters);
 
         return new LocalCreateResult
         {
@@ -158,7 +162,8 @@ public class TargetWorkflowService
             targetImageUrl = targetImageUrl ?? "",
             workspaceId = wid,
             workspaceName = wname,
-            physicalWidthM = 1.0f,
+            physicalWidthM = ResolvePhysicalWidthForSync(targetObject),
+            physicalWidth = ResolvePhysicalWidthForSync(targetObject),
             localPosition = ReadLocalPosition(targetObject),
             localEuler = ReadLocalEuler(targetObject),
             localScale = ReadLocalScale(targetObject),
@@ -214,6 +219,8 @@ public class TargetWorkflowService
         Transform label = visual.Find("TargetLabel");
         if (label != null)
             label.gameObject.SetActive(false);
+
+        TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetObject, texture);
         return true;
     }
 
@@ -262,6 +269,8 @@ public class TargetWorkflowService
             Transform label = visual.Find("TargetLabel");
             if (label != null)
                 label.gameObject.SetActive(false);
+
+            TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetObject, texture);
         }
     }
 
@@ -291,5 +300,17 @@ public class TargetWorkflowService
         if (targetObject == null)
             return null;
         return targetObject.transform.Find("TargetVisual");
+    }
+
+    private static float ResolvePhysicalWidthForSync(GameObject targetObject)
+    {
+        if (targetObject == null)
+            return 0.2f;
+
+        var auth = targetObject.GetComponent<AuthoredTargetInstance>();
+        if (auth != null && auth.PhysicalWidthM > 1e-5f)
+            return auth.PhysicalWidthM;
+
+        return 0.2f;
     }
 }

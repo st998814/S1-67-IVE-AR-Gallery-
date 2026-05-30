@@ -1,3 +1,5 @@
+using ARGallery.AppFlow;
+using ARGallery.Workspace;
 using UnityEngine;
 
 /// <summary>
@@ -19,6 +21,8 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
     [SerializeField] private TargetMovementController targetMovementController;
     [SerializeField] private TargetLocalTransformService targetLocalTransformService;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private PlacementBoundsService placementBoundsService;
+    [SerializeField] private ContentTransformManipulator contentTransformManipulator;
 
     private void Awake()
     {
@@ -62,6 +66,10 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
             targetLocalTransformService = FindFirstObjectByType<TargetLocalTransformService>();
         if (frontSideConstraint == null)
             frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (placementBoundsService == null)
+            placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
     }
 
     private void ApplyWiring()
@@ -69,10 +77,39 @@ public sealed class TransformInteractionCompositionRoot : MonoBehaviour
         if (selectionManager != null)
             selectionManager.Configure(mainCamera, contentRoot);
 
+        if (placementBoundsService != null)
+        {
+            placementBoundsService.Configure(frontSideConstraint);
+            placementBoundsService.SetTargetContext(targetRoot, contentRoot);
+            placementBoundsService.SetPosture(ResolveWorkspacePostureForSandbox());
+        }
+
+        if (contentTransformManipulator == null && frontSideConstraint != null)
+        {
+            contentTransformManipulator = frontSideConstraint.gameObject.AddComponent<ContentTransformManipulator>();
+        }
+
+        if (contentTransformManipulator != null)
+            contentTransformManipulator.Configure(targetLocalTransformService, placementBoundsService, frontSideConstraint);
+
         if (gizmoController != null)
-            gizmoController.ConfigureDependencies(selectionManager, targetLocalTransformService, frontSideConstraint);
+        {
+            if (contentTransformManipulator != null)
+                gizmoController.ConfigureDependencies(selectionManager, contentTransformManipulator);
+            else
+                gizmoController.ConfigureDependencies(selectionManager, targetLocalTransformService, frontSideConstraint);
+        }
 
         if (targetMovementController != null)
             targetMovementController.ConfigureDependencies(targetRoot, contentRoot, mainCamera, gizmoController, targetPlaneAnchor);
+    }
+
+    private static WorkspacePosture ResolveWorkspacePostureForSandbox()
+    {
+        AuthoringWorkspaceEntry entry = FindFirstObjectByType<AuthoringWorkspaceEntry>();
+        if (entry != null)
+            return entry.AppliedPosture;
+
+        return WorkspacePosture.Wall;
     }
 }

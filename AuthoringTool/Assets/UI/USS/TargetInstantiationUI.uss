@@ -34,8 +34,9 @@
 }
 
 .target-setup-card {
-    width: 760px;
-    max-width: 92%;
+    width: 100%;
+    max-width: 860px;
+    min-width: 320px;
     background-color: rgba(18, 24, 48, 0.88);
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
@@ -56,17 +57,17 @@
 }
 
 .target-setup-title {
-    font-size: 22px;
+    font-size: 28px;
     -unity-font-style: bold;
     color: rgb(242, 247, 255);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     -unity-text-align: middle-left;
 }
 
 .target-setup-subtitle {
-    font-size: 12px;
-    color: rgba(196, 212, 255, 0.85);
-    margin-bottom: 14px;
+    font-size: 14px;
+    color: rgba(196, 212, 255, 0.95);
+    margin-bottom: 16px;
 }
 
 .target-setup-section {
@@ -93,14 +94,14 @@
 
 .target-setup-section-title {
     color: rgb(155, 196, 255);
-    font-size: 11px;
+    font-size: 13px;
     -unity-font-style: bold;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
 .target-setup-section TextField,
 .target-setup-section FloatField {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     color: rgb(236, 243, 255);
     -unity-property-field-label-width: 170px;
 }
@@ -108,16 +109,17 @@
 .target-setup-section TextField > Label,
 .target-setup-section FloatField > Label {
     color: rgba(197, 212, 246, 0.94);
-    font-size: 11px;
+    font-size: 14px;
 }
 
 .target-setup-section TextField > VisualElement,
-.target-setup-section FloatField > VisualElement {
-    background-color: rgba(10, 15, 32, 0.92);
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+.target-setup-section FloatField > VisualElement,
+.target-setup-section DropdownField > VisualElement {
+    background-color: rgb(255, 255, 255);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
     border-top-width: 1px;
     border-right-width: 1px;
     border-bottom-width: 1px;
@@ -126,6 +128,17 @@
     border-right-color: rgba(133, 160, 230, 0.36);
     border-bottom-color: rgba(133, 160, 230, 0.36);
     border-left-color: rgba(133, 160, 230, 0.36);
+    min-height: 40px;
+}
+
+.target-setup-section TextField .unity-text-field__input,
+.target-setup-section TextField .unity-base-text-field__input,
+.target-setup-section FloatField .unity-text-field__input,
+.target-setup-section FloatField .unity-base-text-field__input,
+.target-setup-section DropdownField .unity-text-field__input,
+.target-setup-section DropdownField .unity-base-text-field__input {
+    color: rgb(0, 0, 0);
+    font-size: 16px;
 }
 
 .target-setup-status {

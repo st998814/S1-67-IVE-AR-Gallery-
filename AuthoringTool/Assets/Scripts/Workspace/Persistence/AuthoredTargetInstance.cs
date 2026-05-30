@@ -18,6 +18,9 @@ namespace ARGallery.Workspace.Persistence
         public string TargetImageLocalPath = "";
         public string OriginalFileName = "";
 
+        /// <summary>Printed target width in meters (Vuforia / runtime convention). Drives TargetVisual quad scale.</summary>
+        public float PhysicalWidthM = 0.2f;
+
         /// <summary>Layer 3: persists with <see cref="TargetSnapshot.remoteDirty"/>.</summary>
         public bool RemoteDirty;
         /// <summary>ISO-8601 UTC; aligns with <see cref="TargetSnapshot.lastRemoteSyncedAtUtc"/>.</summary>

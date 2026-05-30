@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using ARGallery.AppFlow;
+using ARGallery.Workspace;
+using ARGallery.Workspace.Persistence;
+using ARGallery.Workspace.Presets;
 using RTG;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
@@ -7,7 +11,8 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Wires sandbox transform stack (<see cref="ObjectSelectionManager"/>, <see cref="TransformGizmoController"/>)
-/// into the authoring scene: target switching, UI sync, and legacy keyboard / selection affordances.
+/// into the authoring scene: target switching, UI sync, and selection affordances.
+/// Content transforms are changed only via <see cref="ContentTransformManipulator"/> (gizmo, inspector sliders).
 /// </summary>
 [DefaultExecutionOrder(-40)]
 public sealed class AuthoringTransformCoordinator : MonoBehaviour
@@ -17,33 +22,16 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     [SerializeField] private ObjectSelectionManager objectSelectionManager;
     [SerializeField] private TransformGizmoController gizmoController;
     [SerializeField] private FrontSideConstraint frontSideConstraint;
+    [SerializeField] private PlacementBoundsService placementBoundsService;
+    [SerializeField] private ContentTransformManipulator contentTransformManipulator;
     [SerializeField] private AuthoringUIController authoringUI;
     [SerializeField] private Camera mainCamera;
-
-    [Header("Keyboard nudges (when gizmo is not active)")]
-    [SerializeField] private bool enableKeyboardNudges = true;
-    [SerializeField] private float moveStep = 0.1f;
-    [SerializeField] private float rotateStep = 10f;
-    [SerializeField] private float scaleStep = 0.1f;
-
-    [Header("Selection Highlight")]
-    [SerializeField] private Color selectionBoundsColor = new Color(0.23f, 0.51f, 0.96f, 0.9f);
-    [SerializeField] private float selectionBoundsPadding = 0.03f;
-    [SerializeField] private float selectionPulseSpeed = 2.2f;
-    [SerializeField] private float selectionPulseAlphaRange = 0.25f;
-    [SerializeField] private float selectionEdgeWidth = 0.0075f;
 
     private readonly List<Transform> _contentObjects = new List<Transform>();
     private readonly List<int> _lastContentInstanceIds = new List<int>();
     private int _selectedListIndex = -1;
     private int _authoringSyncedTargetIndex = int.MinValue;
     private bool _suppressAuthoringSyncFromSelection;
-    private Transform _highlightTarget;
-    private GameObject _selectionBoundsVisual;
-    private readonly List<LineRenderer> _selectionEdgeRenderers = new List<LineRenderer>(12);
-    private Material _selectionBoundsMaterial;
-    private Color _baseSelectionBoundsColor;
-    private float _pulseSeed;
     public event System.Action ContentListChanged;
     public event System.Action<Transform> ContentSelectionChanged;
 
@@ -69,17 +57,31 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             gizmoController = FindFirstObjectByType<TransformGizmoController>();
         if (frontSideConstraint == null)
             frontSideConstraint = FindFirstObjectByType<FrontSideConstraint>();
+        if (placementBoundsService == null)
+            placementBoundsService = FindFirstObjectByType<PlacementBoundsService>();
+        if (placementBoundsService == null && frontSideConstraint != null)
+        {
+            placementBoundsService = frontSideConstraint.gameObject.AddComponent<PlacementBoundsService>();
+            placementBoundsService.Configure(frontSideConstraint);
+        }
+        if (contentTransformManipulator == null)
+            contentTransformManipulator = FindFirstObjectByType<ContentTransformManipulator>();
+        if (contentTransformManipulator == null && frontSideConstraint != null)
+        {
+            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
+            contentTransformManipulator = frontSideConstraint.gameObject.AddComponent<ContentTransformManipulator>();
+            contentTransformManipulator.Configure(localSvc, placementBoundsService, frontSideConstraint);
+        }
         if (authoringUI == null)
             authoringUI = FindFirstObjectByType<AuthoringUIController>();
         if (mainCamera == null)
             mainCamera = Camera.main;
 
-        if (gizmoController != null && objectSelectionManager != null && frontSideConstraint != null)
-        {
-            var localSvc = FindFirstObjectByType<TargetLocalTransformService>();
-            gizmoController.ConfigureDependencies(objectSelectionManager, localSvc, frontSideConstraint);
-        }
+        if (gizmoController != null && objectSelectionManager != null && contentTransformManipulator != null)
+            gizmoController.ConfigureDependencies(objectSelectionManager, contentTransformManipulator);
     }
+
+    public ContentTransformManipulator ContentManipulator => contentTransformManipulator;
 
     private void OnEnable()
     {
@@ -99,7 +101,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             gizmoController.ContentTransformChanged -= OnGizmoContentTransformChanged;
         if (objectSelectionManager != null)
             objectSelectionManager.SelectionChanged -= OnObjectSelectionChanged;
-        HideSelectionBoundsVisual();
     }
 
     private void Start()
@@ -125,8 +126,21 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
             objectSelectionManager.Configure(mainCamera, contentRoot);
 
         GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        Transform targetRootTransform = activeTarget != null ? activeTarget.transform : null;
         if (frontSideConstraint != null)
-            frontSideConstraint.SetTargetContext(activeTarget != null ? activeTarget.transform : null, contentRoot);
+            frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
+        if (placementBoundsService != null)
+        {
+            placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
+            placementBoundsService.SetPosture(ResolveActiveWorkspacePosture());
+        }
+
+        SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+        if (spatialMapping != null)
+            spatialMapping.RefreshPlacementVolume();
+
+        if (targetRootTransform != null)
+            WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
 
         RefreshContentList();
 
@@ -197,6 +211,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         RefreshContentList();
         _selectedListIndex = _contentObjects.IndexOf(selected);
         UpdateSelectionVisual();
+        ContentSelectionChanged?.Invoke(selected);
 
         if (_suppressAuthoringSyncFromSelection)
         {
@@ -206,42 +221,27 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
         if (authoringUI != null)
             authoringUI.OnContentSelectedInScene(selected);
-
-        ContentSelectionChanged?.Invoke(selected);
     }
 
     private void OnGizmoContentTransformChanged(Transform contentTransform)
     {
         if (contentTransform != null && authoringUI != null)
+        {
             authoringUI.SyncTransformToInspector(contentTransform);
+            WorkspaceAuthoredAttach.MarkContentRemoteDirty(contentTransform);
+            NotifyWorkspaceAutosave();
+        }
     }
 
     private void Update()
     {
         RefreshContentList();
-        SyncHighlightTargetByInspectorMode();
-        UpdateSelectionBoundsVisual();
 
         if (DraggableObject.IsDraggingObjectInteractionActive)
             return;
 
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
             SelectNextContent();
-
-        Transform selected = objectSelectionManager != null ? objectSelectionManager.Selected : null;
-
-        if (!enableKeyboardNudges || selected == null)
-            return;
-
-        if (gizmoController != null && gizmoController.IsManipulating)
-            return;
-
-        if (RTGizmosEngine.Get != null && RTGizmosEngine.Get.DraggedGizmo != null)
-            return;
-
-        HandlePositionInput(selected);
-        HandleRotationInput(selected);
-        HandleScaleInput(selected);
     }
 
     private void SelectNextContent()
@@ -278,7 +278,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
 
         foreach (Transform child in contentRoot)
+        {
             _contentObjects.Add(child);
+            DraggableObject.ConfigureForContentShell(child.GetComponent<DraggableObject>());
+        }
 
         Transform sel = objectSelectionManager != null ? objectSelectionManager.Selected : null;
         if (sel == null)
@@ -341,6 +344,15 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         return activeTarget.transform.Find("ContentRoot");
     }
 
+    private static WorkspacePosture ResolveActiveWorkspacePosture()
+    {
+        AuthoringWorkspaceEntry entry = FindFirstObjectByType<AuthoringWorkspaceEntry>();
+        if (entry != null)
+            return entry.AppliedPosture;
+
+        return WorkspacePosture.Wall;
+    }
+
     private void UpdateSelectionVisual()
     {
         for (int i = 0; i < _contentObjects.Count; i++)
@@ -359,203 +371,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
     }
 
-    private void SyncHighlightTargetByInspectorMode()
-    {
-        Transform desiredHighlight = null;
-
-        bool targetInspectorActive = authoringUI != null && authoringUI.IsTargetInspectorActive();
-        if (targetInspectorActive)
-        {
-            GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
-            if (activeTarget != null)
-            {
-                Transform targetVisual = activeTarget.transform.Find("TargetVisual");
-                desiredHighlight = targetVisual != null ? targetVisual : activeTarget.transform;
-            }
-        }
-        else
-        {
-            desiredHighlight = objectSelectionManager != null ? objectSelectionManager.Selected : null;
-        }
-
-        if (desiredHighlight == _highlightTarget)
-            return;
-
-        _highlightTarget = desiredHighlight;
-        RebuildSelectionBoundsVisual();
-    }
-
-    private void UpdateSelectionBoundsVisual()
-    {
-        if (_highlightTarget == null || _selectionBoundsVisual == null || _selectionEdgeRenderers.Count == 0 || _selectionBoundsMaterial == null)
-            return;
-
-        if (!TryComputeRenderBounds(_highlightTarget, out Bounds bounds))
-        {
-            HideSelectionBoundsVisual();
-            return;
-        }
-
-        UpdateSelectionEdgeGeometry(bounds);
-
-        float pulse = 0.5f + 0.5f * Mathf.Sin((Time.unscaledTime + _pulseSeed) * selectionPulseSpeed);
-        float alpha = Mathf.Clamp01(_baseSelectionBoundsColor.a - selectionPulseAlphaRange * 0.5f + pulse * selectionPulseAlphaRange);
-        Color c = _baseSelectionBoundsColor;
-        c.a = alpha;
-        ApplyColorToSelectionBoundsMaterial(c);
-    }
-
-    private void RebuildSelectionBoundsVisual()
-    {
-        HideSelectionBoundsVisual();
-        if (_highlightTarget == null)
-            return;
-        if (!TryComputeRenderBounds(_highlightTarget, out Bounds bounds))
-            return;
-
-        _selectionBoundsVisual = new GameObject("__SelectionBoundsVisual");
-        _selectionBoundsMaterial = BuildSelectionBoundsMaterial();
-        BuildSelectionEdgeRenderers();
-        UpdateSelectionEdgeGeometry(bounds);
-        _baseSelectionBoundsColor = selectionBoundsColor;
-        _pulseSeed = Random.Range(0f, 10f);
-    }
-
-    private Material BuildSelectionBoundsMaterial()
-    {
-        Shader shader = Shader.Find("Unlit/Color");
-        if (shader == null)
-            shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-            shader = Shader.Find("Standard");
-
-        var mat = new Material(shader);
-        mat.name = "AuthoringSelectionBoundsMaterial (Runtime)";
-        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-        if (mat.HasProperty("_Surface"))
-            mat.SetFloat("_Surface", 1f);
-        if (mat.HasProperty("_ZWrite"))
-            mat.SetFloat("_ZWrite", 0f);
-        if (mat.HasProperty("_Color"))
-            mat.SetColor("_Color", selectionBoundsColor);
-        if (mat.HasProperty("_BaseColor"))
-            mat.SetColor("_BaseColor", selectionBoundsColor);
-        return mat;
-    }
-
-    private void ApplyColorToSelectionBoundsMaterial(Color color)
-    {
-        if (_selectionBoundsMaterial == null)
-            return;
-
-        if (_selectionBoundsMaterial.HasProperty("_Color"))
-            _selectionBoundsMaterial.SetColor("_Color", color);
-        if (_selectionBoundsMaterial.HasProperty("_BaseColor"))
-            _selectionBoundsMaterial.SetColor("_BaseColor", color);
-    }
-
-    private void BuildSelectionEdgeRenderers()
-    {
-        if (_selectionBoundsVisual == null || _selectionBoundsMaterial == null)
-            return;
-
-        const int edgeCount = 12;
-        for (int i = 0; i < edgeCount; i++)
-        {
-            var edge = new GameObject($"Edge_{i:00}");
-            edge.transform.SetParent(_selectionBoundsVisual.transform, false);
-            var line = edge.AddComponent<LineRenderer>();
-            line.sharedMaterial = _selectionBoundsMaterial;
-            line.useWorldSpace = true;
-            line.loop = false;
-            line.positionCount = 2;
-            line.startWidth = selectionEdgeWidth;
-            line.endWidth = selectionEdgeWidth;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            line.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-            _selectionEdgeRenderers.Add(line);
-        }
-    }
-
-    private void UpdateSelectionEdgeGeometry(Bounds bounds)
-    {
-        if (_selectionEdgeRenderers.Count == 0)
-            return;
-
-        Vector3 ext = bounds.extents + Vector3.one * (selectionBoundsPadding * 0.5f);
-        Vector3 c = bounds.center;
-        Vector3[] p = new Vector3[8];
-        p[0] = c + new Vector3(-ext.x, -ext.y, -ext.z);
-        p[1] = c + new Vector3( ext.x, -ext.y, -ext.z);
-        p[2] = c + new Vector3( ext.x,  ext.y, -ext.z);
-        p[3] = c + new Vector3(-ext.x,  ext.y, -ext.z);
-        p[4] = c + new Vector3(-ext.x, -ext.y,  ext.z);
-        p[5] = c + new Vector3( ext.x, -ext.y,  ext.z);
-        p[6] = c + new Vector3( ext.x,  ext.y,  ext.z);
-        p[7] = c + new Vector3(-ext.x,  ext.y,  ext.z);
-
-        SetEdge(0, p[0], p[1]); SetEdge(1, p[1], p[2]); SetEdge(2, p[2], p[3]); SetEdge(3, p[3], p[0]);
-        SetEdge(4, p[4], p[5]); SetEdge(5, p[5], p[6]); SetEdge(6, p[6], p[7]); SetEdge(7, p[7], p[4]);
-        SetEdge(8, p[0], p[4]); SetEdge(9, p[1], p[5]); SetEdge(10, p[2], p[6]); SetEdge(11, p[3], p[7]);
-    }
-
-    private void SetEdge(int edgeIndex, Vector3 from, Vector3 to)
-    {
-        if (edgeIndex < 0 || edgeIndex >= _selectionEdgeRenderers.Count)
-            return;
-
-        LineRenderer lr = _selectionEdgeRenderers[edgeIndex];
-        if (lr == null)
-            return;
-        lr.SetPosition(0, from);
-        lr.SetPosition(1, to);
-    }
-
-    private void HideSelectionBoundsVisual()
-    {
-        if (_selectionBoundsVisual != null)
-            Destroy(_selectionBoundsVisual);
-        if (_selectionBoundsMaterial != null)
-            Destroy(_selectionBoundsMaterial);
-
-        _selectionBoundsVisual = null;
-        _selectionEdgeRenderers.Clear();
-        _selectionBoundsMaterial = null;
-    }
-
-    private static bool TryComputeRenderBounds(Transform target, out Bounds bounds)
-    {
-        bounds = default;
-        if (target == null)
-            return false;
-
-        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(includeInactive: false);
-        bool hasBounds = false;
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer r = renderers[i];
-            if (r == null || !r.enabled)
-                continue;
-
-            if (!hasBounds)
-            {
-                bounds = r.bounds;
-                hasBounds = true;
-            }
-            else
-            {
-                bounds.Encapsulate(r.bounds);
-            }
-        }
-
-        return hasBounds;
-    }
-
     private static bool RendererHasAssignedTexture(Renderer renderer)
     {
         Material m = renderer.sharedMaterial;
@@ -570,53 +385,10 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         return false;
     }
 
-    private void HandlePositionInput(Transform target)
+    private static void NotifyWorkspaceAutosave()
     {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 pos = target.localPosition;
-
-        if (Keyboard.current.aKey.isPressed) pos.x -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.dKey.isPressed) pos.x += moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.wKey.isPressed) pos.y += moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.sKey.isPressed) pos.y -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.qKey.isPressed) pos.z -= moveStep * Time.deltaTime * 10f;
-        if (Keyboard.current.eKey.isPressed) pos.z += moveStep * Time.deltaTime * 10f;
-
-        target.localPosition = pos;
-        authoringUI?.SyncTransformToInspector(target);
-    }
-
-    private void HandleRotationInput(Transform target)
-    {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 rot = target.localEulerAngles;
-
-        if (Keyboard.current.zKey.isPressed) rot.y -= rotateStep * Time.deltaTime * 10f;
-        if (Keyboard.current.xKey.isPressed) rot.y += rotateStep * Time.deltaTime * 10f;
-
-        target.localEulerAngles = rot;
-        authoringUI?.SyncTransformToInspector(target);
-    }
-
-    private void HandleScaleInput(Transform target)
-    {
-        if (Keyboard.current == null)
-            return;
-
-        Vector3 scale = target.localScale;
-
-        if (Keyboard.current.cKey.isPressed) scale += Vector3.one * scaleStep * Time.deltaTime * 10f;
-        if (Keyboard.current.vKey.isPressed) scale -= Vector3.one * scaleStep * Time.deltaTime * 10f;
-
-        scale.x = Mathf.Max(0.1f, scale.x);
-        scale.y = Mathf.Max(0.1f, scale.y);
-        scale.z = Mathf.Max(0.1f, scale.z);
-
-        target.localScale = scale;
-        authoringUI?.SyncTransformToInspector(target);
+        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
     }
 }

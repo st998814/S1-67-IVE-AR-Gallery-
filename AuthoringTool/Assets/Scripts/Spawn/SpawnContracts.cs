@@ -81,6 +81,8 @@ namespace ARGallery.Spawning
         /// <summary>Must match backend workspaces.workspace_id (session workspace GUID).</summary>
         public string workspaceId = "";
         public string workspaceName = "";
+        /// <summary>Physical width of the printed image target in meters (Vuforia convention).</summary>
+        public float physicalWidthMeters = 0.2f;
     }
 
     /// <summary>

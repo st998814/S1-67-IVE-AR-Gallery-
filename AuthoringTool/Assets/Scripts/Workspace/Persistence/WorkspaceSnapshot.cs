@@ -37,6 +37,8 @@ namespace ARGallery.Workspace.Persistence
         /// <summary>Relative path under workspace folder, e.g. assets/targets/&lt;id&gt;.png</summary>
         public string targetImageLocalPath = "";
         public string originalFileName = "";
+        /// <summary>Physical width of the printed target in meters; used to size TargetVisual in authoring.</summary>
+        public float physicalWidthM = 0.2f;
         public Vector3Data position = new Vector3Data(0f, 0f, 0f);
         public Vector3Data rotation = new Vector3Data(0f, 0f, 0f);
         public Vector3Data scale = new Vector3Data(1f, 1f, 1f);

@@ -11,7 +11,8 @@ public class UploadWorkflowService
         File selectedFile,
         IApiClient apiClient,
         Action<ApiResult<UploadFileResponseDto>> onCompleted,
-        float timeoutSeconds = 20f)
+        float timeoutSeconds = 20f,
+        string contentId = null)
     {
         if (apiClient == null)
         {
@@ -21,11 +22,14 @@ public class UploadWorkflowService
             return null;
         }
 
+        string extension = GetExtension(selectedFile);
         var request = new UploadFileRequestDto
         {
-            fileName = GetSanitizedUploadFileName(selectedFile),
-            mimeType = GuessMimeType(selectedFile),
+            fileName = GetSanitizedUploadFileName(selectedFile, contentId),
+            mimeType = GuessMimeTypeFromExtension(extension),
             fileBytes = selectedFile != null ? selectedFile.data : null,
+            uploadCategory = "content",
+            contentId = string.IsNullOrWhiteSpace(contentId) ? "" : contentId.Trim(),
             meta = new ApiSyncMetaDto
             {
                 schemaVersion = "v1",
@@ -36,32 +40,81 @@ public class UploadWorkflowService
 
         return apiClient.UploadFile(request, onCompleted, timeoutSeconds);
     }
-    // helper methods for dealing with file name and extention
-    private static string GetSanitizedUploadFileName(File file)
+
+    public static string GuessMimeTypeFromExtension(string extension)
     {
+        string lower = NormalizeExtension(extension);
+        if (lower == ".png")
+            return "image/png";
+        if (lower == ".jpg" || lower == ".jpeg")
+            return "image/jpeg";
+        if (lower == ".mp4")
+            return "video/mp4";
+        if (lower == ".mov")
+            return "video/quicktime";
+        if (lower == ".webm")
+            return "video/webm";
+        if (lower == ".glb")
+            return "model/gltf-binary";
+        if (lower == ".gltf")
+            return "model/gltf+json";
+        return "application/octet-stream";
+    }
+
+    private static string GetSanitizedUploadFileName(File file, string contentId = null)
+    {
+        string extension = GetExtension(file);
+
+        if (!string.IsNullOrWhiteSpace(contentId))
+        {
+            string stem = contentId.Trim();
+            if (!string.IsNullOrEmpty(extension))
+                return extension.StartsWith(".") ? stem + extension : stem + "." + extension;
+            return stem + ".bin";
+        }
+
         if (file?.fileInfo == null)
-            return "upload.bin";
+            return DefaultUploadFileNameForExtension(extension);
 
         if (!string.IsNullOrEmpty(file.fileInfo.fullName))
             return System.IO.Path.GetFileName(file.fileInfo.fullName.Trim());
 
-        string baseName = string.IsNullOrEmpty(file.fileInfo.name) ? "image" : file.fileInfo.name.TrimEnd('.');
-        string ext = file.fileInfo.extension ?? "";
-        if (string.IsNullOrEmpty(ext))
+        string baseName = string.IsNullOrEmpty(file.fileInfo.name)
+            ? DefaultBaseNameForExtension(extension)
+            : file.fileInfo.name.TrimEnd('.');
+        if (string.IsNullOrEmpty(extension))
             return baseName;
-        return ext.StartsWith(".") ? baseName + ext : baseName + "." + ext;
+        return extension.StartsWith(".") ? baseName + extension : baseName + "." + extension;
     }
 
-    private static string GuessMimeType(File file)
+    private static string GetExtension(File file)
     {
-        string ext = file?.fileInfo != null ? (file.fileInfo.extension ?? "") : "";
-        string lower = ext.ToLowerInvariant();
-        if (lower == ".png" || lower == "png")
-            return "image/png";
-        if (lower == ".jpg" || lower == "jpg" || lower == ".jpeg" || lower == "jpeg")
-            return "image/jpeg";
-        if (lower == ".mp4" || lower == "mp4")
-            return "video/mp4";
-        return "application/octet-stream";
+        return file?.fileInfo != null ? NormalizeExtension(file.fileInfo.extension ?? "") : "";
+    }
+
+    private static string NormalizeExtension(string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return "";
+        string lower = extension.Trim().ToLowerInvariant();
+        return lower.StartsWith(".") ? lower : "." + lower;
+    }
+
+    private static string DefaultBaseNameForExtension(string extension)
+    {
+        string lower = NormalizeExtension(extension);
+        if (lower == ".mp4" || lower == ".mov" || lower == ".webm")
+            return "upload";
+        if (lower == ".glb" || lower == ".gltf")
+            return "model";
+        return "upload";
+    }
+
+    private static string DefaultUploadFileNameForExtension(string extension)
+    {
+        string baseName = DefaultBaseNameForExtension(extension);
+        if (string.IsNullOrEmpty(extension))
+            return baseName + ".bin";
+        return extension.StartsWith(".") ? baseName + extension : baseName + "." + extension;
     }
 }

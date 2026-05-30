@@ -13,6 +13,8 @@ public class DraggableObject : MonoBehaviour
     [Header("Drag Constraints")]
     [SerializeField] private bool lockLocalZ;
     [SerializeField] private bool moveParentOnDrag;
+    [Tooltip("When false, LMB screen drag does not move this object (content uses inspector sliders). Target visuals keep this enabled.")]
+    [SerializeField] private bool allowPositionDrag = true;
 
     [Header("Scale While Dragging")]
     [SerializeField] private bool allowScrollScale;
@@ -32,6 +34,7 @@ public class DraggableObject : MonoBehaviour
     private Camera cam;
     private Transform dragTransform;
     private Transform scaleTransform;
+    private int dragStartedAtFrame = -1;
 
     public static InteractionOwner CurrentInteractionOwner => currentInteractionOwner;
     public static bool IsDraggingObjectInteractionActive => currentInteractionOwner == InteractionOwner.DraggingObject;
@@ -51,7 +54,7 @@ public class DraggableObject : MonoBehaviour
         if (mouse == null || cam == null)
             return;
 
-        if (mouse.leftButton.wasPressedThisFrame && !isDragging)
+        if (mouse.leftButton.wasPressedThisFrame && !isDragging && allowPositionDrag)
         {
             Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f) &&
@@ -60,6 +63,7 @@ public class DraggableObject : MonoBehaviour
                 TryAcquireDragInteraction())
             {
                 isDragging = true;
+                dragStartedAtFrame = Time.frameCount;
                 dragTransform = ResolveDragTransform();
                 scaleTransform = ResolveScaleTransform();
                 lockedLocalZ = dragTransform.localPosition.z;
@@ -87,7 +91,12 @@ public class DraggableObject : MonoBehaviour
                 ApplyScrollScale(mouse);
         }
 
-        if (isDragging && mouse.leftButton.wasReleasedThisFrame)
+        // End drag when the primary button is up. Relying only on wasReleasedThisFrame has been observed to fire
+        // repeatedly in some Editor/input setups, which spammed workspace autosave and prevented snapshot writes.
+        // Require a later frame than drag start so we never cancel a drag on the same frame it began.
+        if (isDragging
+            && !mouse.leftButton.isPressed
+            && Time.frameCount > dragStartedAtFrame)
         {
             EndDrag(notifyUi: true);
         }
@@ -120,7 +129,11 @@ public class DraggableObject : MonoBehaviour
 
     private void EndDrag(bool notifyUi)
     {
+        if (!isDragging)
+            return;
+
         isDragging = false;
+        dragStartedAtFrame = -1;
         ReleaseDragInteraction();
         if (notifyUi && uiController != null)
             uiController.UpdateCoordinatesFromDrag((dragTransform != null ? dragTransform : transform).localPosition);
@@ -135,6 +148,22 @@ public class DraggableObject : MonoBehaviour
     public void ConfigureDragBinding(bool shouldMoveParentOnDrag)
     {
         moveParentOnDrag = shouldMoveParentOnDrag;
+    }
+
+    public void ConfigurePositionDrag(bool allowed)
+    {
+        allowPositionDrag = allowed;
+        if (!allowed && isDragging)
+            EndDrag(notifyUi: false);
+    }
+
+    /// <summary>Content under ContentRoot: no LMB drag (semantic sliders / gizmo only).</summary>
+    public static void ConfigureForContentShell(DraggableObject draggable)
+    {
+        if (draggable == null)
+            return;
+
+        draggable.ConfigurePositionDrag(false);
     }
 
     public void ConfigureScaleBinding(bool shouldScaleParentOnScroll)

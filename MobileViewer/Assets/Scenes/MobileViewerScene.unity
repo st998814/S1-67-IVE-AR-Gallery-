@@ -265,12 +265,12 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 9001001}
-  - component: {fileID: 9001002}
   - component: {fileID: 9001003}
   - component: {fileID: 9001004}
   - component: {fileID: 9001005}
   - component: {fileID: 9001006}
   - component: {fileID: 9001007}
+  - component: {fileID: 9001008}
   m_Layer: 0
   m_Name: MobileViewerRuntime
   m_TagString: Untagged
@@ -293,19 +293,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &9001002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9001000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f5af3ee2b3d24e5fbf95d9ea51ec9db7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  simulatedDelaySeconds: 0.35
 --- !u!114 &9001003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -318,6 +305,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a52767f34a948a6ba719e2e796ca7fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  showContentPanel: 0
   panelRoot: {fileID: 9102000}
   titleTmpText: {fileID: 0}
   titleText: {fileID: 9102022}
@@ -326,6 +314,34 @@ MonoBehaviour:
   displayLabelTmpText: {fileID: 0}
   displayLabelText: {fileID: 9102012}
   backgroundImage: {fileID: 9102002}
+  showMock3DObject: 1
+  previewCamera: {fileID: 0}
+  previewDistance: 0.6
+  previewVerticalOffset: -0.05
+  previewScale: 0.08
+  showImageContent: 1
+  treatImageLocalScaleAsMeters: 1
+  imagePlaneScale: 0.3
+  imageLocalOffset: {x: 0, y: 0.08, z: 0}
+  imageForwardOffset: 0.01
+  authoredPositionScale: 1
+  authoredPositionScalePerAxis: {x: 1, y: 1, z: 1}
+  keepImageOnTargetPlane: 1
+  useTargetPhysicalWidthScaling: 1
+  clampImageOffsetNearTarget: 1
+  imageOffsetClampPerAxis: {x: 0.25, y: 0.25, z: 0.25}
+  applyPostureRotationCorrection: 1
+  wallRotationCorrectionEuler: {x: 90, y: 0, z: 0}
+  floorRotationCorrectionEuler: {x: 0, y: 0, z: 0}
+  ceilingRotationCorrectionEuler: {x: -90, y: 0, z: 0}
+  showVideoContent: 1
+  videoPrepareTimeoutSeconds: 12
+  showModelContent: 1
+  modelDefaultLocalScale: 0.05
+  treatUnitModelScaleAsDefault: 1
+  statusUI: {fileID: 9001004}
+  failureMediaTint: {r: 0.95, g: 0.45, b: 0.1, a: 1}
+  failureUnsupportedTint: {r: 0.55, g: 0.55, b: 0.55, a: 1}
 --- !u!114 &9001004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -340,7 +356,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   statusTmpText: {fileID: 0}
   statusText: {fileID: 9101002}
+  statusBackground: {fileID: 0}
+  toastRoot: {fileID: 0}
+  toastCanvasGroup: {fileID: 0}
   logToConsole: 1
+  showOnGuiFallback: 1
+  fallbackFontSize: 34
+  toastVisibleSeconds: 3
+  toastAnimationSeconds: 0.25
+  topPadding: 128
+  hiddenYOffset: -80
+  primaryColor: {r: 0.05, g: 0.33, b: 0.85, a: 0.9}
+  infoColor: {r: 0.05, g: 0.45, b: 0.75, a: 0.9}
+  successColor: {r: 0.12, g: 0.55, b: 0.22, a: 0.9}
+  warningColor: {r: 0.95, g: 0.62, b: 0.05, a: 0.9}
+  dangerColor: {r: 0.75, g: 0.18, b: 0.2, a: 0.9}
 --- !u!114 &9001005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -355,6 +385,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cloudRecoBehaviour: {fileID: 0}
   debugLogs: 1
+  requireDirectTracking: 1
 --- !u!114 &9001006
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -368,7 +399,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   vuforiaController: {fileID: 9001005}
-  contentServiceBehaviour: {fileID: 9001002}
+  contentServiceBehaviour: {fileID: 9001008}
   contentRenderer: {fileID: 9001003}
   statusUI: {fileID: 9001004}
   ignoreConsecutiveDuplicateTarget: 1
@@ -388,6 +419,25 @@ MonoBehaviour:
   secretKey: a4338ff31ecf63aaf54524a602e326f1d83a4716
   targetCamera: {fileID: 7001001}
   vuforiaCloudTargetController: {fileID: 9001005}
+  debugLogs: 1
+--- !u!114 &9001008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9001000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: daf5a40ff797e4b00bded33d1524a810, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MobileViewer.Content.HttpContentService
+  baseApiUrl: http://172.20.10.2:5050
+  contentPath: /api/mobileviewer/content/by-target/
+  apiKeyHeaderName: 
+  apiKeyValue: 
+  logRequests: 1
+  logResponses: 1
 --- !u!1 &9100000
 GameObject:
   m_ObjectHideFlags: 0

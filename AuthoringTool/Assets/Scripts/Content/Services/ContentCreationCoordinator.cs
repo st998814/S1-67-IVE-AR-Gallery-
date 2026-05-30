@@ -282,6 +282,7 @@ namespace ARGallery.Content
             if (root == null) root = instance.AddComponent<ModelContentContainerRoot>();
 
             DraggableObject drag = instance.GetComponent<DraggableObject>();
+            DraggableObject.ConfigureForContentShell(drag);
 
             string baseName = !string.IsNullOrWhiteSpace(originalFileName) ? Path.GetFileName(originalFileName) : Path.GetFileName(GetUrlPathForExtension(uploadedUrl) ?? "");
             if (string.IsNullOrWhiteSpace(baseName)) baseName = "model";

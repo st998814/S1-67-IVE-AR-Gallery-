@@ -98,10 +98,8 @@ namespace ARGallery.Workspace.Persistence
 
             if (_debounceCoroutine != null)
                 StopCoroutine(_debounceCoroutine);
+
             _debounceCoroutine = StartCoroutine(DebounceThenStartSyncRoutine());
-            int sec = Mathf.RoundToInt(EffectiveDebounceSeconds);
-            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Debouncing,
-                $"Backend sync will start in about {sec} second{(sec == 1 ? "" : "s")}.");
         }
 
         private IEnumerator DebounceThenStartSyncRoutine()
@@ -157,7 +155,6 @@ namespace ARGallery.Workspace.Persistence
         private IEnumerator SyncCoroutineWrapper()
         {
             _syncInProgress = true;
-            RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Syncing, "Uploading targets and content to the server…");
             bool runAgain = false;
             try
             {
@@ -232,7 +229,6 @@ namespace ARGallery.Workspace.Persistence
             }
 
             PersistRemoteStateSuccess(workspaceId, workspaceName, registry);
-            Debug.Log($"{LogPrefix}Remote sync completed for workspace '{workspaceId}'.");
         }
 
         private IEnumerator SyncTargetToBackend(IApiClient api, string workspaceId, string workspaceName, AuthoredTargetInstance target)
@@ -513,8 +509,17 @@ namespace ARGallery.Workspace.Persistence
             snap.lastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
             snap.remoteSyncStatus = RemoteSyncStatus.Synced;
 
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err))
+            string snapshotPath = WorkspacePersistencePaths.GetSnapshotPath(workspaceId);
+            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
+            {
                 Debug.LogWarning($"{LogPrefix}Post-sync snapshot save failed: {err}");
+            }
+            else
+            {
+                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
+                // One line after upload (avoids duplicate TrySaveSnapshot OK in the same frame as completion).
+                Debug.Log($"[WorkspacePersistence] Remote sync completed successfully for workspace '{workspaceId}' | path={snapshotPath}");
+            }
 
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Synced, "Workspace synchronized with the server.");
         }
@@ -543,8 +548,10 @@ namespace ARGallery.Workspace.Persistence
             snap.lastRemoteSyncError = m;
             snap.remoteSyncStatus = RemoteSyncStatus.Failed;
 
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err))
+            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
                 Debug.LogWarning($"{LogPrefix}Failed-state snapshot save error: {err}");
+            else
+                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
         }
 
         private IApiClient ResolveApiClient()
@@ -594,20 +601,7 @@ namespace ARGallery.Workspace.Persistence
             return $"{safe}{ext}";
         }
 
-        private static string GuessMimeTypeFromName(string fileName)
-        {
-            string ext = Path.GetExtension(fileName ?? "").ToLowerInvariant();
-            if (ext == ".png")
-                return "image/png";
-            if (ext == ".jpg" || ext == ".jpeg")
-                return "image/jpeg";
-            if (ext == ".mp4")
-                return "video/mp4";
-            if (ext == ".glb")
-                return "model/gltf-binary";
-            if (ext == ".gltf")
-                return "model/gltf+json";
-            return "application/octet-stream";
-        }
+        private static string GuessMimeTypeFromName(string fileName) =>
+            UploadWorkflowService.GuessMimeTypeFromExtension(Path.GetExtension(fileName ?? ""));
     }
 }

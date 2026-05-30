@@ -129,10 +129,11 @@ namespace ARGallery.AppFlow
             string displayLabel = Safe(displayLabelInput != null ? displayLabelInput.value : "");
             string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
             float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
+            bool hasTargetImage = HasValidSelectedTargetImage();
 
-            if (string.IsNullOrWhiteSpace(workspaceName) || string.IsNullOrWhiteSpace(targetName) || string.IsNullOrWhiteSpace(displayLabel) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select..." || physicalWidth <= 0f || !HasValidSelectedTargetImage())
+            if (!TryValidateRequiredFields(workspaceName, targetName, displayLabel, postureValue, physicalWidth, hasTargetImage, out string validationMessage))
             {
-                SetStatus("Missing required fields: workspace name, target name, display label, target posture, target image file, and physical width.");
+                SetStatus(validationMessage);
                 return;
             }
 
@@ -222,6 +223,27 @@ namespace ARGallery.AppFlow
 
             if (cancelButton != null)
                 cancelButton.SetEnabled(!isBusy);
+        }
+
+        private static bool TryValidateRequiredFields(string workspaceName, string targetName, string displayLabel, string postureValue, float physicalWidth, bool hasTargetImage, out string validationMessage)
+        {
+            var missing = new System.Collections.Generic.List<string>();
+
+            if (string.IsNullOrWhiteSpace(workspaceName)) missing.Add("workspace name");
+            if (string.IsNullOrWhiteSpace(targetName)) missing.Add("target name");
+            if (string.IsNullOrWhiteSpace(displayLabel)) missing.Add("display label");
+            if (string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select...") missing.Add("target posture");
+            if (physicalWidth <= 0f) missing.Add("physical width");
+            if (!hasTargetImage) missing.Add("target image file");
+
+            if (missing.Count == 0)
+            {
+                validationMessage = null;
+                return true;
+            }
+
+            validationMessage = "Missing required fields: " + string.Join(", ", missing) + ".";
+            return false;
         }
 
         private void SetStatus(string message)

@@ -31,6 +31,9 @@ namespace ARGallery.Workspace.Persistence
 
             WorkspaceServices.WorkspaceDataServices.RemoveCachedWorkspaceDraft(id);
 
+            if (WorkspaceServices.WorkspaceDataServices.Provider is global::ARGallery.Workspace.MockWorkspaceProvider mock)
+                mock.OnDeletedFromDisk(id);
+
             if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) && session != null
                 && string.Equals(session.workspaceId, id, StringComparison.OrdinalIgnoreCase))
                 AppFlowController.ClearWorkspaceSession();

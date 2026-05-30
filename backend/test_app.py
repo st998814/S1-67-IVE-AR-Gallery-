@@ -37,6 +37,20 @@ def test_405_returns_json(client):
     assert res.get_json()["errorCode"] == "VALIDATION_ERROR"
 
 
+def test_api_response_includes_request_id(client):
+    res = client.get("/api/nonexistent")
+
+    assert res.status_code == 404
+    assert res.headers["X-Request-Id"]
+
+
+def test_api_response_uses_incoming_request_id(client):
+    res = client.get("/api/nonexistent", headers={"X-Request-Id": "demo-request-id"})
+
+    assert res.status_code == 404
+    assert res.headers["X-Request-Id"] == "demo-request-id"
+
+
 def test_upload_no_file_part(client):
     res = client.post("/api/upload")
     assert res.status_code == 400
@@ -57,15 +71,14 @@ def test_upload_success(client, tmp_path):
         res = client.post("/api/upload", data=data, content_type="multipart/form-data")
     assert res.status_code == 201
     body = res.get_json()
-    assert body["url"].endswith("/uploads/test.jpg")
+    assert body["url"].endswith("/uploads/content/test.jpg")
     assert body["fileName"] == "test.jpg"
     assert body["sizeBytes"] > 0
 
 
 def test_upload_oserror_returns_500(client):
     data = {"file": (io.BytesIO(b"data"), "test.jpg")}
-    with patch("app.secure_filename", return_value="test.jpg"), \
-         patch("werkzeug.datastructures.FileStorage.save", side_effect=OSError("disk full")):
+    with patch("werkzeug.datastructures.FileStorage.save", side_effect=OSError("disk full")):
         res = client.post("/api/upload", data=data, content_type="multipart/form-data")
     assert res.status_code == 500
     assert "Failed to save file" in res.get_json()["message"]
@@ -74,6 +87,77 @@ def test_upload_oserror_returns_500(client):
 def test_serve_file_not_found(client):
     res = client.get("/uploads/nonexistent_file.jpg")
     assert res.status_code == 404
+
+
+def test_health_success(client):
+    mock_cur = MagicMock()
+    mock_cur.fetchone.side_effect = [
+        ("argallery",),
+        (1,),
+        (2,),
+        (3,),
+    ]
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.get("/api/health")
+
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["ok"] is True
+    assert body["postgresDatabase"] == "argallery"
+    assert body["workspaces"] == 1
+    assert body["targets"] == 2
+    assert body["contents"] == 3
+
+
+def test_delete_workspace_default_blocked(client):
+    res = client.delete("/api/workspaces/default")
+
+    assert res.status_code == 403
+    assert res.get_json()["errorCode"] == "VALIDATION_ERROR"
+
+
+def test_delete_workspace_not_found(client):
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = None
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.delete("/api/workspaces/missing")
+
+    assert res.status_code == 404
+    assert res.get_json()["errorCode"] == "NOT_FOUND"
+
+
+def test_delete_workspace_success(client, tmp_path):
+    app.config["UPLOAD_FOLDER"] = str(tmp_path)
+    target_dir = tmp_path / "target"
+    content_dir = tmp_path / "content"
+    target_dir.mkdir()
+    content_dir.mkdir()
+    target_file = target_dir / "poster.jpg"
+    content_file = content_dir / "image.jpg"
+    target_file.write_bytes(b"target")
+    content_file.write_bytes(b"content")
+
+    mock_cur = MagicMock()
+    mock_cur.fetchone.side_effect = [(1,), (2,)]
+    mock_cur.fetchall.side_effect = [
+        [("http://127.0.0.1:5050/uploads/target/poster.jpg",)],
+        [("http://127.0.0.1:5050/uploads/content/image.jpg",)],
+    ]
+    mock_cur.rowcount = 1
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.delete("/api/workspaces/demo-workspace")
+
+    assert res.status_code == 200
+    assert res.get_json() == {
+        "workspaceId": "demo-workspace",
+        "deletedTargets": 1,
+        "deletedContents": 2,
+    }
+    assert not target_file.exists()
+    assert not content_file.exists()
 
 
 VALID_TARGET_PAYLOAD = {
@@ -288,6 +372,86 @@ def test_content_success(client):
     assert body["contentId"] == "content-001"
     assert body["targetId"] == "poster-a"
 
+
+
+
+@pytest.mark.parametrize(
+    "content_type,media_url,render_kind,asset_format,content_id",
+    [
+        pytest.param(
+            "video",
+            "http://example.com/demo.mp4",
+            "surface",
+            "mp4",
+            "content-video-001",
+            id="video",
+        ),
+        pytest.param(
+            "model",
+            "http://example.com/demo.glb",
+            "volumetric",
+            "glb",
+            "content-model-001",
+            id="model",
+        ),
+    ],
+)
+def test_content_create_video_and_model_success(client, content_type, media_url, render_kind, asset_format, content_id):
+    mock_cur = MagicMock()
+    now = datetime(2026, 4, 18, 12, 5, 1, tzinfo=timezone.utc)
+    mock_cur.fetchone.side_effect = [
+        (1,),
+        None,
+        (content_id, "poster-a", "created", now),
+    ]
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": content_id,
+        "contentType": content_type,
+        "mediaUrl": media_url,
+        "renderKind": render_kind,
+        "assetFormat": asset_format,
+    }
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 201
+    body = res.get_json()
+    assert body["contentId"] == content_id
+    assert body["targetId"] == "poster-a"
+
+
+@pytest.mark.parametrize("content_type", ["video", "model"])
+def test_content_video_and_model_require_media_url(client, content_type):
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": f"content-{content_type}-missing-media",
+        "contentType": content_type,
+        "mediaUrl": "",
+    }
+
+    res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["errorCode"] == "VALIDATION_ERROR"
+    assert "mediaUrl" in body["message"]
+
+
+def test_content_invalid_content_type(client):
+    payload = {
+        **VALID_CONTENT_PAYLOAD,
+        "contentId": "content-invalid-type",
+        "contentType": "text",
+    }
+
+    res = client.post("/api/content", json=payload)
+
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["errorCode"] == "VALIDATION_ERROR"
+    assert "contentType" in body["message"]
 
 def test_list_content_success(client):
     mock_cur = MagicMock()

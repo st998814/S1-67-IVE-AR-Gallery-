@@ -2,6 +2,7 @@
     "name": "ARGallery.Tests.EditMode",
     "rootNamespace": "",
     "references": [
+        "ARGallery.Authoring.Core",
         "ARGallery.Models",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

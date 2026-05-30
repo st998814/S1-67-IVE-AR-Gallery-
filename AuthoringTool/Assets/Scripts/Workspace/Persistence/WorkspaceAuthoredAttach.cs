@@ -37,6 +37,15 @@ namespace ARGallery.Workspace.Persistence
                 return null;
 
             AuthoredContentInstance ac = spawnedRoot.GetComponent<AuthoredContentInstance>() ?? spawnedRoot.AddComponent<AuthoredContentInstance>();
+            string requestedContentId = request != null && !string.IsNullOrWhiteSpace(request.contentIdOverride)
+                ? request.contentIdOverride.Trim()
+                : "";
+            if (!string.IsNullOrWhiteSpace(requestedContentId))
+            {
+                ac.LocalContentId = requestedContentId;
+                ac.ServerContentId = requestedContentId;
+            }
+
             if (string.IsNullOrWhiteSpace(ac.LocalContentId))
                 ac.LocalContentId = Guid.NewGuid().ToString("N");
             if (string.IsNullOrWhiteSpace(ac.ServerContentId))
@@ -54,6 +63,8 @@ namespace ARGallery.Workspace.Persistence
                 ac.Title = string.IsNullOrWhiteSpace(request.originalFileName)
                     ? (request.contentType == SpawnContentType.Text ? ac.TextBody : ac.TargetId)
                     : request.originalFileName.Trim();
+                if (request.localFileBytes == null || request.localFileBytes.Length == 0)
+                    ac.AssetLocalPath = "";
             }
 
             TryPersistLocalContentAsset(ac, request);
@@ -74,8 +85,6 @@ namespace ARGallery.Workspace.Persistence
                 return;
             if (request.localFileBytes == null || request.localFileBytes.Length == 0)
                 return;
-            if (!string.IsNullOrWhiteSpace(ac.AssetLocalPath))
-                return;
 
             if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
                 || string.IsNullOrWhiteSpace(session.workspaceId))
@@ -87,15 +96,42 @@ namespace ARGallery.Workspace.Persistence
             string workspaceId = session.workspaceId.Trim();
             string originalName = string.IsNullOrWhiteSpace(request.originalFileName) ? "content.bin" : request.originalFileName.Trim();
             string hint = WorkspaceStateSerializer.ToSnapshotContentTypeLabel(request.contentType);
+            string stableStem = !string.IsNullOrWhiteSpace(ac.ServerContentId)
+                ? ac.ServerContentId.Trim()
+                : ac.LocalContentId?.Trim();
 
             var repo = new WorkspaceAssetRepository();
-            if (!repo.TryImportContentAsset(workspaceId, originalName, hint, request.localFileBytes, "", out string relativePath, out string error))
+            if (!repo.TryImportContentAsset(
+                    workspaceId,
+                    originalName,
+                    hint,
+                    request.localFileBytes,
+                    "",
+                    out string relativePath,
+                    out string error,
+                    stableStem))
             {
                 Debug.LogWarning($"[WorkspacePersistence] TryImportContentAsset failed: {error}");
                 return;
             }
 
             ac.AssetLocalPath = relativePath;
+        }
+
+        /// <summary>
+        /// Marks authored content as needing a Layer-3 push (<see cref="WorkspaceRemoteSyncService"/>).
+        /// Call after any user-driven change to local position/rotation/scale under a target.
+        /// </summary>
+        public static void MarkContentRemoteDirty(Transform contentTransform)
+        {
+            if (contentTransform == null)
+                return;
+
+            AuthoredContentInstance ac = contentTransform.GetComponent<AuthoredContentInstance>()
+                ?? contentTransform.GetComponentInParent<AuthoredContentInstance>()
+                ?? contentTransform.GetComponentInChildren<AuthoredContentInstance>(true);
+            if (ac != null)
+                ac.RemoteDirty = true;
         }
     }
 }
