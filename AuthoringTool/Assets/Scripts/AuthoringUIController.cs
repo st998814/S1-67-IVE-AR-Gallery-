@@ -88,11 +88,18 @@ public class AuthoringUIController : MonoBehaviour
     private VisualElement _errorToast;
     private Label _errorLabel;
     private Coroutine _errorToastCoroutine;
+    private Coroutine _loadingHideRoutine;
+    private float _loadingShownAt;
+    private GameObject _lastDeletedObject;
+    private AuthoredContentInstance _lastDeletedContentInstance;
+    private ContentDraftState _lastDeletedDraft;
+    private DraggableObject _lastDeletedDraggable;
 
     private VisualElement _syncStatusToast;
     private Label _syncStatusTitle;
     private Label _syncStatusMessage;
     private Button _syncToastDismiss;
+    private Label _physicalSizeLabel;
     private Coroutine _syncToastHideRoutine;
     private WorkspaceRemoteSyncService _boundRemoteSyncService;
     // ----------------------------
@@ -269,6 +276,7 @@ public class AuthoringUIController : MonoBehaviour
         _syncStatusTitle = root.Q<Label>("SyncStatusTitle");
         _syncStatusMessage = root.Q<Label>("SyncStatusMessage");
         _syncToastDismiss = root.Q<Button>("SyncToastDismiss");
+        _physicalSizeLabel = root.Q<Label>("PhysicalSizeLabel");
 
         HideLoading();
         HideErrorToast();
@@ -576,6 +584,70 @@ public class AuthoringUIController : MonoBehaviour
         ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
     }
 
+    // Delete 键：隐藏内容（可撤回）
+    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
+        && !Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
+    {
+        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
+        if (ci != null)
+        {
+            // 真正销毁上一个待删除的物体（如果有）
+            if (_lastDeletedObject != null) Destroy(_lastDeletedObject);
+
+            _lastDeletedContentInstance = ci;
+            _lastDeletedDraggable = activeDraggedObject;
+            _lastDeletedDraft = activeContentDraft;
+            _lastDeletedObject = authoringSpatialTarget.gameObject;
+
+            AuthoredObjectRegistry.UnregisterContent(ci);
+            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
+                contentDraftsByTransform.Remove(authoringSpatialTarget);
+            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
+                contentDraftsByDraggable.Remove(activeDraggedObject);
+
+            _lastDeletedObject.SetActive(false);
+            ClearAuthoringSpatialSelection();
+            NotifyWorkspacePersistenceChanged();
+        }
+    }
+
+    // Shift + Delete：立即彻底销毁（不可撤回）
+    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
+        && Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
+    {
+        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
+        if (ci != null)
+        {
+            if (_lastDeletedObject != null) { Destroy(_lastDeletedObject); _lastDeletedObject = null; }
+            AuthoredObjectRegistry.UnregisterContent(ci);
+            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
+                contentDraftsByTransform.Remove(authoringSpatialTarget);
+            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
+                contentDraftsByDraggable.Remove(activeDraggedObject);
+            GameObject toDestroy = authoringSpatialTarget.gameObject;
+            ClearAuthoringSpatialSelection();
+            Destroy(toDestroy);
+            NotifyWorkspacePersistenceChanged();
+        }
+    }
+
+    // Ctrl + Z：恢复最后一次删除
+    if (Keyboard.current != null && Keyboard.current.ctrlKey.isPressed
+        && Keyboard.current.zKey.wasPressedThisFrame && _lastDeletedObject != null)
+    {
+        _lastDeletedObject.SetActive(true);
+        AuthoredObjectRegistry.RegisterContent(_lastDeletedContentInstance);
+        if (_lastDeletedDraggable != null && _lastDeletedDraft != null)
+            contentDraftsByDraggable[_lastDeletedDraggable] = _lastDeletedDraft;
+        if (_lastDeletedContentInstance != null && _lastDeletedDraft != null)
+            contentDraftsByTransform[_lastDeletedContentInstance.transform] = _lastDeletedDraft;
+        _lastDeletedObject = null;
+        _lastDeletedContentInstance = null;
+        _lastDeletedDraft = null;
+        _lastDeletedDraggable = null;
+        NotifyWorkspacePersistenceChanged();
+    }
+
     // Keep inspector coordinates synced when moving target/content via 3D interaction.
     SyncSpatialInspectorRealtime();
     SyncModeIndicatorLabel();
@@ -709,14 +781,34 @@ public class AuthoringUIController : MonoBehaviour
     // ==========================================
     public void ShowLoading()
     {
-        if (_loadingOverlay != null)
-            _loadingOverlay.style.display = DisplayStyle.Flex;
+        if (_loadingOverlay == null) return;
+        if (_loadingHideRoutine != null) { StopCoroutine(_loadingHideRoutine); _loadingHideRoutine = null; }
+        _loadingShownAt = Time.realtimeSinceStartup;
+        _loadingOverlay.style.display = DisplayStyle.Flex;
     }
 
     public void HideLoading()
     {
+        if (_loadingOverlay == null) return;
+        float elapsed = Time.realtimeSinceStartup - _loadingShownAt;
+        float remaining = 1.5f - elapsed;
+        if (remaining > 0f)
+        {
+            if (_loadingHideRoutine != null) StopCoroutine(_loadingHideRoutine);
+            _loadingHideRoutine = StartCoroutine(HideLoadingAfterDelay(remaining));
+        }
+        else
+        {
+            _loadingOverlay.style.display = DisplayStyle.None;
+        }
+    }
+
+    private IEnumerator HideLoadingAfterDelay(float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
         if (_loadingOverlay != null)
             _loadingOverlay.style.display = DisplayStyle.None;
+        _loadingHideRoutine = null;
     }
 
     public void ShowError(string errorMessage)
@@ -783,9 +875,13 @@ public class AuthoringUIController : MonoBehaviour
 
     private void OnRemoteSyncToastChanged(WorkspaceRemoteSyncToastKind kind, string message)
     {
-        // Local snapshot save does not raise this event. Debouncing / syncing are log-only in WorkspaceRemoteSyncService.
-        if (kind == WorkspaceRemoteSyncToastKind.Debouncing || kind == WorkspaceRemoteSyncToastKind.Syncing)
+        if (kind == WorkspaceRemoteSyncToastKind.Debouncing)
             return;
+
+        if (kind == WorkspaceRemoteSyncToastKind.Syncing)
+            ShowLoading();
+        else if (kind == WorkspaceRemoteSyncToastKind.Synced || kind == WorkspaceRemoteSyncToastKind.Failed || kind == WorkspaceRemoteSyncToastKind.Skipped)
+            HideLoading();
 
         if (_syncStatusToast == null || _syncStatusTitle == null || _syncStatusMessage == null)
             return;
@@ -921,6 +1017,17 @@ public class AuthoringUIController : MonoBehaviour
         yield return new WaitForSeconds(delaySeconds);
         _syncToastHideRoutine = null;
         HideSyncStatusToast();
+    }
+
+    private void UpdatePhysicalSizeLabel(Transform t)
+    {
+        if (_physicalSizeLabel == null) return;
+        if (t == null) { _physicalSizeLabel.text = ""; return; }
+        Vector3 s = t.localScale;
+        int wMm = Mathf.RoundToInt(Mathf.Abs(s.x) * 1000f);
+        int hMm = Mathf.RoundToInt(Mathf.Abs(s.y) * 1000f);
+        int dMm = Mathf.RoundToInt(Mathf.Abs(s.z) * 1000f);
+        _physicalSizeLabel.text = $"Physical size: {wMm}mm × {hMm}mm × {dMm}mm";
     }
     // ==========================================
 
@@ -1338,32 +1445,32 @@ public class AuthoringUIController : MonoBehaviour
 
     /// <summary>用于场景点击选中 / Gizmo 拖拽后，把 Transform 写回面板（位置 + 均匀缩放）。</summary>
     public void SyncTransformToInspector(Transform target)
+{
+    if (target == null || !HasPlacementOffsetInspectorUi())
+        return;
+
+    Vector3 lp = target.localPosition;
+    SemanticDistanceFormatter.FormatOffsets(lp, out string leftRight, out string upDown, out string closerFurther);
+    SetLabelText(posLeftRightOffsetLabel, leftRight);
+    SetLabelText(posUpDownOffsetLabel, upDown);
+    SetLabelText(posCloserFurtherOffsetLabel, closerFurther);
+
+    if (scaleInput != null)
     {
-        if (target == null || !HasPlacementOffsetInspectorUi())
-            return;
-
-        Vector3 lp = target.localPosition;
-        SemanticDistanceFormatter.FormatOffsets(lp, out string leftRight, out string upDown, out string closerFurther);
-        SetLabelText(posLeftRightOffsetLabel, leftRight);
-        SetLabelText(posUpDownOffsetLabel, upDown);
-        SetLabelText(posCloserFurtherOffsetLabel, closerFurther);
-
-        if (scaleInput != null)
+        suppressSpatialUiCallbacks = true;
+        try
         {
-            suppressSpatialUiCallbacks = true;
-            try
-            {
-                scaleInput.value = (float)System.Math.Round(target.localScale.x, 2);
-            }
-            finally
-            {
-                suppressSpatialUiCallbacks = false;
-            }
+            scaleInput.value = (float)System.Math.Round(target.localScale.x, 2);
         }
-
-        _manipulatorPanel.RefreshVisibilityAndValues();
+        finally
+        {
+            suppressSpatialUiCallbacks = false;
+        }
     }
 
+    UpdatePhysicalSizeLabel(target);
+    _manipulatorPanel.RefreshVisibilityAndValues();
+}
     private void ApplyInspectorModeContent()
     {
         inspectorMode = InspectorMode.Content;
@@ -1426,6 +1533,9 @@ public class AuthoringUIController : MonoBehaviour
                 suppressSpatialUiCallbacks = false;
             }
         }
+
+        GameObject sizeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        UpdatePhysicalSizeLabel(sizeTarget != null ? sizeTarget.transform : null);
     }
 
     private void UpdatePlacementInspectorSectionVisibility()
@@ -1572,6 +1682,7 @@ public class AuthoringUIController : MonoBehaviour
         authoringSpatialTarget = null;
         activeDraggedObject = null;
         activeContentDraft = null;
+        UpdatePhysicalSizeLabel(null);
         if (inspectorMode == InspectorMode.Target)
             ApplyInspectorModeTarget();
 
