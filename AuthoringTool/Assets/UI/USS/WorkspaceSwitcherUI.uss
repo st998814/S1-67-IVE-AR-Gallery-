@@ -1,6 +1,51 @@
 .switcher-root {
     justify-content: center;
     align-items: center;
+    position: relative;
+}
+
+.switcher-back-btn {
+    position: absolute;
+    left: 24px;
+    top: 24px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0;
+    margin: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+    background-color: rgb(27, 34, 43);
+    justify-content: center;
+    align-items: center;
+    color: rgb(255, 255, 255);
+    -unity-font-style: normal;
+    font-size: 0;
+}
+
+.switcher-back-btn:hover {
+    background-color: rgb(38, 48, 60);
+}
+
+.switcher-back-btn:active {
+    background-color: rgb(22, 28, 36);
+}
+
+.switcher-back-btn__icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    background-image: url("../Icons/SwitcherBackArrow.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 .switcher-title {

@@ -23,6 +23,7 @@ namespace ARGallery.AppFlow
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
         private const string EditButtonName = "EditButton";
         private const string DeleteWorkspaceButtonName = "DeleteWorkspaceButton";
+        private const string BackToLandingButtonName = "BackToLandingButton";
 
         private readonly List<WorkspaceSessionContext> mockWorkspaces = new List<WorkspaceSessionContext>();
         private readonly List<VisualElement> cardElements = new List<VisualElement>();
@@ -49,6 +50,7 @@ namespace ARGallery.AppFlow
         private Label activeWorkspaceNameLabel;
         private Button editButton;
         private Button deleteWorkspaceButton;
+        private Button backToLandingButton;
 
         [SerializeField]
         [Tooltip("Backend base URL for DELETE /api/workspaces/{id} before removing local snapshot. Leave empty to only delete on-disk workspace data.")]
@@ -89,6 +91,7 @@ namespace ARGallery.AppFlow
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
             if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
+            if (backToLandingButton != null) backToLandingButton.clicked -= OnBackToLandingClicked;
         }
 
         private void OnDestroy()
@@ -137,6 +140,7 @@ namespace ARGallery.AppFlow
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
             editButton = root.Q<Button>(EditButtonName);
             deleteWorkspaceButton = root.Q<Button>(DeleteWorkspaceButtonName);
+            backToLandingButton = root.Q<Button>(BackToLandingButtonName);
 
             if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || editButton == null)
             {
@@ -151,6 +155,20 @@ namespace ARGallery.AppFlow
             editButton.clicked += OnEditButtonClicked;
             if (deleteWorkspaceButton != null)
                 deleteWorkspaceButton.clicked += OnDeleteWorkspaceClicked;
+            if (backToLandingButton != null)
+            {
+                backToLandingButton.clicked += OnBackToLandingClicked;
+                backToLandingButton.BringToFront();
+            }
+        }
+
+        private void OnBackToLandingClicked()
+        {
+            if (SceneTransitionService.IsTransitioning)
+                return;
+
+            AppFlowController.ClearWorkspaceSession();
+            SceneTransitionService.TransitionToScene(AppFlowController.LandingSceneName);
         }
 
         private void SeedMockWorkspaces()
@@ -634,6 +652,21 @@ namespace ARGallery.AppFlow
             AppFlowWallpaper.Apply(root);
             root.style.justifyContent = Justify.Center;
             root.style.alignItems = Align.Center;
+
+            var backBtn = new Button { name = BackToLandingButtonName };
+            backBtn.AddToClassList("switcher-back-btn");
+            backBtn.style.position = Position.Absolute;
+            backBtn.style.left = 24;
+            backBtn.style.top = 24;
+            backBtn.style.width = 48;
+            backBtn.style.height = 48;
+            backBtn.style.borderTopLeftRadius = backBtn.style.borderTopRightRadius =
+                backBtn.style.borderBottomLeftRadius = backBtn.style.borderBottomRightRadius = 24;
+            backBtn.style.backgroundColor = new Color(27f / 255f, 34f / 255f, 43f / 255f, 1f);
+            backBtn.style.color = Color.white;
+            backBtn.style.fontSize = 22;
+            backBtn.text = "\u2190";
+            root.Add(backBtn);
 
             var title = new Label("Workspace Switcher");
             title.style.color = Color.white;

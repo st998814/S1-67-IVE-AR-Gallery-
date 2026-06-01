@@ -1,19 +1,21 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:Style src="../USS/AppTheme.uss" />
-    <ui:Style src="../USS/AppFlowBackground.uss" />
-    <ui:Style src="../USS/WorkspaceSwitcherUI.uss" />
-
+    <Style src="project://database/Assets/UI/USS/AppTheme.uss?fileID=7433441132597879392&amp;guid=5354bb360bd1478f958cfafb4ec4699f&amp;type=3#AppTheme"/>
+    <Style src="project://database/Assets/UI/USS/AppFlowBackground.uss?fileID=7433441132597879392&amp;guid=a0b6b5c771f14977b7397b0d66dd29f4&amp;type=3#AppFlowBackground"/>
+    <Style src="project://database/Assets/UI/USS/WorkspaceSwitcherUI.uss?fileID=7433441132597879392&amp;guid=ddbde54ad879467693b6232a3022f2fc&amp;type=3#WorkspaceSwitcherUI"/>
     <ui:VisualElement name="WorkspaceSwitcherRoot" class="app-root layout-full layout-centered-column switcher-root app-flow-wallpaper">
-        <ui:Label text="Workspace Switcher" class="text-title switcher-title" />
+        <ui:Button name="BackToLandingButton" tooltip="Back to landing" class="switcher-back-btn">
+            <ui:VisualElement class="switcher-back-btn__icon"/>
+        </ui:Button>
+        <ui:Label text="Workspace Switcher" class="text-title switcher-title" style="-unity-text-align: upper-left; bottom: 30px;"/>
         <ui:VisualElement class="layout-row switcher-carousel">
-            <ui:Button name="LeftArrowButton" text="&lt;" class="btn switcher-arrow-btn switcher-arrow-left" />
-            <ui:VisualElement name="WorkspaceCardsRow" class="switcher-cards-row" />
-            <ui:Button name="RightArrowButton" text="&gt;" class="btn switcher-arrow-btn switcher-arrow-right" />
+            <ui:Button name="LeftArrowButton" text="&lt;" class="btn switcher-arrow-btn switcher-arrow-left"/>
+            <ui:VisualElement name="WorkspaceCardsRow" class="switcher-cards-row"/>
+            <ui:Button name="RightArrowButton" text="&gt;" class="btn switcher-arrow-btn switcher-arrow-right"/>
         </ui:VisualElement>
-        <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label" />
+        <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label"/>
         <ui:VisualElement class="switcher-actions">
-            <ui:Button name="EditButton" text="EDIT" class="btn btn-primary switcher-action-primary" />
-            <ui:Button name="DeleteWorkspaceButton" text="DELETE" class="btn switcher-action-danger" />
+            <ui:Button name="EditButton" text="EDIT" class="btn btn-primary switcher-action-primary" style="background-color: rgb(173, 173, 173); width: 160px; top: 40px; opacity: 0.5;"/>
+            <ui:Button name="DeleteWorkspaceButton" text="DELETE" class="btn switcher-action-danger" style="background-color: rgb(209, 106, 130); height: 46px; width: 160px; top: 40px; opacity: 0.5;"/>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
