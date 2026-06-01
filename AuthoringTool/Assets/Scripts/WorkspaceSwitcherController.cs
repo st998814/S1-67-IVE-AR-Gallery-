@@ -20,6 +20,7 @@ namespace ARGallery.AppFlow
         private const string LeftArrowButtonName = "LeftArrowButton";
         private const string RightArrowButtonName = "RightArrowButton";
         private const string WorkspaceCardsRowName = "WorkspaceCardsRow";
+        private const string WorkspaceCardsViewportName = "WorkspaceCardsViewport";
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
         private const string BackToLandingButtonName = "BackToLandingButton";
         private const string DeleteConfirmOverlayName = "DeleteConfirmOverlay";
@@ -46,9 +47,11 @@ namespace ARGallery.AppFlow
         private const float InactiveCardOpacity = 0.55f;
         private const float CardStepPixels = 256f;
         private const float FocusAnimationSpeed = 12f;
+        private const int MaxCarouselViewportSlots = 4;
 
         private Button leftArrowButton;
         private Button rightArrowButton;
+        private VisualElement workspaceCardsViewport;
         private VisualElement workspaceCardsRow;
         private Label activeWorkspaceNameLabel;
         private Button backToLandingButton;
@@ -146,6 +149,7 @@ namespace ARGallery.AppFlow
         {
             leftArrowButton = root.Q<Button>(LeftArrowButtonName);
             rightArrowButton = root.Q<Button>(RightArrowButtonName);
+            workspaceCardsViewport = root.Q<VisualElement>(WorkspaceCardsViewportName);
             workspaceCardsRow = root.Q<VisualElement>(WorkspaceCardsRowName);
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
             backToLandingButton = root.Q<Button>(BackToLandingButtonName);
@@ -644,6 +648,8 @@ namespace ARGallery.AppFlow
             addCard.RegisterCallback<ClickEvent>(_ => OnNewButtonClicked());
             workspaceCardsRow.Add(addCard);
             RefreshCardToolbars();
+            RefreshCarouselViewportLayout();
+            RefreshCarouselArrowState();
         }
 
         private VisualElement CreateCardToolbar(int cardIndex)
@@ -691,10 +697,28 @@ namespace ARGallery.AppFlow
             return button;
         }
 
+        private static Button CreateCarouselArrowButton(string elementName, bool isLeft)
+        {
+            var button = new Button { name = elementName };
+            button.AddToClassList("switcher-carousel-arrow");
+            button.AddToClassList(isLeft ? "switcher-carousel-arrow--left" : "switcher-carousel-arrow--right");
+            button.tooltip = isLeft ? "Previous workspace" : "Next workspace";
+
+            var icon = new VisualElement();
+            icon.AddToClassList("switcher-carousel-arrow__icon");
+            icon.AddToClassList(isLeft ? "switcher-carousel-arrow__icon--left" : "switcher-carousel-arrow__icon--right");
+            button.Add(icon);
+            return button;
+        }
+
         private void RefreshSelectionUi(bool forceImmediate = false)
         {
             if (mockWorkspaces.Count == 0)
+            {
+                RefreshCarouselViewportLayout();
+                RefreshCarouselArrowState();
                 return;
+            }
 
             selectedIndex = Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1);
             WorkspaceSessionContext selected = mockWorkspaces[selectedIndex];
@@ -728,11 +752,46 @@ namespace ARGallery.AppFlow
 
             hasAnimationState = true;
             RefreshCardToolbars();
+            RefreshCarouselViewportLayout();
+            RefreshCarouselArrowState();
+        }
+
+        private void RefreshCarouselViewportLayout()
+        {
+            if (workspaceCardsViewport == null)
+                return;
+
+            // Viewport spans workspace cards + add card so arrows hug the strip, not the full scroll width.
+            int slotCount = mockWorkspaces.Count + 1;
+            int visibleSlots = Mathf.Clamp(slotCount, 1, MaxCarouselViewportSlots);
+            float viewportWidth = visibleSlots * CardStepPixels;
+
+            workspaceCardsViewport.style.width = viewportWidth;
+            workspaceCardsViewport.style.minWidth = viewportWidth;
+            workspaceCardsViewport.style.maxWidth = viewportWidth;
+        }
+
+        private void RefreshCarouselArrowState()
+        {
+            bool canNavigate = mockWorkspaces.Count > 1;
+            DisplayStyle arrowDisplay = canNavigate ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (leftArrowButton != null)
+            {
+                leftArrowButton.SetEnabled(canNavigate);
+                leftArrowButton.style.display = arrowDisplay;
+            }
+
+            if (rightArrowButton != null)
+            {
+                rightArrowButton.SetEnabled(canNavigate);
+                rightArrowButton.style.display = arrowDisplay;
+            }
         }
 
         private void OnLeftArrowClicked()
         {
-            if (mockWorkspaces.Count == 0)
+            if (mockWorkspaces.Count <= 1)
                 return;
             selectedIndex = (selectedIndex - 1 + mockWorkspaces.Count) % mockWorkspaces.Count;
             RefreshSelectionUi();
@@ -740,7 +799,7 @@ namespace ARGallery.AppFlow
 
         private void OnRightArrowClicked()
         {
-            if (mockWorkspaces.Count == 0)
+            if (mockWorkspaces.Count <= 1)
                 return;
             selectedIndex = (selectedIndex + 1) % mockWorkspaces.Count;
             RefreshSelectionUi();
@@ -850,33 +909,24 @@ namespace ARGallery.AppFlow
             root.Add(title);
 
             var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.justifyContent = Justify.Center;
-            row.style.width = new Length(100, LengthUnit.Percent);
-            row.style.maxWidth = 980;
-            row.style.height = 190;
-            row.style.marginBottom = 16;
+            row.AddToClassList("switcher-carousel");
+            row.AddToClassList("layout-row");
             root.Add(row);
 
-            var left = new Button { name = LeftArrowButtonName, text = "<" };
-            left.style.width = 52;
-            left.style.height = 52;
-            left.style.marginRight = 12;
-            row.Add(left);
+            var track = new VisualElement();
+            track.AddToClassList("switcher-carousel-track");
+            row.Add(track);
 
+            track.Add(CreateCarouselArrowButton(LeftArrowButtonName, isLeft: true));
+
+            var viewport = new VisualElement { name = WorkspaceCardsViewportName };
+            viewport.AddToClassList("switcher-carousel-viewport");
             var cardsRow = new VisualElement { name = WorkspaceCardsRowName };
-            cardsRow.style.flexDirection = FlexDirection.Row;
-            cardsRow.style.justifyContent = Justify.Center;
-            cardsRow.style.alignItems = Align.Center;
-            cardsRow.style.flexGrow = 1;
-            row.Add(cardsRow);
+            cardsRow.AddToClassList("switcher-cards-row");
+            viewport.Add(cardsRow);
+            track.Add(viewport);
 
-            var right = new Button { name = RightArrowButtonName, text = ">" };
-            right.style.width = 52;
-            right.style.height = 52;
-            right.style.marginLeft = 12;
-            row.Add(right);
+            track.Add(CreateCarouselArrowButton(RightArrowButtonName, isLeft: false));
 
             var selectedLabel = new Label("Selected: -") { name = ActiveWorkspaceNameLabelName };
             selectedLabel.style.color = Color.white;

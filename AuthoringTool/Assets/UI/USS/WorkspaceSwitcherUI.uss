@@ -56,30 +56,104 @@
     width: 100%;
     max-width: 980px;
     height: 190px;
+    flex-direction: row;
+    align-items: center;
     justify-content: center;
     margin-bottom: 16px;
 }
 
-.switcher-arrow-btn {
-    width: 52px;
-    height: 52px;
-    min-width: 52px;
-    min-height: 52px;
-}
-
-.switcher-arrow-left {
-    margin-right: 12px;
-}
-
-.switcher-arrow-right {
-    margin-left: 12px;
-}
-
-.switcher-cards-row {
-    flex-grow: 1;
+/* Keeps arrows tight to the card strip (avoids flex-grow pushing the right arrow outward). */
+.switcher-carousel-track {
     flex-direction: row;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
+.switcher-carousel-viewport {
+    flex-shrink: 0;
+    flex-grow: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 170px;
+}
+
+.switcher-carousel-arrow {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    flex-shrink: 0;
+    padding: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+    background-color: rgb(27, 34, 43);
+    justify-content: center;
+    align-items: center;
+    font-size: 0;
+    color: rgb(255, 255, 255);
+    -unity-font-style: normal;
+}
+
+.switcher-carousel-arrow:hover {
+    background-color: rgb(38, 48, 60);
+}
+
+.switcher-carousel-arrow:active {
+    background-color: rgb(22, 28, 36);
+}
+
+.switcher-carousel-arrow:disabled {
+    opacity: 0.35;
+    background-color: rgb(27, 34, 43);
+}
+
+.switcher-carousel-arrow--left {
+    margin-right: 8px;
+    margin-left: 0;
+}
+
+.switcher-carousel-arrow--right {
+    margin-left: 8px;
+    margin-right: 0;
+}
+
+.switcher-carousel-arrow__icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.switcher-carousel-arrow__icon--left {
+    background-image: url("../Icons/SwitcherBackArrow.svg");
+}
+
+.switcher-carousel-arrow__icon--right {
+    background-image: url("../Icons/SwitcherCarouselArrowRight.svg");
+}
+
+.switcher-cards-row {
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .switcher-selection-label {

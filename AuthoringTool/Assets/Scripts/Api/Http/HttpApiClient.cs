@@ -41,7 +41,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
     public IApiRequestHandle CreateCloudTarget(
         CreateCloudTargetRequestDto request,
         Action<ApiResult<CreateTargetResponseDto>> onCompleted,
-        float timeoutSeconds = 25f)
+        float timeoutSeconds = 120f)
     {
         var handle = new CoroutineApiRequestHandle(this);
         Coroutine c = StartCoroutine(CreateCloudTargetRoutine(request, onCompleted, timeoutSeconds, handle));
@@ -442,7 +442,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
 
         using (UnityWebRequest uwr = UnityWebRequest.Post(url, form))
         {
-            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 25f : timeoutSeconds));
+            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 120f : timeoutSeconds));
             yield return uwr.SendWebRequest();
 
             if (handle.IsCancelled)

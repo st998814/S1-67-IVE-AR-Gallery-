@@ -256,6 +256,35 @@ def test_vws_bodyless_request_uses_empty_body_md5_in_signature():
     assert req.get_header("Content-type") is None
 
 
+def test_vws_post_request_uses_body_md5_in_signature():
+    import hashlib
+
+    from vuforia_service import VuforiaConfig, _authorized_request
+
+    config = VuforiaConfig(access_key="access", secret_key="secret")
+    body = b'{"name":"poster-a","width":0.2,"image":"abc"}'
+    req = _authorized_request(config, method="POST", request_path="/targets", body=body)
+    assert req.get_header("Content-md5") == hashlib.md5(body).hexdigest()
+    assert req.get_header("Content-type") == "application/json"
+
+
+def test_register_vuforia_target_timeout_maps_to_vuforia_error(monkeypatch):
+    import urllib.error
+    from unittest.mock import MagicMock
+
+    from vuforia_service import VuforiaConfig, VuforiaError, register_vuforia_target
+
+    config = VuforiaConfig(access_key="access", secret_key="secret")
+
+    def _timeout(*_args, **_kwargs):
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr("vuforia_service.request.urlopen", _timeout)
+    with pytest.raises(VuforiaError) as exc:
+        register_vuforia_target(config, name="poster-a", image_bytes=b"123", width=0.2)
+    assert exc.value.status_code == 504
+
+
 VALID_TARGET_PAYLOAD = {
     "targetId": "poster-a",
     "targetName": "Poster A",

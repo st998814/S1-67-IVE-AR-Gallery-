@@ -163,7 +163,26 @@ def create_cloud_target():
     except VuforiaError as e:
         logger.warning("Vuforia target registration failed for '%s': %s", target_id, e)
         return error_response(str(e), "VUFORIA_ERROR", e.status_code or 502, e.details)
-    except (OSError, ValueError) as e:
+    except TimeoutError as e:
+        logger.warning("Cloud target registration timed out for '%s': %s", target_id, e)
+        return error_response(
+            "Vuforia target registration timed out. Try a smaller image or retry.",
+            "VUFORIA_TIMEOUT",
+            504,
+            str(e),
+        )
+    except OSError as e:
+        if "timed out" in str(e).lower():
+            logger.warning("Cloud target registration timed out for '%s': %s", target_id, e)
+            return error_response(
+                "Vuforia target registration timed out. Try a smaller image or retry.",
+                "VUFORIA_TIMEOUT",
+                504,
+                str(e),
+            )
+        logger.error("Cloud target save failed for '%s': %s", file.filename, e)
+        return error_response("Failed to save cloud target.", "SERVER_ERROR", 500, str(e))
+    except ValueError as e:
         logger.error("Cloud target save failed for '%s': %s", file.filename, e)
         return error_response("Failed to save cloud target.", "SERVER_ERROR", 500, str(e))
     except psycopg2.Error as e:

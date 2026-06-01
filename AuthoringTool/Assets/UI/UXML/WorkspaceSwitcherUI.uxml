@@ -8,9 +8,17 @@
         </ui:Button>
         <ui:Label text="Workspace Switcher" class="text-title switcher-title" style="-unity-text-align: upper-left; bottom: 30px;"/>
         <ui:VisualElement class="layout-row switcher-carousel">
-            <ui:Button name="LeftArrowButton" text="&lt;" class="btn switcher-arrow-btn switcher-arrow-left"/>
-            <ui:VisualElement name="WorkspaceCardsRow" class="switcher-cards-row"/>
-            <ui:Button name="RightArrowButton" text="&gt;" class="btn switcher-arrow-btn switcher-arrow-right"/>
+            <ui:VisualElement class="switcher-carousel-track">
+                <ui:Button name="LeftArrowButton" tooltip="Previous workspace" class="switcher-carousel-arrow switcher-carousel-arrow--left">
+                    <ui:VisualElement class="switcher-carousel-arrow__icon switcher-carousel-arrow__icon--left"/>
+                </ui:Button>
+                <ui:VisualElement name="WorkspaceCardsViewport" class="switcher-carousel-viewport">
+                    <ui:VisualElement name="WorkspaceCardsRow" class="switcher-cards-row"/>
+                </ui:VisualElement>
+                <ui:Button name="RightArrowButton" tooltip="Next workspace" class="switcher-carousel-arrow switcher-carousel-arrow--right">
+                    <ui:VisualElement class="switcher-carousel-arrow__icon switcher-carousel-arrow__icon--right"/>
+                </ui:Button>
+            </ui:VisualElement>
         </ui:VisualElement>
         <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label"/>
         <ui:VisualElement name="DeleteConfirmOverlay" class="switcher-delete-overlay switcher-delete-overlay--hidden">

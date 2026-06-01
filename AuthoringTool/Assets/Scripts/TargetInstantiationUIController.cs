@@ -24,7 +24,7 @@ namespace ARGallery.AppFlow
         private const string StatusLabelName = "StatusLabel";
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
-        [SerializeField] private float createTargetTimeoutSeconds = 20f;
+        [SerializeField] private float createTargetTimeoutSeconds = 120f;
 
         private IApiClient apiClient;
         private TargetInstantiationSceneController sceneController;

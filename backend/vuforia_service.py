@@ -2,6 +2,8 @@ import base64
 import hashlib
 import hmac
 import json
+import os
+import socket
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,6 +18,39 @@ logger = get_vuforia_logger()
 
 # VWS auth: bodyless requests must sign with MD5 of empty body (not an empty Content-MD5 field).
 EMPTY_BODY_MD5 = hashlib.md5(b"").hexdigest()
+
+# POST /targets uploads a base64 image payload; Vuforia often needs >20s for phone photos.
+DEFAULT_VUFORIA_REGISTER_TIMEOUT_SECONDS = 90.0
+DEFAULT_VUFORIA_API_TIMEOUT_SECONDS = 30.0
+
+
+def _register_timeout_seconds() -> float:
+    raw = os.getenv("VUFORIA_REGISTER_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_VUFORIA_REGISTER_TIMEOUT_SECONDS
+    try:
+        return max(20.0, float(raw))
+    except ValueError:
+        return DEFAULT_VUFORIA_REGISTER_TIMEOUT_SECONDS
+
+
+def _api_timeout_seconds() -> float:
+    raw = os.getenv("VUFORIA_API_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return DEFAULT_VUFORIA_API_TIMEOUT_SECONDS
+    try:
+        return max(5.0, float(raw))
+    except ValueError:
+        return DEFAULT_VUFORIA_API_TIMEOUT_SECONDS
+
+
+def _is_timeout_error(exc: BaseException) -> bool:
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return True
+    if isinstance(exc, error.URLError) and isinstance(exc.reason, (TimeoutError, socket.timeout)):
+        return True
+    message = str(exc).lower()
+    return "timed out" in message or "timeout" in message
 
 
 @dataclass
@@ -92,8 +127,9 @@ def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: by
     started_at = time.perf_counter()
     logger.info("vuforia_register_start name=%s request_path=%s image_bytes=%s", name, request_path, len(image_bytes))
 
+    timeout_seconds = _register_timeout_seconds()
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        with request.urlopen(req, timeout=timeout_seconds) as resp:
             response_body = resp.read().decode("utf-8")
             parsed = json.loads(response_body) if response_body else {}
             duration_ms = (time.perf_counter() - started_at) * 1000.0
@@ -126,16 +162,30 @@ def register_vuforia_target(config: VuforiaConfig, *, name: str, image_bytes: by
             duration_ms,
         )
         raise VuforiaError("Vuforia target registration failed.", status_code=exc.code, details=details) from exc
-    except error.URLError as exc:
+    except (error.URLError, TimeoutError, socket.timeout, OSError) as exc:
         duration_ms = (time.perf_counter() - started_at) * 1000.0
+        if _is_timeout_error(exc):
+            logger.warning(
+                "vuforia_register_timeout name=%s request_path=%s duration_ms=%.2f timeout_seconds=%.1f reason=%s",
+                name,
+                request_path,
+                duration_ms,
+                timeout_seconds,
+                exc,
+            )
+            raise VuforiaError(
+                f"Vuforia target registration timed out after {timeout_seconds:.0f}s. Try a smaller image or retry.",
+                status_code=504,
+                details=str(exc),
+            ) from exc
         logger.warning(
             "vuforia_register_unreachable name=%s request_path=%s duration_ms=%.2f reason=%s",
             name,
             request_path,
             duration_ms,
-            exc.reason,
+            exc,
         )
-        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc)) from exc
 
 
 def get_vuforia_target(config: VuforiaConfig, target_id: str):
@@ -149,7 +199,8 @@ def get_vuforia_target(config: VuforiaConfig, target_id: str):
     started_at = time.perf_counter()
     logger.info("vuforia_get_start target_id=%s request_path=%s", target_id, request_path)
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        api_timeout = _api_timeout_seconds()
+        with request.urlopen(req, timeout=api_timeout) as resp:
             response_body = resp.read().decode("utf-8")
             duration_ms = (time.perf_counter() - started_at) * 1000.0
             logger.info(
@@ -175,16 +226,18 @@ def get_vuforia_target(config: VuforiaConfig, target_id: str):
             duration_ms,
         )
         raise VuforiaError("Vuforia target status check failed.", status_code=exc.code, details=details) from exc
-    except error.URLError as exc:
+    except (error.URLError, TimeoutError, socket.timeout, OSError) as exc:
         duration_ms = (time.perf_counter() - started_at) * 1000.0
+        if _is_timeout_error(exc):
+            raise VuforiaError("Vuforia target status check timed out.", status_code=504, details=str(exc)) from exc
         logger.warning(
             "vuforia_get_unreachable target_id=%s request_path=%s duration_ms=%.2f reason=%s",
             target_id,
             request_path,
             duration_ms,
-            exc.reason,
+            exc,
         )
-        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc)) from exc
 
 
 def delete_vuforia_target(config: VuforiaConfig, target_id: str):
@@ -199,7 +252,8 @@ def delete_vuforia_target(config: VuforiaConfig, target_id: str):
     started_at = time.perf_counter()
     logger.info("vuforia_delete_start target_id=%s request_path=%s", target_id, request_path)
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        api_timeout = _api_timeout_seconds()
+        with request.urlopen(req, timeout=api_timeout) as resp:
             response_body = resp.read().decode("utf-8")
             parsed = json.loads(response_body) if response_body else {}
             duration_ms = (time.perf_counter() - started_at) * 1000.0
@@ -233,16 +287,18 @@ def delete_vuforia_target(config: VuforiaConfig, target_id: str):
             details,
         )
         raise VuforiaError("Vuforia target delete failed.", status_code=exc.code, details=details) from exc
-    except error.URLError as exc:
+    except (error.URLError, TimeoutError, socket.timeout, OSError) as exc:
         duration_ms = (time.perf_counter() - started_at) * 1000.0
+        if _is_timeout_error(exc):
+            raise VuforiaError("Vuforia target delete timed out.", status_code=504, details=str(exc)) from exc
         logger.warning(
             "vuforia_delete_unreachable target_id=%s request_path=%s duration_ms=%.2f reason=%s",
             target_id,
             request_path,
             duration_ms,
-            exc.reason,
+            exc,
         )
-        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc)) from exc
 
 
 def wait_vuforia_target_ready(config: VuforiaConfig, target_id: str, *, timeout_seconds: float = 20.0, poll_interval_seconds: float = 1.5):
