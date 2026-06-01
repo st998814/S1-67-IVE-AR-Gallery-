@@ -11,7 +11,6 @@
         </ui:VisualElement>
         <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label" />
         <ui:VisualElement class="switcher-actions">
-            <ui:Button name="NewButton" text="NEW" class="btn switcher-action-secondary" />
             <ui:Button name="EditButton" text="EDIT" class="btn btn-primary switcher-action-primary" />
             <ui:Button name="DeleteWorkspaceButton" text="DELETE" class="btn switcher-action-danger" />
         </ui:VisualElement>

@@ -21,7 +21,6 @@ namespace ARGallery.AppFlow
         private const string RightArrowButtonName = "RightArrowButton";
         private const string WorkspaceCardsRowName = "WorkspaceCardsRow";
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
-        private const string NewButtonName = "NewButton";
         private const string EditButtonName = "EditButton";
         private const string DeleteWorkspaceButtonName = "DeleteWorkspaceButton";
 
@@ -48,7 +47,6 @@ namespace ARGallery.AppFlow
         private Button rightArrowButton;
         private VisualElement workspaceCardsRow;
         private Label activeWorkspaceNameLabel;
-        private Button newButton;
         private Button editButton;
         private Button deleteWorkspaceButton;
 
@@ -85,7 +83,6 @@ namespace ARGallery.AppFlow
         {
             if (leftArrowButton != null) leftArrowButton.clicked -= OnLeftArrowClicked;
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
-            if (newButton != null) newButton.clicked -= OnNewButtonClicked;
             if (editButton != null) editButton.clicked -= OnEditButtonClicked;
             if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
         }
@@ -134,11 +131,10 @@ namespace ARGallery.AppFlow
             rightArrowButton = root.Q<Button>(RightArrowButtonName);
             workspaceCardsRow = root.Q<VisualElement>(WorkspaceCardsRowName);
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
-            newButton = root.Q<Button>(NewButtonName);
             editButton = root.Q<Button>(EditButtonName);
             deleteWorkspaceButton = root.Q<Button>(DeleteWorkspaceButtonName);
 
-            if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || newButton == null || editButton == null)
+            if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || editButton == null)
             {
                 Debug.LogError("WorkspaceSwitcherController: required UI elements were not found.");
                 return;
@@ -148,7 +144,6 @@ namespace ARGallery.AppFlow
 
             leftArrowButton.clicked += OnLeftArrowClicked;
             rightArrowButton.clicked += OnRightArrowClicked;
-            newButton.clicked += OnNewButtonClicked;
             editButton.clicked += OnEditButtonClicked;
             if (deleteWorkspaceButton != null)
                 deleteWorkspaceButton.clicked += OnDeleteWorkspaceClicked;
@@ -683,16 +678,10 @@ namespace ARGallery.AppFlow
             actionRow.style.alignItems = Align.Center;
             actionRow.style.justifyContent = Justify.Center;
 
-            var newBtn = new Button { name = NewButtonName, text = "NEW" };
-            newBtn.style.width = 160;
-            newBtn.style.height = 46;
-            newBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
-            actionRow.Add(newBtn);
-
             var editBtn = new Button { name = EditButtonName, text = "EDIT" };
             editBtn.style.width = 160;
             editBtn.style.height = 46;
-            editBtn.style.marginLeft = 14;
+            editBtn.style.marginLeft = 0;
             editBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
             actionRow.Add(editBtn);
 
