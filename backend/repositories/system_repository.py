@@ -30,6 +30,18 @@ class SystemRepository:
         )
         return int(cur.fetchone()[0])
 
+    def workspace_vuforia_target_ids(self, cur, workspace_id: str):
+        cur.execute(
+            """
+            SELECT DISTINCT vuforia_target_id FROM targets
+            WHERE workspace_id = %s
+              AND vuforia_target_id IS NOT NULL
+              AND TRIM(vuforia_target_id) <> '';
+            """,
+            (workspace_id,),
+        )
+        return [row[0].strip() for row in cur.fetchall() if row and row[0]]
+
     def target_upload_urls(self, cur, workspace_id: str):
         cur.execute("SELECT target_image_url FROM targets WHERE workspace_id = %s;", (workspace_id,))
         return [row[0] for row in cur.fetchall() if row and row[0]]

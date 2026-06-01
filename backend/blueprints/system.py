@@ -15,6 +15,8 @@ def _service() -> SystemService:
         current_app.config["GET_DB_CONNECTION"],
         public_base_url=current_app.config["PUBLIC_BASE_URL"],
         upload_folder=current_app.config["UPLOAD_FOLDER"],
+        vuforia_config=current_app.config.get("VUFORIA_CONFIG"),
+        delete_vuforia_target_fn=current_app.config.get("DELETE_VUFORIA_TARGET"),
     )
 
 
@@ -49,20 +51,24 @@ def delete_workspace(workspace_id):
             return error_response(f"Workspace '{wid}' was not found.", "NOT_FOUND", 404)
         for path, exc in body["fileDeleteErrors"]:
             logger.warning("Workspace delete: could not remove file %s: %s", path, exc)
+        for vuforia_id, exc in body.get("vuforiaDeleteErrors", []):
+            logger.warning("Workspace delete: could not remove Vuforia target %s: %s", vuforia_id, exc)
         if body.get("workspaceDeleted") == 0:
             logger.warning("Workspace row missing after target deletes for workspace_id=%s", wid)
         logger.info(
-            "Deleted workspace '%s' (targets=%s, contents=%s, upload_urls=%s)",
+            "Deleted workspace '%s' (targets=%s, contents=%s, upload_urls=%s, vuforia_targets=%s)",
             wid,
             body["deletedTargets"],
             body["deletedContents"],
             body["deletedUploadUrls"],
+            body.get("deletedVuforiaTargets", 0),
         )
         return jsonify(
             {
                 "workspaceId": body["workspaceId"],
                 "deletedTargets": body["deletedTargets"],
                 "deletedContents": body["deletedContents"],
+                "deletedVuforiaTargets": body.get("deletedVuforiaTargets", 0),
             }
         ), 200
     except psycopg2.Error as e:

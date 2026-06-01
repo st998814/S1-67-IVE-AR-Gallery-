@@ -39,7 +39,7 @@ Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring
 | **`POST /api/targets`** | JSON create/update; **`workspaceId`** / optional **`workspaceName`**. |
 | **`POST /api/targets/cloud`** | Vuforia + multipart image; **`workspaceId`** / **`workspaceName`**. |
 | **`POST /api/content`** | JSON; **`contentId`**, **`targetId`**, **`mediaUrl`**, transforms, meta. |
-| **`DELETE /api/workspaces/<workspace_id>`** | Cascade: uploads URLs + files under **`PUBLIC_BASE_URL`**, **`targets`** (contents cascade), **`workspaces`**. Reserved **`default`** workspace returns **403**. |
+| **`DELETE /api/workspaces/<workspace_id>`** | Cascade: Vuforia cloud targets (`vuforia_target_id` per row), upload URLs + files under **`PUBLIC_BASE_URL`**, **`targets`** (contents cascade), **`workspaces`**. Response includes **`deletedVuforiaTargets`**. Reserved **`default`** workspace returns **403**. |
 
 Environment: see repo **`.env.example`** (`DB_NAME`, `PUBLIC_BASE_URL`, Docker **`DOCKER_DB_PUBLISH`** when host Postgres already uses port **5432**).
 
@@ -61,7 +61,7 @@ Local **`WorkspaceDeletion`** always removes **`snapshot.json`** and workspace f
 
 - After sync, **`GET /api/health`** counts match expectations; TablePlus connects to the **same** DB/host/port as the backend.
 - Re-sync does not multiply **`uploads/target/`** / **`uploads/content/`** files for the same ids when **`targetId`** / **`contentId`** are sent.
-- Deleting a workspace removes related server rows and upload files when the delete API succeeds.
+- Deleting a workspace removes related Vuforia cloud targets, server rows, and upload files when the delete API succeeds.
 
 ---
 

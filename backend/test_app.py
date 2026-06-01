@@ -142,12 +142,15 @@ def test_delete_workspace_success(client, tmp_path):
     mock_cur = MagicMock()
     mock_cur.fetchone.side_effect = [(1,), (2,)]
     mock_cur.fetchall.side_effect = [
+        [("vuforia-target-abc",)],
         [("http://127.0.0.1:5050/uploads/target/poster.jpg",)],
         [("http://127.0.0.1:5050/uploads/content/image.jpg",)],
     ]
     mock_cur.rowcount = 1
 
-    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)), patch(
+        "app.delete_vuforia_target", return_value={"targetId": "vuforia-target-abc", "resultCode": "Success"}
+    ) as delete_vuforia:
         res = client.delete("/api/workspaces/demo-workspace")
 
     assert res.status_code == 200
@@ -155,9 +158,60 @@ def test_delete_workspace_success(client, tmp_path):
         "workspaceId": "demo-workspace",
         "deletedTargets": 1,
         "deletedContents": 2,
+        "deletedVuforiaTargets": 1,
     }
+    delete_vuforia.assert_called_once()
     assert not target_file.exists()
     assert not content_file.exists()
+
+
+def test_delete_workspace_vuforia_404_counts_as_deleted(client, tmp_path):
+    from vuforia_service import VuforiaError
+
+    app.config["UPLOAD_FOLDER"] = str(tmp_path)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.side_effect = [(1,), (0,)]
+    mock_cur.fetchall.side_effect = [
+        [("missing-vu-target",)],
+        [],
+        [],
+    ]
+    mock_cur.rowcount = 1
+
+    def _raise_404(_config, target_id):
+        raise VuforiaError("not found", status_code=404)
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)), patch(
+        "app.delete_vuforia_target", side_effect=_raise_404
+    ):
+        res = client.delete("/api/workspaces/demo-workspace")
+
+    assert res.status_code == 200
+    assert res.get_json()["deletedVuforiaTargets"] == 1
+
+
+def test_delete_vuforia_target_requires_id():
+    from vuforia_service import VuforiaConfig, VuforiaError, delete_vuforia_target
+
+    config = VuforiaConfig(access_key="key", secret_key="secret")
+    with pytest.raises(VuforiaError) as exc:
+        delete_vuforia_target(config, "")
+    assert exc.value.status_code == 400
+
+
+def test_vws_empty_body_md5_constant():
+    from vuforia_service import EMPTY_BODY_MD5
+
+    assert EMPTY_BODY_MD5 == "d41d8cd98f00b204e9800998ecf8427e"
+
+
+def test_vws_bodyless_request_uses_empty_body_md5_in_signature():
+    from vuforia_service import EMPTY_BODY_MD5, VuforiaConfig, _authorized_request
+
+    config = VuforiaConfig(access_key="access", secret_key="secret")
+    req = _authorized_request(config, method="DELETE", request_path="/targets/abc")
+    assert req.get_header("Content-md5") == EMPTY_BODY_MD5
+    assert req.get_header("Content-type") is None
 
 
 VALID_TARGET_PAYLOAD = {

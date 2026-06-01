@@ -14,6 +14,9 @@ from logging_config import get_vuforia_logger
 
 logger = get_vuforia_logger()
 
+# VWS auth: bodyless requests must sign with MD5 of empty body (not an empty Content-MD5 field).
+EMPTY_BODY_MD5 = hashlib.md5(b"").hexdigest()
+
 
 @dataclass
 class VuforiaConfig:
@@ -45,17 +48,22 @@ def _sign_request(secret_key: str, method: str, content_md5: str, content_type: 
 
 
 def _authorized_request(config: VuforiaConfig, *, method: str, request_path: str, body: Optional[bytes] = None):
-    content_type = "application/json" if body is not None else ""
-    content_md5 = hashlib.md5(body).hexdigest() if body is not None else ""
+    if body is not None:
+        content_type = "application/json"
+        content_md5 = hashlib.md5(body).hexdigest()
+    else:
+        content_type = ""
+        content_md5 = EMPTY_BODY_MD5
+
     date = _http_date()
     signature = _sign_request(config.secret_key, method, content_md5, content_type, date, request_path)
     headers = {
         "Authorization": f"VWS {config.access_key}:{signature}",
         "Date": date,
+        "Content-MD5": content_md5,
     }
     if body is not None:
         headers["Content-Type"] = content_type
-        headers["Content-MD5"] = content_md5
 
     return request.Request(
         config.host.rstrip("/") + request_path,
@@ -171,6 +179,64 @@ def get_vuforia_target(config: VuforiaConfig, target_id: str):
         duration_ms = (time.perf_counter() - started_at) * 1000.0
         logger.warning(
             "vuforia_get_unreachable target_id=%s request_path=%s duration_ms=%.2f reason=%s",
+            target_id,
+            request_path,
+            duration_ms,
+            exc.reason,
+        )
+        raise VuforiaError("Could not reach Vuforia Web API.", status_code=502, details=str(exc.reason)) from exc
+
+
+def delete_vuforia_target(config: VuforiaConfig, target_id: str):
+    """Removes a cloud image target from the Vuforia database (DELETE /targets/{id})."""
+    if not config.enabled:
+        raise VuforiaError("Vuforia credentials are not configured.", status_code=503)
+    if not target_id:
+        raise VuforiaError("Vuforia target id is required.", status_code=400)
+
+    request_path = f"/targets/{target_id}"
+    req = _authorized_request(config, method="DELETE", request_path=request_path)
+    started_at = time.perf_counter()
+    logger.info("vuforia_delete_start target_id=%s request_path=%s", target_id, request_path)
+    try:
+        with request.urlopen(req, timeout=20) as resp:
+            response_body = resp.read().decode("utf-8")
+            parsed = json.loads(response_body) if response_body else {}
+            duration_ms = (time.perf_counter() - started_at) * 1000.0
+            logger.info(
+                "vuforia_delete_complete target_id=%s request_path=%s status=%s duration_ms=%.2f result_code=%s",
+                target_id,
+                request_path,
+                resp.status,
+                duration_ms,
+                parsed.get("result_code", "Success"),
+            )
+            return {
+                "targetId": target_id,
+                "resultCode": parsed.get("result_code", "Success"),
+                "transactionId": parsed.get("transaction_id"),
+                "raw": parsed,
+            }
+    except error.HTTPError as exc:
+        duration_ms = (time.perf_counter() - started_at) * 1000.0
+        response_body = exc.read().decode("utf-8", errors="replace")
+        try:
+            details = json.loads(response_body)
+        except json.JSONDecodeError:
+            details = response_body
+        logger.warning(
+            "vuforia_delete_failed target_id=%s request_path=%s status=%s duration_ms=%.2f details=%s",
+            target_id,
+            request_path,
+            exc.code,
+            duration_ms,
+            details,
+        )
+        raise VuforiaError("Vuforia target delete failed.", status_code=exc.code, details=details) from exc
+    except error.URLError as exc:
+        duration_ms = (time.perf_counter() - started_at) * 1000.0
+        logger.warning(
+            "vuforia_delete_unreachable target_id=%s request_path=%s duration_ms=%.2f reason=%s",
             target_id,
             request_path,
             duration_ms,
