@@ -15,13 +15,33 @@ namespace ARGallery.AppFlow
         private const string TargetIdInputName = "TargetIdInput";
         private const string DisplayLabelInputName = "DisplayLabelInput";
         private const string TargetPostureDropdownName = "TargetPostureDropdown";
-        private const string BrowseTargetImageButtonName = "BrowseTargetImageButton";
-        private const string SelectedTargetImageLabelName = "SelectedTargetImageLabel";
+        private const string TargetImagePreviewButtonName = "TargetImagePreviewButton";
+        private const string TargetImagePreviewMediaName = "TargetImagePreviewMedia";
         private const string PhysicalWidthInputName = "PhysicalWidthInput";
         private const string VuforiaTargetNameInputName = "VuforiaTargetNameInput";
         private const string SubmitButtonName = "SubmitTargetButton";
-        private const string CancelButtonName = "CancelButton";
+        private const string PrevStepButtonName = "PrevStepButton";
+        private const string NextStepButtonName = "NextStepButton";
+        private const string StepTrackablePanelName = "StepTrackablePanel";
+        private const string StepNamesPanelName = "StepNamesPanel";
+        private const string StepDot0Name = "StepDot0";
+        private const string StepDot1Name = "StepDot1";
+        private const string StepSummaryLabelName = "StepSummaryLabel";
         private const string StatusLabelName = "StatusLabel";
+        private const string StatusBannerName = "StatusBanner";
+        private const string BackToSwitcherButtonName = "BackToSwitcherButton";
+        private const string AdvancedToggleButtonName = "AdvancedToggleButton";
+        private const string AdvancedSectionName = "AdvancedSection";
+        private const string UseCustomDisplayLabelToggleName = "UseCustomDisplayLabelToggle";
+
+        private enum TargetSetupStatusKind
+        {
+            Idle,
+            Info,
+            Busy,
+            Error,
+            Success
+        }
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
         [SerializeField] private float createTargetTimeoutSeconds = 120f;
@@ -34,20 +54,36 @@ namespace ARGallery.AppFlow
         private TextField targetIdInput;
         private TextField displayLabelInput;
         private DropdownField targetPostureDropdown;
-        private Button browseTargetImageButton;
-        private Label selectedTargetImageLabel;
+        private Button targetImagePreviewButton;
+        private VisualElement targetImagePreviewMedia;
         private FloatField physicalWidthInput;
         private TextField vuforiaTargetNameInput;
         private Button submitButton;
-        private Button cancelButton;
+        private Button prevStepButton;
+        private Button nextStepButton;
+        private Button backToSwitcherButton;
+        private VisualElement stepTrackablePanel;
+        private VisualElement stepNamesPanel;
+        private VisualElement stepDot0;
+        private VisualElement stepDot1;
+        private Label stepSummaryLabel;
+        private Button advancedToggleButton;
         private Label statusLabel;
+        private VisualElement statusBanner;
+        private VisualElement advancedSection;
+        private Toggle useCustomDisplayLabelToggle;
         private File selectedTargetImageFile;
+        private Texture2D previewTexture;
 
         private readonly WorkspaceAssetRepository workspaceAssetRepository = new WorkspaceAssetRepository();
         private readonly WorkspaceSnapshotRepository workspaceSnapshotRepository = new WorkspaceSnapshotRepository();
 
+        private const int StepCount = 2;
+
         private string lastTargetId = "";
         private bool isBusy;
+        private bool advancedExpanded;
+        private int currentStep;
 
         private void OnEnable()
         {
@@ -64,10 +100,18 @@ namespace ARGallery.AppFlow
 
             VisualElement root = uiDocument.rootVisualElement;
             EnsureFallbackUi(root);
+
+            VisualElement screenRoot = root.Q<VisualElement>("TargetSetupRoot") ?? root;
+            AppFlowWallpaper.Apply(screenRoot);
+
             BindUi(root);
             ApplyWorkspaceNameFromSession();
+            SyncDerivedFieldsFromTargetName();
+            RefreshDisplayLabelFieldVisibility();
+            currentStep = 0;
+            RefreshWizardUi();
             UpdateUiState();
-            SetStatus("Create target to continue.");
+            SetStatus("Click the image area to upload, then use the arrow to continue.", TargetSetupStatusKind.Idle);
         }
 
         private void ApplyWorkspaceNameFromSession()
@@ -82,9 +126,23 @@ namespace ARGallery.AppFlow
         private void OnDisable()
         {
             if (submitButton != null) submitButton.clicked -= OnSubmitClicked;
-            if (browseTargetImageButton != null) browseTargetImageButton.clicked -= OnBrowseTargetImageClicked;
-            if (cancelButton != null) cancelButton.clicked -= OnCancelClicked;
+            if (targetImagePreviewButton != null) targetImagePreviewButton.clicked -= OnBrowseTargetImageClicked;
+            if (prevStepButton != null) prevStepButton.clicked -= OnPreviousStepClicked;
+            if (nextStepButton != null) nextStepButton.clicked -= OnNextStepClicked;
+            if (backToSwitcherButton != null) backToSwitcherButton.clicked -= OnBackToSwitcherClicked;
+            if (advancedToggleButton != null) advancedToggleButton.clicked -= OnAdvancedToggleClicked;
+            if (useCustomDisplayLabelToggle != null) useCustomDisplayLabelToggle.UnregisterValueChangedCallback(OnUseCustomDisplayLabelChanged);
+            if (targetNameInput != null) targetNameInput.UnregisterValueChangedCallback(OnTargetNameChanged);
             WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
+        }
+
+        private void OnDestroy()
+        {
+            if (previewTexture != null)
+            {
+                Destroy(previewTexture);
+                previewTexture = null;
+            }
         }
 
         private void BindUi(VisualElement root)
@@ -94,22 +152,165 @@ namespace ARGallery.AppFlow
             targetIdInput = root.Q<TextField>(TargetIdInputName);
             displayLabelInput = root.Q<TextField>(DisplayLabelInputName);
             targetPostureDropdown = root.Q<DropdownField>(TargetPostureDropdownName);
-            browseTargetImageButton = root.Q<Button>(BrowseTargetImageButtonName);
-            selectedTargetImageLabel = root.Q<Label>(SelectedTargetImageLabelName);
+            targetImagePreviewButton = root.Q<Button>(TargetImagePreviewButtonName);
+            targetImagePreviewMedia = root.Q<VisualElement>(TargetImagePreviewMediaName);
             physicalWidthInput = root.Q<FloatField>(PhysicalWidthInputName);
             vuforiaTargetNameInput = root.Q<TextField>(VuforiaTargetNameInputName);
             submitButton = root.Q<Button>(SubmitButtonName);
-            cancelButton = root.Q<Button>(CancelButtonName);
+            prevStepButton = root.Q<Button>(PrevStepButtonName);
+            nextStepButton = root.Q<Button>(NextStepButtonName);
+            stepTrackablePanel = root.Q<VisualElement>(StepTrackablePanelName);
+            stepNamesPanel = root.Q<VisualElement>(StepNamesPanelName);
+            stepDot0 = root.Q<VisualElement>(StepDot0Name);
+            stepDot1 = root.Q<VisualElement>(StepDot1Name);
+            stepSummaryLabel = root.Q<Label>(StepSummaryLabelName);
+            backToSwitcherButton = root.Q<Button>(BackToSwitcherButtonName);
+            advancedToggleButton = root.Q<Button>(AdvancedToggleButtonName);
+            advancedSection = root.Q<VisualElement>(AdvancedSectionName);
+            statusBanner = root.Q<VisualElement>(StatusBannerName);
             statusLabel = root.Q<Label>(StatusLabelName);
+            useCustomDisplayLabelToggle = root.Q<Toggle>(UseCustomDisplayLabelToggleName);
 
             if (submitButton != null) submitButton.clicked += OnSubmitClicked;
-            if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageClicked;
-            if (cancelButton != null) cancelButton.clicked += OnCancelClicked;
+            if (targetImagePreviewButton != null) targetImagePreviewButton.clicked += OnBrowseTargetImageClicked;
+            if (prevStepButton != null) prevStepButton.clicked += OnPreviousStepClicked;
+            if (nextStepButton != null) nextStepButton.clicked += OnNextStepClicked;
+            if (backToSwitcherButton != null)
+            {
+                backToSwitcherButton.clicked += OnBackToSwitcherClicked;
+                backToSwitcherButton.BringToFront();
+            }
+            if (advancedToggleButton != null) advancedToggleButton.clicked += OnAdvancedToggleClicked;
+            if (useCustomDisplayLabelToggle != null)
+                useCustomDisplayLabelToggle.RegisterValueChangedCallback(OnUseCustomDisplayLabelChanged);
+            if (targetNameInput != null)
+                targetNameInput.RegisterValueChangedCallback(OnTargetNameChanged);
             WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
             WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
             ConfigurePostureDropdown();
 
             ApplyInputValueTextColor();
+            UpdateImagePreview();
+        }
+
+        private void OnBackToSwitcherClicked()
+        {
+            if (isBusy)
+                return;
+            sceneController?.CancelToSwitcher();
+        }
+
+        private void OnNextStepClicked()
+        {
+            if (isBusy || currentStep >= StepCount - 1)
+                return;
+
+            if (!TryValidateStep1(out string validationMessage))
+            {
+                SetStatus(validationMessage, TargetSetupStatusKind.Error);
+                return;
+            }
+
+            currentStep++;
+            RefreshWizardUi();
+            SetStatus("Enter workspace and target names, then create.", TargetSetupStatusKind.Idle);
+        }
+
+        private void OnPreviousStepClicked()
+        {
+            if (isBusy || currentStep <= 0)
+                return;
+
+            currentStep--;
+            RefreshWizardUi();
+            SetStatus("Click the image area to upload, then use the arrow to continue.", TargetSetupStatusKind.Idle);
+        }
+
+        private void RefreshWizardUi()
+        {
+            bool onTrackable = currentStep == 0;
+
+            if (stepTrackablePanel != null)
+                stepTrackablePanel.EnableInClassList("target-setup-step-card--hidden", !onTrackable);
+            if (stepNamesPanel != null)
+                stepNamesPanel.EnableInClassList("target-setup-step-card--hidden", onTrackable);
+
+            if (prevStepButton != null)
+            {
+                bool showPrev = currentStep > 0 && !isBusy;
+                prevStepButton.EnableInClassList("target-setup-nav-arrow--hidden", !showPrev);
+                prevStepButton.SetEnabled(showPrev);
+            }
+
+            if (nextStepButton != null)
+            {
+                bool showNext = currentStep < StepCount - 1 && !isBusy;
+                nextStepButton.EnableInClassList("target-setup-nav-arrow--hidden", !showNext);
+                nextStepButton.SetEnabled(showNext);
+            }
+
+            if (stepDot0 != null)
+                stepDot0.EnableInClassList("target-setup-step-dot--active", currentStep == 0);
+            if (stepDot1 != null)
+                stepDot1.EnableInClassList("target-setup-step-dot--active", currentStep == 1);
+
+            if (!onTrackable)
+                RefreshStepSummary();
+        }
+
+        private void RefreshStepSummary()
+        {
+            if (stepSummaryLabel == null)
+                return;
+
+            string fileName = HasValidSelectedTargetImage() ? ResolveSelectedFileName() : "—";
+            string posture = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
+            float width = physicalWidthInput != null ? physicalWidthInput.value : 0f;
+            stepSummaryLabel.text = $"Trackable: {fileName} · {posture} · {width:0.###} m wide";
+        }
+
+        private void OnAdvancedToggleClicked()
+        {
+            advancedExpanded = !advancedExpanded;
+            RefreshAdvancedSection();
+        }
+
+        private void OnUseCustomDisplayLabelChanged(ChangeEvent<bool> evt)
+        {
+            RefreshDisplayLabelFieldVisibility();
+        }
+
+        private void OnTargetNameChanged(ChangeEvent<string> evt)
+        {
+            SyncDerivedFieldsFromTargetName();
+        }
+
+        private void RefreshAdvancedSection()
+        {
+            if (advancedSection != null)
+                advancedSection.EnableInClassList("target-setup-advanced--expanded", advancedExpanded);
+            if (advancedToggleButton != null)
+                advancedToggleButton.text = advancedExpanded ? "Advanced \u25B4" : "Advanced \u25BE";
+        }
+
+        private void RefreshDisplayLabelFieldVisibility()
+        {
+            bool showCustom = useCustomDisplayLabelToggle != null && useCustomDisplayLabelToggle.value;
+            if (displayLabelInput == null)
+                return;
+
+            displayLabelInput.EnableInClassList("target-setup-field--conditional--visible", showCustom);
+            displayLabelInput.style.display = showCustom ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void SyncDerivedFieldsFromTargetName()
+        {
+            string targetName = Safe(targetNameInput != null ? targetNameInput.value : "");
+            if (targetIdInput != null && !string.IsNullOrWhiteSpace(targetName))
+                targetIdInput.SetValueWithoutNotify(NormalizeTargetId(targetIdInput.value, targetName));
+
+            if (useCustomDisplayLabelToggle != null && !useCustomDisplayLabelToggle.value && displayLabelInput != null && !string.IsNullOrWhiteSpace(targetName))
+                displayLabelInput.SetValueWithoutNotify(targetName);
         }
 
         private void OnSubmitClicked()
@@ -119,21 +320,38 @@ namespace ARGallery.AppFlow
 
             if (apiClient == null)
             {
-                SetStatus("No API client available.");
+                SetStatus("No API client available.", TargetSetupStatusKind.Error);
                 return;
             }
 
             string workspaceName = Safe(workspaceNameInput != null ? workspaceNameInput.value : "");
             string targetName = Safe(targetNameInput != null ? targetNameInput.value : "");
             string targetId = NormalizeTargetId(targetIdInput != null ? targetIdInput.value : "", targetName);
-            string displayLabel = Safe(displayLabelInput != null ? displayLabelInput.value : "");
+            bool useCustomDisplayLabel = useCustomDisplayLabelToggle != null && useCustomDisplayLabelToggle.value;
+            string displayLabel = useCustomDisplayLabel
+                ? Safe(displayLabelInput != null ? displayLabelInput.value : "")
+                : targetName;
+            if (string.IsNullOrWhiteSpace(displayLabel))
+                displayLabel = targetName;
+            if (useCustomDisplayLabel && string.IsNullOrWhiteSpace(displayLabel))
+            {
+                SetStatus("Enter a display label or disable the custom label option.", TargetSetupStatusKind.Error);
+                return;
+            }
+
             string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
             float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
             bool hasTargetImage = HasValidSelectedTargetImage();
 
-            if (!TryValidateRequiredFields(workspaceName, targetName, displayLabel, postureValue, physicalWidth, hasTargetImage, out string validationMessage))
+            if (!TryValidateStep1(out string step1Message))
             {
-                SetStatus(validationMessage);
+                SetStatus(step1Message, TargetSetupStatusKind.Error);
+                return;
+            }
+
+            if (!TryValidateStep2(workspaceName, targetName, useCustomDisplayLabel, displayLabel, out string step2Message))
+            {
+                SetStatus(step2Message, TargetSetupStatusKind.Error);
                 return;
             }
 
@@ -145,7 +363,7 @@ namespace ARGallery.AppFlow
 
             isBusy = true;
             UpdateUiState();
-            SetStatus("Creating cloud target...");
+            SetStatus("Creating cloud target… This may take up to a minute for large images.", TargetSetupStatusKind.Busy);
 
             string cloudWorkspaceId = "default";
             if (AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext wsSession) && wsSession != null
@@ -179,7 +397,7 @@ namespace ARGallery.AppFlow
                 {
                     isBusy = false;
                     UpdateUiState();
-                    SetStatus($"Create cloud target failed: {BuildResultMessage(result)}");
+                    SetStatus(BuildResultMessage(result), TargetSetupStatusKind.Error);
                     return;
                 }
 
@@ -195,46 +413,53 @@ namespace ARGallery.AppFlow
                     selectedPosture);
                 isBusy = false;
                 UpdateUiState();
-                SetStatus("Target created. Entering authoring...");
+                SetStatus("Target created. Opening authoring…", TargetSetupStatusKind.Success);
                 sceneController?.MarkReadyAndContinue(lastTargetId);
             }, createTargetTimeoutSeconds);
         }
 
-        private void OnCancelClicked()
+        private void UpdateUiState()
         {
-            if (isBusy)
-                return;
-            sceneController?.CancelToSwitcher();
-        }
+            bool enabled = !isBusy;
 
-        private void UpdateUiState(bool failureState = false)
-        {
             if (submitButton != null)
             {
-                submitButton.SetEnabled(!isBusy);
-                submitButton.text = isBusy ? "Processing..." : "Create + Continue";
+                submitButton.SetEnabled(enabled);
+                submitButton.text = isBusy ? "Creating target…" : "Create target & continue";
             }
 
-            if (browseTargetImageButton != null)
-                browseTargetImageButton.SetEnabled(!isBusy);
+            if (targetImagePreviewButton != null)
+                targetImagePreviewButton.SetEnabled(enabled);
+            if (workspaceNameInput != null) workspaceNameInput.SetEnabled(enabled);
+            if (targetNameInput != null) targetNameInput.SetEnabled(enabled);
+            if (targetIdInput != null) targetIdInput.SetEnabled(enabled);
+            if (displayLabelInput != null) displayLabelInput.SetEnabled(enabled);
+            if (targetPostureDropdown != null) targetPostureDropdown.SetEnabled(enabled);
+            if (physicalWidthInput != null) physicalWidthInput.SetEnabled(enabled);
+            if (vuforiaTargetNameInput != null) vuforiaTargetNameInput.SetEnabled(enabled);
+            if (useCustomDisplayLabelToggle != null) useCustomDisplayLabelToggle.SetEnabled(enabled);
+            if (advancedToggleButton != null) advancedToggleButton.SetEnabled(enabled);
+            if (backToSwitcherButton != null) backToSwitcherButton.SetEnabled(enabled);
+            if (prevStepButton != null) prevStepButton.SetEnabled(enabled && currentStep > 0);
+            if (nextStepButton != null) nextStepButton.SetEnabled(enabled && currentStep < StepCount - 1);
 
-            if (workspaceNameInput != null)
-                workspaceNameInput.SetEnabled(!isBusy);
-
-            if (cancelButton != null)
-                cancelButton.SetEnabled(!isBusy);
+            RefreshWizardUi();
         }
 
-        private static bool TryValidateRequiredFields(string workspaceName, string targetName, string displayLabel, string postureValue, float physicalWidth, bool hasTargetImage, out string validationMessage)
+        private bool TryValidateStep1(out string validationMessage)
+        {
+            string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
+            float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
+            return TryValidateStep1Fields(postureValue, physicalWidth, HasValidSelectedTargetImage(), out validationMessage);
+        }
+
+        private static bool TryValidateStep1Fields(string postureValue, float physicalWidth, bool hasTargetImage, out string validationMessage)
         {
             var missing = new System.Collections.Generic.List<string>();
 
-            if (string.IsNullOrWhiteSpace(workspaceName)) missing.Add("workspace name");
-            if (string.IsNullOrWhiteSpace(targetName)) missing.Add("target name");
-            if (string.IsNullOrWhiteSpace(displayLabel)) missing.Add("display label");
-            if (string.IsNullOrWhiteSpace(postureValue) || postureValue == "Select...") missing.Add("target posture");
+            if (!hasTargetImage) missing.Add("trackable image");
+            if (string.IsNullOrWhiteSpace(postureValue)) missing.Add("placement");
             if (physicalWidth <= 0f) missing.Add("physical width");
-            if (!hasTargetImage) missing.Add("target image file");
 
             if (missing.Count == 0)
             {
@@ -242,15 +467,87 @@ namespace ARGallery.AppFlow
                 return true;
             }
 
-            validationMessage = "Missing required fields: " + string.Join(", ", missing) + ".";
+            validationMessage = "Missing: " + string.Join(", ", missing) + ".";
             return false;
         }
 
-        private void SetStatus(string message)
+        private static bool TryValidateStep2(string workspaceName, string targetName, bool useCustomDisplayLabel, string displayLabel, out string validationMessage)
+        {
+            var missing = new System.Collections.Generic.List<string>();
+
+            if (string.IsNullOrWhiteSpace(workspaceName)) missing.Add("workspace name");
+            if (string.IsNullOrWhiteSpace(targetName)) missing.Add("target name");
+            if (useCustomDisplayLabel && string.IsNullOrWhiteSpace(displayLabel)) missing.Add("display label");
+
+            if (missing.Count == 0)
+            {
+                validationMessage = null;
+                return true;
+            }
+
+            validationMessage = "Missing: " + string.Join(", ", missing) + ".";
+            return false;
+        }
+
+        private void SetStatus(string message, TargetSetupStatusKind kind = TargetSetupStatusKind.Info)
         {
             if (statusLabel != null)
                 statusLabel.text = message ?? "";
+
+            if (statusBanner != null)
+            {
+                statusBanner.EnableInClassList("target-setup-status--idle", kind == TargetSetupStatusKind.Idle);
+                statusBanner.EnableInClassList("target-setup-status--info", kind == TargetSetupStatusKind.Info);
+                statusBanner.EnableInClassList("target-setup-status--busy", kind == TargetSetupStatusKind.Busy);
+                statusBanner.EnableInClassList("target-setup-status--error", kind == TargetSetupStatusKind.Error);
+                statusBanner.EnableInClassList("target-setup-status--success", kind == TargetSetupStatusKind.Success);
+            }
+
             Debug.Log($"TargetInstantiationUIController: {message}");
+        }
+
+        private void UpdateImagePreview()
+        {
+            if (targetImagePreviewMedia == null)
+                return;
+
+            if (previewTexture != null)
+            {
+                Destroy(previewTexture);
+                previewTexture = null;
+            }
+
+            bool hasImage = HasValidSelectedTargetImage();
+            if (targetImagePreviewButton != null)
+            {
+                targetImagePreviewButton.EnableInClassList("target-setup-image-picker--empty", !hasImage);
+                targetImagePreviewButton.EnableInClassList("target-setup-image-picker--has-image", hasImage);
+            }
+
+            if (!hasImage)
+            {
+                targetImagePreviewMedia.style.backgroundImage = new StyleBackground(StyleKeyword.None);
+                return;
+            }
+
+            previewTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!previewTexture.LoadImage(selectedTargetImageFile.data, markNonReadable: false))
+            {
+                Destroy(previewTexture);
+                previewTexture = null;
+                targetImagePreviewMedia.style.backgroundImage = new StyleBackground(StyleKeyword.None);
+                if (targetImagePreviewButton != null)
+                {
+                    targetImagePreviewButton.EnableInClassList("target-setup-image-picker--empty", true);
+                    targetImagePreviewButton.EnableInClassList("target-setup-image-picker--has-image", false);
+                }
+                return;
+            }
+
+            targetImagePreviewMedia.style.backgroundImage = Background.FromTexture2D(previewTexture);
+            targetImagePreviewMedia.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+            targetImagePreviewMedia.style.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Center);
+            targetImagePreviewMedia.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Center);
         }
 
         private IApiClient ResolveApiClient()
@@ -274,12 +571,23 @@ namespace ARGallery.AppFlow
         private static string BuildResultMessage(ApiResult<CreateTargetResponseDto> result)
         {
             if (result == null)
-                return "No result";
+                return "No response from server.";
+
+            if (string.Equals(result.errorCode, "VUFORIA_TIMEOUT", StringComparison.OrdinalIgnoreCase))
+                return "Vuforia registration timed out. Try a smaller JPG/PNG or check your network.";
+
+            if (string.Equals(result.errorCode, "VUFORIA_ERROR", StringComparison.OrdinalIgnoreCase))
+                return string.IsNullOrWhiteSpace(result.message)
+                    ? "Vuforia registration failed."
+                    : result.message;
+
             if (!string.IsNullOrWhiteSpace(result.message))
                 return result.message;
+
             if (!string.IsNullOrWhiteSpace(result.errorCode))
                 return result.errorCode;
-            return "Unknown error";
+
+            return "Could not create cloud target.";
         }
 
         private static string Safe(string value)
@@ -294,7 +602,7 @@ namespace ARGallery.AppFlow
             EnsureFgFileBrowserPresent();
             if (GameObject.Find("[FGFileBrowser]") == null)
             {
-                SetStatus("File browser is not available in this scene.");
+                SetStatus("File browser is not available in this scene.", TargetSetupStatusKind.Error);
                 return;
             }
             WebGLFileBrowser.OpenFilePanelWithFilters(".png,.jpg,.jpeg", false);
@@ -307,15 +615,17 @@ namespace ARGallery.AppFlow
             File selected = files[0];
             if (selected == null || selected.data == null || selected.data.Length == 0)
             {
-                SetStatus("Selected target image is empty.");
+                SetStatus("Selected image is empty.", TargetSetupStatusKind.Error);
                 return;
             }
 
             selectedTargetImageFile = selected;
-            if (selectedTargetImageLabel != null)
-                selectedTargetImageLabel.text = $"Selected: {ResolveSelectedFileName()}";
+            UpdateImagePreview();
             ImportSelectedTargetImageToPersistentStorage();
-            SetStatus("Target image selected. Ready to create.");
+            if (currentStep == 0)
+                SetStatus("Image ready. Use the arrow to continue.", TargetSetupStatusKind.Info);
+            else
+                RefreshStepSummary();
         }
 
         private bool HasValidSelectedTargetImage()
@@ -472,13 +782,10 @@ namespace ARGallery.AppFlow
             };
             postureDropdown.style.marginBottom = 8;
             root.Add(postureDropdown);
-            Button browseTargetImage = new Button { name = BrowseTargetImageButtonName, text = "Choose Target Image..." };
-            browseTargetImage.style.marginBottom = 6;
-            root.Add(browseTargetImage);
-            Label selectedImage = new Label("No target image selected.") { name = SelectedTargetImageLabelName };
-            selectedImage.style.color = new Color(0.8f, 0.9f, 1f, 1f);
-            selectedImage.style.marginBottom = 8;
-            root.Add(selectedImage);
+            Button imagePicker = new Button { name = TargetImagePreviewButtonName, text = "Choose Target Image..." };
+            imagePicker.style.marginBottom = 8;
+            imagePicker.style.height = 120;
+            root.Add(imagePicker);
 
             FloatField width = new FloatField("Physical Width (m, required)") { name = PhysicalWidthInputName, value = 0.2f };
             width.style.marginBottom = 8;
@@ -497,10 +804,7 @@ namespace ARGallery.AppFlow
             row.style.flexDirection = FlexDirection.Row;
 
             Button submit = new Button { name = SubmitButtonName, text = "Create + Continue" };
-            Button cancel = new Button { name = CancelButtonName, text = "Cancel" };
-            cancel.style.marginLeft = 8;
             row.Add(submit);
-            row.Add(cancel);
             root.Add(row);
         }
 
@@ -535,9 +839,10 @@ namespace ARGallery.AppFlow
         {
             if (targetPostureDropdown == null)
                 return;
-            targetPostureDropdown.choices = new System.Collections.Generic.List<string> { "Select...", "Wall", "Floor", "Ceiling" };
-            if (string.IsNullOrWhiteSpace(targetPostureDropdown.value))
-                targetPostureDropdown.SetValueWithoutNotify("Select...");
+            targetPostureDropdown.choices = new System.Collections.Generic.List<string> { "Wall", "Floor", "Ceiling" };
+            if (string.IsNullOrWhiteSpace(targetPostureDropdown.value)
+                || string.Equals(targetPostureDropdown.value, "Select...", StringComparison.Ordinal))
+                targetPostureDropdown.SetValueWithoutNotify("Wall");
         }
 
         private static WorkspaceDomain.WorkspacePosture ParsePosture(string value)
