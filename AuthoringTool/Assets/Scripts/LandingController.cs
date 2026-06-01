@@ -31,6 +31,9 @@ namespace ARGallery.AppFlow
             // Fallback: if UXML is not bound/imported correctly, build a minimal landing UI at runtime.
             EnsureLandingFallbackUi(root);
 
+            VisualElement screenRoot = root.Q<VisualElement>("LandingRoot") ?? root;
+            AppFlowWallpaper.Apply(screenRoot);
+
             startButton = root.Q<Button>(StartButtonName);
             if (startButton == null)
             {
@@ -65,7 +68,7 @@ namespace ARGallery.AppFlow
             root.style.flexGrow = 1f;
             root.style.justifyContent = Justify.Center;
             root.style.alignItems = Align.Center;
-            root.style.backgroundColor = Color.black;
+            AppFlowWallpaper.Apply(root);
 
             var titleLabel = new Label("AR Authoring Tool Beta");
             titleLabel.style.color = Color.white;

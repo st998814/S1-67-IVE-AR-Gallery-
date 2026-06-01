@@ -73,6 +73,10 @@ namespace ARGallery.AppFlow
             }
 
             EnsureSwitcherFallbackUi(root);
+
+            VisualElement screenRoot = root.Q<VisualElement>("WorkspaceSwitcherRoot") ?? root;
+            AppFlowWallpaper.Apply(screenRoot);
+
             BindUi(root);
             SeedMockWorkspaces();
             RebuildCards();
@@ -627,7 +631,7 @@ namespace ARGallery.AppFlow
 
             root.Clear();
             root.style.flexGrow = 1f;
-            root.style.backgroundColor = new Color(0.06f, 0.06f, 0.08f, 1f);
+            AppFlowWallpaper.Apply(root);
             root.style.justifyContent = Justify.Center;
             root.style.alignItems = Align.Center;
 

@@ -1,8 +1,9 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Style src="../USS/AppTheme.uss" />
+    <ui:Style src="../USS/AppFlowBackground.uss" />
     <ui:Style src="../USS/WorkspaceSwitcherUI.uss" />
 
-    <ui:VisualElement name="WorkspaceSwitcherRoot" class="app-root layout-full layout-centered-column switcher-root">
+    <ui:VisualElement name="WorkspaceSwitcherRoot" class="app-root layout-full layout-centered-column switcher-root app-flow-wallpaper">
         <ui:Label text="Workspace Switcher" class="text-title switcher-title" />
         <ui:VisualElement class="layout-row switcher-carousel">
             <ui:Button name="LeftArrowButton" text="&lt;" class="btn switcher-arrow-btn switcher-arrow-left" />

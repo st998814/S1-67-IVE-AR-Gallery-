@@ -1,0 +1,12 @@
+/* Shared synthwave grid wallpaper for Landing and Workspace Switcher.
+   Texture is assigned at runtime via AppFlowWallpaper (USS resource() cannot load Texture2D). */
+.app-flow-wallpaper {
+    background-color: rgb(0, 0, 0);
+    background-size: cover;
+    background-position: center;
+    -unity-background-repeat: no-repeat;
+}
+
+.app-root.app-flow-wallpaper {
+    background-color: rgb(0, 0, 0);
+}
