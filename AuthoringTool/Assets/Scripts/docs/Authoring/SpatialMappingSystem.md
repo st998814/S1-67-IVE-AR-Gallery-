@@ -13,6 +13,7 @@ Authoring placement limits are now driven by workspace posture presets, not only
 - **Pure math** — `PlacementBoundsCalculator` builds ContentRoot-local axis ranges and eight box corners.
 - **Runtime service** — `PlacementBoundsService` resolves bounds from `TargetVisual`, active preset, and `FrontSideConstraint` Z rules.
 - **Wall safe zone** — `PlacementBoundaryPreset.WallDefault` uses absolute half-extents (±0.75 m left/right, ±0.50 m up/down, 0.05 m–1.00 m in front) so the target acts as a spatial anchor rather than a tight card-sized box.
+- **Floor / ceiling safe zone** — `PlacementBoundaryPreset.FloorDefault` and `CeilingDefault` use the same ±0.75 m × ±0.50 m anchor with **0.35 m–1.25 m** in front (ContentRoot local Z, negative front). `FrontSideConstraint` standoff is synced when posture changes so gizmo/slider clamping and front-plane enforcement agree.
 - **Clamp path unchanged** — `ContentTransformManipulator` remains the only writer; sliders and gizmo still clamp through the same service.
 
 ### 2. Semantic real-world distance labels

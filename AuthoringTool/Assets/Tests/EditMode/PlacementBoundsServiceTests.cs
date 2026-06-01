@@ -156,27 +156,46 @@ public class PlacementBoundsServiceTests
     // -----------------------------------------------------------------------
 
     [Test]
-    public void Compute_WithFloorPreset_ScalesHorizontalVerticalAndDepth()
+    public void Compute_FloorDefaultPreset_UsesAbsoluteTargetRelativeSafeZone()
     {
-        var preset = new PlacementBoundaryPreset(
-            horizontalScale: 1.15f,
-            verticalScale: 1.1f,
-            depthMeters: 1.25f,
-            edgeMargin: 0.03f,
-            minStandoffZ: 0.35f);
-
         var bounds = PlacementBoundsCalculator.Compute(
-            new Vector3(1f, 1f, 1f),
-            preset,
+            new Vector3(0.2f, 0.28f, 1f),
+            PlacementBoundaryPreset.FloorDefault,
             constraintMinimumLocalZ: 0.5f,
             negativeFrontLocalZ: true);
 
-        Assert.AreEqual(-0.545f, bounds.x.min, Epsilon);
-        Assert.AreEqual(0.545f, bounds.x.max, Epsilon);
-        Assert.AreEqual(-0.52f, bounds.y.min, Epsilon);
-        Assert.AreEqual(0.52f, bounds.y.max, Epsilon);
+        Assert.AreEqual(-0.75f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.75f, bounds.x.max, Epsilon);
+        Assert.AreEqual(-0.5f, bounds.y.min, Epsilon);
+        Assert.AreEqual(0.5f, bounds.y.max, Epsilon);
         Assert.AreEqual(-1.25f, bounds.z.min, Epsilon);
         Assert.AreEqual(-0.35f, bounds.z.max, Epsilon);
+    }
+
+    [Test]
+    public void Compute_FloorDefaultPreset_IgnoresSmallTargetVisualScale()
+    {
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(0.1f, 0.1f, 1f),
+            PlacementBoundaryPreset.FloorDefault,
+            constraintMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true);
+
+        Assert.AreEqual(-0.75f, bounds.x.min, Epsilon);
+        Assert.AreEqual(0.75f, bounds.x.max, Epsilon);
+    }
+
+    [Test]
+    public void Clamp_FloorDefault_ZBehindMinimumStandoff_ClampedTo35Cm()
+    {
+        var bounds = PlacementBoundsCalculator.Compute(
+            new Vector3(1f, 1f, 1f),
+            PlacementBoundaryPreset.FloorDefault,
+            constraintMinimumLocalZ: 0.5f,
+            negativeFrontLocalZ: true);
+
+        Vector3 clamped = bounds.Clamp(new Vector3(0f, 0f, -0.1f));
+        Assert.AreEqual(-0.35f, clamped.z, Epsilon);
     }
 
     [Test]

@@ -369,7 +369,11 @@ namespace ARGallery.AppFlow
 
             PlacementBoundsService placementBounds = FindFirstObjectByType<PlacementBoundsService>();
             if (placementBounds != null)
+            {
+                placementBounds.SetTargetContext(targetRoot, targetRoot.Find("ContentRoot"));
                 placementBounds.SetPosture(posture);
+                ReclampContentUnderTarget(targetRoot, placementBounds);
+            }
 
             SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
             if (spatialMapping != null)
@@ -410,6 +414,29 @@ namespace ARGallery.AppFlow
                 return new Vector3(0f, Mathf.Max(0f, ceilingTargetHeightOffset), 0f);
 
             return Vector3.zero;
+        }
+
+        private static void ReclampContentUnderTarget(Transform targetRoot, PlacementBoundsService placementBounds)
+        {
+            if (targetRoot == null || placementBounds == null)
+                return;
+
+            Transform contentRoot = targetRoot.Find("ContentRoot");
+            if (contentRoot == null)
+                return;
+
+            ContentTransformManipulator manipulator = FindFirstObjectByType<ContentTransformManipulator>();
+            for (int i = 0; i < contentRoot.childCount; i++)
+            {
+                Transform child = contentRoot.GetChild(i);
+                if (child == null)
+                    continue;
+
+                if (manipulator != null)
+                    manipulator.SetLocalPosition(child, child.localPosition);
+                else
+                    child.localPosition = placementBounds.ClampLocalPosition(child, child.localPosition);
+            }
         }
 
         private static void EnsureTargetHierarchyCompatibility(Transform targetRoot)

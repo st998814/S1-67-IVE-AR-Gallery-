@@ -59,6 +59,32 @@ public readonly struct PlacementBoundaryPreset
             absoluteHalfExtentX: 0.75f,
             absoluteHalfExtentY: 0.5f);
 
+    /// <summary>
+    /// Floor posture: same target-relative safe zone as wall; 35 cm–125 cm in front (ContentRoot local Z, negative front).
+    /// </summary>
+    public static PlacementBoundaryPreset FloorDefault =>
+        new PlacementBoundaryPreset(
+            horizontalScale: 1f,
+            verticalScale: 1f,
+            depthMeters: 1.25f,
+            edgeMargin: 0.03f,
+            minStandoffZ: 0.35f,
+            absoluteHalfExtentX: 0.75f,
+            absoluteHalfExtentY: 0.5f);
+
+    /// <summary>
+    /// Ceiling posture: same spatial anchor as floor; depth/standoff tuned for overhead targets.
+    /// </summary>
+    public static PlacementBoundaryPreset CeilingDefault =>
+        new PlacementBoundaryPreset(
+            horizontalScale: 1f,
+            verticalScale: 1f,
+            depthMeters: 1.25f,
+            edgeMargin: 0.03f,
+            minStandoffZ: 0.35f,
+            absoluteHalfExtentX: 0.75f,
+            absoluteHalfExtentY: 0.5f);
+
     public bool UsesConstraintMinStandoff => minStandoffZ < 0f;
 
     public bool UsesAbsoluteHalfExtentX => absoluteHalfExtentX > 0f;

@@ -58,6 +58,17 @@ public sealed class PlacementBoundsService : MonoBehaviour
     {
         _activeBoundaryPreset = preset;
         _hasActiveBoundaryPreset = true;
+        SyncFrontConstraintStandoff(preset);
+    }
+
+    private void SyncFrontConstraintStandoff(PlacementBoundaryPreset preset)
+    {
+        if (frontSideConstraint == null)
+            return;
+
+        float constraintMin = frontSideConstraint.EffectiveMinimumLocalZ;
+        float standoff = preset.ResolveMinStandoffZ(constraintMin);
+        frontSideConstraint.SetFrontStandoffMetres(standoff);
     }
 
     /// <summary>
