@@ -21,9 +21,12 @@ namespace ARGallery.AppFlow
         private const string RightArrowButtonName = "RightArrowButton";
         private const string WorkspaceCardsRowName = "WorkspaceCardsRow";
         private const string ActiveWorkspaceNameLabelName = "ActiveWorkspaceNameLabel";
-        private const string EditButtonName = "EditButton";
-        private const string DeleteWorkspaceButtonName = "DeleteWorkspaceButton";
         private const string BackToLandingButtonName = "BackToLandingButton";
+        private const string DeleteConfirmOverlayName = "DeleteConfirmOverlay";
+        private const string DeleteConfirmMessageLabelName = "DeleteConfirmMessageLabel";
+        private const string DeleteConfirmCancelButtonName = "DeleteConfirmCancelButton";
+        private const string DeleteConfirmDeleteButtonName = "DeleteConfirmDeleteButton";
+        private const string CardToolbarClass = "workspace-card__toolbar";
 
         private readonly List<WorkspaceSessionContext> mockWorkspaces = new List<WorkspaceSessionContext>();
         private readonly List<VisualElement> cardElements = new List<VisualElement>();
@@ -48,9 +51,12 @@ namespace ARGallery.AppFlow
         private Button rightArrowButton;
         private VisualElement workspaceCardsRow;
         private Label activeWorkspaceNameLabel;
-        private Button editButton;
-        private Button deleteWorkspaceButton;
         private Button backToLandingButton;
+        private VisualElement deleteConfirmOverlay;
+        private Label deleteConfirmMessageLabel;
+        private Button deleteConfirmCancelButton;
+        private Button deleteConfirmDeleteButton;
+        private string pendingDeleteWorkspaceId;
 
         [SerializeField]
         [Tooltip("Backend base URL for DELETE /api/workspaces/{id} before removing local snapshot. Leave empty to only delete on-disk workspace data.")]
@@ -80,6 +86,7 @@ namespace ARGallery.AppFlow
             AppFlowWallpaper.Apply(screenRoot);
 
             BindUi(root);
+            HideDeleteConfirm();
             SeedMockWorkspaces();
             RebuildCards();
             RefreshSelectionUi(forceImmediate: true);
@@ -89,9 +96,10 @@ namespace ARGallery.AppFlow
         {
             if (leftArrowButton != null) leftArrowButton.clicked -= OnLeftArrowClicked;
             if (rightArrowButton != null) rightArrowButton.clicked -= OnRightArrowClicked;
-            if (editButton != null) editButton.clicked -= OnEditButtonClicked;
-            if (deleteWorkspaceButton != null) deleteWorkspaceButton.clicked -= OnDeleteWorkspaceClicked;
+            if (deleteConfirmCancelButton != null) deleteConfirmCancelButton.clicked -= OnDeleteConfirmCancelClicked;
+            if (deleteConfirmDeleteButton != null) deleteConfirmDeleteButton.clicked -= OnDeleteConfirmDeleteClicked;
             if (backToLandingButton != null) backToLandingButton.clicked -= OnBackToLandingClicked;
+            HideDeleteConfirm();
         }
 
         private void OnDestroy()
@@ -130,6 +138,8 @@ namespace ARGallery.AppFlow
                 card.EnableInClassList("card--active", isSelected);
                 card.EnableInClassList("card--inactive", !isSelected);
             }
+
+            RefreshCardToolbars();
         }
 
         private void BindUi(VisualElement root)
@@ -138,11 +148,9 @@ namespace ARGallery.AppFlow
             rightArrowButton = root.Q<Button>(RightArrowButtonName);
             workspaceCardsRow = root.Q<VisualElement>(WorkspaceCardsRowName);
             activeWorkspaceNameLabel = root.Q<Label>(ActiveWorkspaceNameLabelName);
-            editButton = root.Q<Button>(EditButtonName);
-            deleteWorkspaceButton = root.Q<Button>(DeleteWorkspaceButtonName);
             backToLandingButton = root.Q<Button>(BackToLandingButtonName);
 
-            if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null || editButton == null)
+            if (leftArrowButton == null || rightArrowButton == null || workspaceCardsRow == null || activeWorkspaceNameLabel == null)
             {
                 Debug.LogError("WorkspaceSwitcherController: required UI elements were not found.");
                 return;
@@ -152,14 +160,142 @@ namespace ARGallery.AppFlow
 
             leftArrowButton.clicked += OnLeftArrowClicked;
             rightArrowButton.clicked += OnRightArrowClicked;
-            editButton.clicked += OnEditButtonClicked;
-            if (deleteWorkspaceButton != null)
-                deleteWorkspaceButton.clicked += OnDeleteWorkspaceClicked;
             if (backToLandingButton != null)
             {
                 backToLandingButton.clicked += OnBackToLandingClicked;
                 backToLandingButton.BringToFront();
             }
+
+            BindDeleteConfirmDialog(root);
+        }
+
+        private void BindDeleteConfirmDialog(VisualElement root)
+        {
+            VisualElement screenRoot = root.Q<VisualElement>("WorkspaceSwitcherRoot") ?? root;
+            EnsureDeleteConfirmOverlay(screenRoot);
+
+            deleteConfirmOverlay = screenRoot.Q<VisualElement>(DeleteConfirmOverlayName);
+            deleteConfirmMessageLabel = screenRoot.Q<Label>(DeleteConfirmMessageLabelName);
+            deleteConfirmCancelButton = screenRoot.Q<Button>(DeleteConfirmCancelButtonName);
+            deleteConfirmDeleteButton = screenRoot.Q<Button>(DeleteConfirmDeleteButtonName);
+
+            if (deleteConfirmOverlay == null || deleteConfirmCancelButton == null || deleteConfirmDeleteButton == null)
+            {
+                Debug.LogWarning("WorkspaceSwitcherController: delete confirmation UI was not found.");
+                return;
+            }
+
+            deleteConfirmCancelButton.clicked += OnDeleteConfirmCancelClicked;
+            deleteConfirmDeleteButton.clicked += OnDeleteConfirmDeleteClicked;
+            deleteConfirmOverlay.BringToFront();
+        }
+
+        private static void EnsureDeleteConfirmOverlay(VisualElement screenRoot)
+        {
+            if (screenRoot.Q<VisualElement>(DeleteConfirmOverlayName) != null)
+                return;
+
+            var overlay = new VisualElement { name = DeleteConfirmOverlayName };
+            overlay.AddToClassList("switcher-delete-overlay");
+            overlay.AddToClassList("switcher-delete-overlay--hidden");
+
+            var dialog = new VisualElement();
+            dialog.AddToClassList("switcher-delete-dialog");
+
+            var title = new Label("Delete workspace?");
+            title.AddToClassList("switcher-delete-dialog__title");
+            dialog.Add(title);
+
+            var message = new Label("This cannot be undone.") { name = DeleteConfirmMessageLabelName };
+            message.AddToClassList("switcher-delete-dialog__message");
+            dialog.Add(message);
+
+            var actions = new VisualElement();
+            actions.AddToClassList("switcher-delete-dialog__actions");
+
+            var cancel = new Button { name = DeleteConfirmCancelButtonName, text = "Cancel" };
+            cancel.AddToClassList("btn");
+            cancel.AddToClassList("switcher-delete-dialog__btn");
+            cancel.AddToClassList("switcher-delete-dialog__btn--cancel");
+            actions.Add(cancel);
+
+            var confirm = new Button { name = DeleteConfirmDeleteButtonName, text = "Delete" };
+            confirm.AddToClassList("btn");
+            confirm.AddToClassList("switcher-delete-dialog__btn");
+            confirm.AddToClassList("switcher-delete-dialog__btn--confirm");
+            actions.Add(confirm);
+
+            dialog.Add(actions);
+            overlay.Add(dialog);
+            screenRoot.Add(overlay);
+        }
+
+        private void RefreshCardToolbars()
+        {
+            for (int i = 0; i < cardElements.Count; i++)
+            {
+                VisualElement toolbar = cardElements[i].Q(className: CardToolbarClass);
+                if (toolbar != null)
+                    toolbar.EnableInClassList("workspace-card__toolbar--visible", i == selectedIndex);
+            }
+        }
+
+        private void ShowDeleteConfirm(WorkspaceSessionContext workspace)
+        {
+            if (workspace == null || deleteConfirmOverlay == null)
+                return;
+
+            string id = workspace.workspaceId?.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+                return;
+
+            if (string.Equals(id, "default", StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogWarning("WorkspaceSwitcherController: cannot delete reserved workspace 'default'.");
+                return;
+            }
+
+            pendingDeleteWorkspaceId = id;
+            string displayName = string.IsNullOrWhiteSpace(workspace.workspaceName) ? id : workspace.workspaceName.Trim();
+            if (deleteConfirmMessageLabel != null)
+            {
+                deleteConfirmMessageLabel.text =
+                    $"Delete \"{displayName}\"? Local snapshots and server data (if synced) will be permanently removed.";
+            }
+
+            deleteConfirmOverlay.RemoveFromClassList("switcher-delete-overlay--hidden");
+            deleteConfirmOverlay.AddToClassList("switcher-delete-overlay--visible");
+            deleteConfirmOverlay.pickingMode = PickingMode.Position;
+            deleteConfirmOverlay.BringToFront();
+        }
+
+        private void HideDeleteConfirm()
+        {
+            pendingDeleteWorkspaceId = null;
+            if (deleteConfirmOverlay == null)
+                return;
+
+            deleteConfirmOverlay.RemoveFromClassList("switcher-delete-overlay--visible");
+            deleteConfirmOverlay.AddToClassList("switcher-delete-overlay--hidden");
+            deleteConfirmOverlay.pickingMode = PickingMode.Ignore;
+        }
+
+        private void OnDeleteConfirmCancelClicked()
+        {
+            HideDeleteConfirm();
+        }
+
+        private void OnDeleteConfirmDeleteClicked()
+        {
+            if (workspaceDeleteBusy || string.IsNullOrWhiteSpace(pendingDeleteWorkspaceId))
+            {
+                HideDeleteConfirm();
+                return;
+            }
+
+            string id = pendingDeleteWorkspaceId.Trim();
+            HideDeleteConfirm();
+            StartCoroutine(DeleteWorkspaceCoroutine(id));
         }
 
         private void OnBackToLandingClicked()
@@ -456,11 +592,14 @@ namespace ARGallery.AppFlow
                 var label = new Label(ws.workspaceName) { name = "WorkspaceCardLabel" };
                 label.AddToClassList("workspace-card__label");
 
+                int idx = i;
+                VisualElement toolbar = CreateCardToolbar(idx);
+
                 card.Add(thumbnailLayer);
                 card.Add(overlay);
                 card.Add(label);
+                card.Add(toolbar);
 
-                int idx = i;
                 card.RegisterCallback<ClickEvent>(_ =>
                 {
                     selectedIndex = idx;
@@ -504,6 +643,52 @@ namespace ARGallery.AppFlow
 
             addCard.RegisterCallback<ClickEvent>(_ => OnNewButtonClicked());
             workspaceCardsRow.Add(addCard);
+            RefreshCardToolbars();
+        }
+
+        private VisualElement CreateCardToolbar(int cardIndex)
+        {
+            var toolbar = new VisualElement();
+            toolbar.AddToClassList(CardToolbarClass);
+
+            Button openButton = CreateCardIconButton("workspace-card__icon-btn--open", "Open workspace");
+            Button deleteButton = CreateCardIconButton("workspace-card__icon-btn--delete", "Delete workspace");
+
+            int idx = cardIndex;
+            openButton.clicked += () =>
+            {
+                selectedIndex = idx;
+                RefreshSelectionUi();
+                OpenWorkspaceAtIndex(idx);
+            };
+            deleteButton.clicked += () =>
+            {
+                selectedIndex = idx;
+                RefreshSelectionUi();
+                if (idx >= 0 && idx < mockWorkspaces.Count)
+                    ShowDeleteConfirm(mockWorkspaces[idx]);
+            };
+
+            openButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            deleteButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            toolbar.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+
+            toolbar.Add(openButton);
+            toolbar.Add(deleteButton);
+            return toolbar;
+        }
+
+        private static Button CreateCardIconButton(string modifierClass, string tooltip)
+        {
+            var button = new Button();
+            button.AddToClassList("workspace-card__icon-btn");
+            button.AddToClassList(modifierClass);
+            button.tooltip = tooltip;
+
+            var glyph = new VisualElement();
+            glyph.AddToClassList("workspace-card__icon-btn__glyph");
+            button.Add(glyph);
+            return button;
         }
 
         private void RefreshSelectionUi(bool forceImmediate = false)
@@ -542,6 +727,7 @@ namespace ARGallery.AppFlow
             }
 
             hasAnimationState = true;
+            RefreshCardToolbars();
         }
 
         private void OnLeftArrowClicked()
@@ -570,29 +756,17 @@ namespace ARGallery.AppFlow
             SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
         }
 
-        private void OnEditButtonClicked()
+        private void OpenWorkspaceAtIndex(int index)
         {
             if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0)
                 return;
 
-            WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)].Clone();
+            index = Mathf.Clamp(index, 0, mockWorkspaces.Count - 1);
+            WorkspaceSessionContext selected = mockWorkspaces[index].Clone();
             selected.isNewWorkspace = false;
             selected.setupState = WorkspaceSetupState.Ready;
             AppFlowController.SetWorkspaceSession(selected);
             SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
-        }
-
-        private void OnDeleteWorkspaceClicked()
-        {
-            if (SceneTransitionService.IsTransitioning || mockWorkspaces.Count == 0 || workspaceDeleteBusy)
-                return;
-
-            WorkspaceSessionContext selected = mockWorkspaces[Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1)];
-            string id = selected.workspaceId?.Trim();
-            if (string.IsNullOrWhiteSpace(id))
-                return;
-
-            StartCoroutine(DeleteWorkspaceCoroutine(id));
         }
 
         private IEnumerator DeleteWorkspaceCoroutine(string workspaceId)
@@ -710,31 +884,7 @@ namespace ARGallery.AppFlow
             selectedLabel.style.marginBottom = 18;
             root.Add(selectedLabel);
 
-            var actionRow = new VisualElement();
-            actionRow.style.flexDirection = FlexDirection.Row;
-            actionRow.style.alignItems = Align.Center;
-            actionRow.style.justifyContent = Justify.Center;
-
-            var editBtn = new Button { name = EditButtonName, text = "EDIT" };
-            editBtn.style.width = 160;
-            editBtn.style.height = 46;
-            editBtn.style.marginLeft = 0;
-            editBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
-            actionRow.Add(editBtn);
-
-            var deleteBtn = new Button { name = DeleteWorkspaceButtonName, text = "DELETE" };
-            deleteBtn.style.width = 160;
-            deleteBtn.style.height = 46;
-            deleteBtn.style.marginLeft = 14;
-            deleteBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
-            deleteBtn.style.backgroundColor = new Color(185f / 255f, 28f / 255f, 28f / 255f, 1f);
-            deleteBtn.style.color = Color.white;
-            deleteBtn.style.borderLeftWidth = deleteBtn.style.borderRightWidth = deleteBtn.style.borderTopWidth = deleteBtn.style.borderBottomWidth = 1;
-            var dangerBorder = new Color(248f / 255f, 113f / 255f, 113f / 255f, 1f);
-            deleteBtn.style.borderLeftColor = deleteBtn.style.borderRightColor = deleteBtn.style.borderTopColor = deleteBtn.style.borderBottomColor = dangerBorder;
-            actionRow.Add(deleteBtn);
-
-            root.Add(actionRow);
+            EnsureDeleteConfirmOverlay(root);
         }
     }
 }

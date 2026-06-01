@@ -86,41 +86,137 @@
     margin-bottom: 18px;
 }
 
-.switcher-actions {
-    flex-direction: row;
-    align-items: center;
+.switcher-delete-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.72);
     justify-content: center;
+    align-items: center;
 }
 
-.switcher-action-secondary {
-    min-width: 160px;
-    height: 46px;
+.switcher-delete-overlay--hidden {
+    display: none;
 }
 
-.switcher-action-primary {
-    min-width: 160px;
-    height: 46px;
-    margin-left: 14px;
+.switcher-delete-overlay--visible {
+    display: flex;
 }
 
-.switcher-action-danger {
-    min-width: 160px;
-    height: 46px;
-    margin-left: 14px;
+.switcher-delete-dialog {
+    width: 100%;
+    max-width: 420px;
+    margin-left: 24px;
+    margin-right: 24px;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: rgb(20, 26, 33);
+    border-width: 1px;
+    border-color: rgb(36, 48, 59);
+}
+
+.switcher-delete-dialog__title {
+    color: rgb(230, 237, 243);
+    font-size: 20px;
+    -unity-font-style: bold;
+    margin-bottom: 10px;
+}
+
+.switcher-delete-dialog__message {
+    color: rgb(154, 167, 179);
+    font-size: 14px;
+    margin-bottom: 20px;
+    white-space: normal;
+}
+
+.switcher-delete-dialog__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.switcher-delete-dialog__btn {
+    min-width: 100px;
+    height: 40px;
+    margin-left: 0;
+}
+
+.switcher-delete-dialog__btn--cancel {
+    margin-right: 10px;
+    background-color: rgb(38, 48, 60);
+    border-width: 0;
+}
+
+.switcher-delete-dialog__btn--confirm {
     background-color: rgb(185, 28, 28);
-    border-left-color: rgb(248, 113, 113);
-    border-right-color: rgb(248, 113, 113);
-    border-top-color: rgb(248, 113, 113);
-    border-bottom-color: rgb(248, 113, 113);
+    border-width: 0;
     color: rgb(255, 255, 255);
 }
 
-.switcher-action-danger:hover {
+.switcher-delete-dialog__btn--confirm:hover {
     background-color: rgb(220, 38, 38);
 }
 
-.switcher-action-danger:active {
-    background-color: rgb(153, 27, 27);
+.workspace-card__toolbar {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    flex-direction: row;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.workspace-card__toolbar--visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.workspace-card__icon-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    margin-left: 6px;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+    background-color: rgb(27, 34, 43);
+    justify-content: center;
+    align-items: center;
+    font-size: 0;
+}
+
+.workspace-card__icon-btn:hover {
+    background-color: rgb(38, 48, 60);
+}
+
+.workspace-card__icon-btn--delete:hover {
+    background-color: rgb(120, 32, 40);
+}
+
+.workspace-card__icon-btn__glyph {
+    width: 18px;
+    height: 18px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.workspace-card__icon-btn--open .workspace-card__icon-btn__glyph {
+    background-image: url("../Icons/SwitcherOpenPencil.svg");
+}
+
+.workspace-card__icon-btn--delete .workspace-card__icon-btn__glyph {
+    background-image: url("../Icons/SwitcherDeleteTrash.svg");
 }
 
 .workspace-card {
@@ -165,7 +261,7 @@
 .workspace-card__label {
     position: absolute;
     left: 12px;
-    right: 12px;
+    right: 92px;
     bottom: 12px;
     padding: 8px 10px;
     border-radius: 10px;

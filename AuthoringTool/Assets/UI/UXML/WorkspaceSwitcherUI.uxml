@@ -13,9 +13,15 @@
             <ui:Button name="RightArrowButton" text="&gt;" class="btn switcher-arrow-btn switcher-arrow-right"/>
         </ui:VisualElement>
         <ui:Label name="ActiveWorkspaceNameLabel" text="Selected: -" class="text-muted switcher-selection-label"/>
-        <ui:VisualElement class="switcher-actions">
-            <ui:Button name="EditButton" text="EDIT" class="btn btn-primary switcher-action-primary" style="background-color: rgb(173, 173, 173); width: 160px; top: 40px; opacity: 0.5;"/>
-            <ui:Button name="DeleteWorkspaceButton" text="DELETE" class="btn switcher-action-danger" style="background-color: rgb(209, 106, 130); height: 46px; width: 160px; top: 40px; opacity: 0.5;"/>
+        <ui:VisualElement name="DeleteConfirmOverlay" class="switcher-delete-overlay switcher-delete-overlay--hidden">
+            <ui:VisualElement name="DeleteConfirmDialog" class="switcher-delete-dialog">
+                <ui:Label text="Delete workspace?" class="switcher-delete-dialog__title"/>
+                <ui:Label name="DeleteConfirmMessageLabel" text="This cannot be undone." class="switcher-delete-dialog__message"/>
+                <ui:VisualElement class="switcher-delete-dialog__actions">
+                    <ui:Button name="DeleteConfirmCancelButton" text="Cancel" class="btn switcher-delete-dialog__btn switcher-delete-dialog__btn--cancel"/>
+                    <ui:Button name="DeleteConfirmDeleteButton" text="Delete" class="btn switcher-delete-dialog__btn switcher-delete-dialog__btn--confirm"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
