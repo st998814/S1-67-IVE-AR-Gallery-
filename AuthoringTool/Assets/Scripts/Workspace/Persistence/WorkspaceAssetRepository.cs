@@ -94,6 +94,50 @@ namespace ARGallery.Workspace.Persistence
         }
 
         /// <summary>
+        /// Copies a target placement reference photo into assets/target_refs/&lt;guid&gt;&lt;ext&gt;.
+        /// </summary>
+        public bool TryImportTargetReferenceImage(
+            string workspaceId,
+            string originalFileName,
+            byte[] bytes,
+            string sourcePath,
+            out string relativePathOut,
+            out string errorMessage)
+        {
+            relativePathOut = null;
+            string workspaceRoot = WorkspacePersistencePaths.GetWorkspaceRoot(workspaceId);
+            string refsDir = WorkspacePersistencePaths.GetTargetReferencesAssetsDirectory(workspaceId);
+
+            byte[] data = ResolveBytes(bytes, sourcePath, out errorMessage);
+            if (data == null || data.Length == 0)
+            {
+                if (string.IsNullOrEmpty(errorMessage))
+                    errorMessage = "Target reference image data is empty.";
+                return false;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(workspaceRoot);
+                Directory.CreateDirectory(refsDir);
+
+                string ext = GetExtension(originalFileName, sourcePath);
+                string fileName = $"{Guid.NewGuid():N}{ext}";
+                string absoluteFile = Path.Combine(refsDir, fileName);
+                File.WriteAllBytes(absoluteFile, data);
+
+                relativePathOut = NormalizeRelativePath(
+                    $"{WorkspacePersistencePaths.AssetsFolderName}/{WorkspacePersistencePaths.TargetReferencesAssetsFolderName}/{fileName}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Copies content asset into assets/contents/&lt;guid&gt;&lt;ext&gt;.
         /// </summary>
         public bool TryImportContentAsset(

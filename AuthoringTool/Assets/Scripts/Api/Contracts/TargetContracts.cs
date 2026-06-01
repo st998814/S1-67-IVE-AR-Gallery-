@@ -17,6 +17,8 @@ public class CreateTargetRequestDto
     public string displayLabel;
     /// <summary>Possible values: upload URL, YouTube URL, text payload marker, or empty string.</summary>
     public string targetImageUrl;
+    /// <summary>Optional real-world placement reference photo URL (from POST /api/targets/{id}/reference).</summary>
+    public string targetReferenceImageUrl;
     /// <summary>Current contract field. Possible values: workspace key such as "default".</summary>
     public string workspaceId = "default";
     /// <summary>Optional human-readable name; backend upserts workspaces when missing.</summary>
@@ -51,6 +53,7 @@ public class CreateTargetResponseDto
     public string displayLabel;
     /// <summary>Possible values: reference image URL echoed from backend record.</summary>
     public string targetImageUrl;
+    public string targetReferenceImageUrl;
     /// <summary>Current contract field. Possible values: workspace key such as "default".</summary>
     public string workspaceId;
     /// <summary>Current contract field. Possible values: persisted physical width in meters.</summary>
@@ -84,4 +87,12 @@ public class CreateCloudTargetRequestDto
     public ApiSyncMetaDto meta = new ApiSyncMetaDto();
     public string fileName;
     public byte[] fileBytes;
+}
+
+[Serializable]
+public class UploadTargetReferenceResponseDto
+{
+    public string targetId;
+    public string targetReferenceImageUrl;
+    public string status;
 }

@@ -28,6 +28,8 @@ def target_response(row, status_override=None):
         body["vuforiaTargetId"] = row[6] or ""
     if len(row) > 7:
         body["vuforiaStatus"] = row[7] or ""
+    if len(row) > 8:
+        body["targetReferenceImageUrl"] = row[8] or ""
     return body
 
 

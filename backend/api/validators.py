@@ -2,6 +2,65 @@ import json
 
 from flask import request
 
+# Reference photos (placement context) — broader than Vuforia trackable images.
+REFERENCE_IMAGE_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "bmp"})
+
+
+def _extension_allowed(ext: str, allowed: set[str]) -> bool:
+    if ext not in REFERENCE_IMAGE_EXTENSIONS:
+        return False
+    if ext in allowed:
+        return True
+    return ext == "jpg" and "jpeg" in allowed
+
+
+def resolve_reference_image_extension(file_storage, allowed_extensions) -> str | None:
+    """Return normalized extension without dot, or None if not a supported reference image."""
+    allowed = set(allowed_extensions or REFERENCE_IMAGE_EXTENSIONS)
+
+    filename = (getattr(file_storage, "filename", None) or "").strip()
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext == "jpeg":
+        ext = "jpg"
+    if _extension_allowed(ext, allowed):
+        return ext
+
+    mime = (getattr(file_storage, "mimetype", None) or "").lower()
+    mime_map = (
+        ("image/png", "png"),
+        ("image/jpeg", "jpg"),
+        ("image/jpg", "jpg"),
+        ("image/webp", "webp"),
+        ("image/gif", "gif"),
+        ("image/heic", "heic"),
+        ("image/heif", "heif"),
+        ("image/bmp", "bmp"),
+    )
+    for prefix, candidate in mime_map:
+        if prefix in mime and _extension_allowed(candidate, allowed):
+            return candidate
+
+    try:
+        stream = getattr(file_storage, "stream", None)
+        if stream is not None:
+            pos = stream.tell()
+            head = stream.read(16)
+            stream.seek(pos)
+            if head.startswith(b"\x89PNG\r\n\x1a\n") and _extension_allowed("png", allowed):
+                return "png"
+            if head.startswith(b"\xff\xd8\xff") and _extension_allowed("jpg", allowed):
+                return "jpg"
+            if (head.startswith(b"GIF87a") or head.startswith(b"GIF89a")) and _extension_allowed("gif", allowed):
+                return "gif"
+            if len(head) >= 12 and head[4:8] == b"ftyp" and _extension_allowed("heic", allowed):
+                return "heic"
+    except Exception:
+        pass
+
+    if _extension_allowed("jpg", allowed):
+        return "jpg"
+    return None
+
 
 def require_json_body(error_response):
     if not request.is_json:

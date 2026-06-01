@@ -46,6 +46,13 @@ class SystemRepository:
         cur.execute("SELECT target_image_url FROM targets WHERE workspace_id = %s;", (workspace_id,))
         return [row[0] for row in cur.fetchall() if row and row[0]]
 
+    def target_reference_upload_urls(self, cur, workspace_id: str):
+        cur.execute(
+            "SELECT target_reference_image_url FROM targets WHERE workspace_id = %s;",
+            (workspace_id,),
+        )
+        return [row[0] for row in cur.fetchall() if row and row[0]]
+
     def content_upload_urls(self, cur, workspace_id: str):
         cur.execute(
             """

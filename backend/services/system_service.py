@@ -41,8 +41,9 @@ class SystemService:
                 deleted_contents = self.repository.count_workspace_contents(cur, workspace_id)
                 vuforia_target_ids = self.repository.workspace_vuforia_target_ids(cur, workspace_id)
                 target_urls = self.repository.target_upload_urls(cur, workspace_id)
+                reference_urls = self.repository.target_reference_upload_urls(cur, workspace_id)
                 content_urls = self.repository.content_upload_urls(cur, workspace_id)
-                all_urls = list(dict.fromkeys([u for u in target_urls + content_urls if u]))
+                all_urls = list(dict.fromkeys([u for u in target_urls + reference_urls + content_urls if u]))
 
                 deleted_vuforia_targets, vuforia_delete_errors = self._delete_vuforia_targets(vuforia_target_ids)
 

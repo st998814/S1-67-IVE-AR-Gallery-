@@ -60,6 +60,115 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         return handle;
     }
 
+    public IApiRequestHandle UploadTargetReference(
+        string targetId,
+        UploadFileRequestDto request,
+        Action<ApiResult<UploadTargetReferenceResponseDto>> onCompleted,
+        float timeoutSeconds = 20f)
+    {
+        var handle = new CoroutineApiRequestHandle(this);
+        Coroutine c = StartCoroutine(UploadTargetReferenceRoutine(targetId, request, onCompleted, timeoutSeconds, handle));
+        handle.BindCoroutine(c);
+        return handle;
+    }
+
+    private IEnumerator UploadTargetReferenceRoutine(
+        string targetId,
+        UploadFileRequestDto request,
+        Action<ApiResult<UploadTargetReferenceResponseDto>> onCompleted,
+        float timeoutSeconds,
+        CoroutineApiRequestHandle handle)
+    {
+        if (string.IsNullOrWhiteSpace(targetId))
+        {
+            onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(ApiErrorCodes.ValidationError, "targetId is empty"));
+            handle.MarkDone();
+            yield break;
+        }
+
+        if (request == null || request.fileBytes == null || request.fileBytes.Length == 0)
+        {
+            onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(ApiErrorCodes.ValidationError, "fileBytes is empty"));
+            handle.MarkDone();
+            yield break;
+        }
+
+        string tid = targetId.Trim();
+        string url = BuildUrl($"{targetEndpoint}/{Uri.EscapeDataString(tid)}/reference");
+        var form = new WWWForm();
+        string fileName = string.IsNullOrWhiteSpace(request.fileName) ? "reference.jpg" : request.fileName.Trim();
+        if (string.IsNullOrEmpty(System.IO.Path.GetExtension(fileName)))
+            fileName += ".jpg";
+        string mimeType = string.IsNullOrWhiteSpace(request.mimeType) || request.mimeType == "application/octet-stream"
+            ? GuessImageMimeType(fileName)
+            : request.mimeType;
+        form.AddBinaryData("file", request.fileBytes, fileName, mimeType);
+
+        using (UnityWebRequest uwr = UnityWebRequest.Post(url, form))
+        {
+            uwr.timeout = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds <= 0f ? 20f : timeoutSeconds));
+            yield return uwr.SendWebRequest();
+
+            if (handle.IsCancelled)
+            {
+                onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(ApiErrorCodes.Cancelled, "Request cancelled"));
+                handle.MarkDone();
+                yield break;
+            }
+
+            if (uwr.result != UnityWebRequest.Result.Success)
+            {
+                string err = $"Target reference upload failed: {uwr.error} HTTP {(long)uwr.responseCode}";
+                onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(ApiErrorCodes.NetworkError, err, (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            if (IsNonSuccessHttpStatus(uwr, out int httpStatus))
+            {
+                string errorBody = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+                string fallback = $"Target reference upload failed: HTTP {httpStatus}";
+                string errMsg = ExtractServerErrorMessage(errorBody, fallback);
+                string errCode = ExtractServerErrorCode(errorBody, ApiErrorCodes.ServerError);
+                onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(errCode, errMsg, httpStatus));
+                handle.MarkDone();
+                yield break;
+            }
+
+            string body = uwr.downloadHandler != null ? uwr.downloadHandler.text : "";
+            UploadTargetReferenceResponseDto parsed = JsonUtility.FromJson<UploadTargetReferenceResponseDto>(body);
+            if (parsed == null)
+                parsed = new UploadTargetReferenceResponseDto();
+
+            if (string.IsNullOrWhiteSpace(parsed.targetReferenceImageUrl))
+            {
+                var generic = JsonUtility.FromJson<CreateTargetResponseDto>(body);
+                if (generic != null && !string.IsNullOrWhiteSpace(generic.targetReferenceImageUrl))
+                {
+                    parsed.targetId = generic.targetId;
+                    parsed.targetReferenceImageUrl = generic.targetReferenceImageUrl;
+                    parsed.status = generic.status;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(parsed.targetReferenceImageUrl))
+            {
+                onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Fail(
+                    ApiErrorCodes.ServerError,
+                    "Target reference upload succeeded but response has no targetReferenceImageUrl.",
+                    (int)uwr.responseCode));
+                handle.MarkDone();
+                yield break;
+            }
+
+            if (string.IsNullOrWhiteSpace(parsed.targetId))
+                parsed.targetId = tid;
+
+            onCompleted?.Invoke(ApiResult<UploadTargetReferenceResponseDto>.Ok(parsed, "target reference ok", (int)uwr.responseCode));
+            handle.MarkDone();
+        }
+    }
+
     private IEnumerator UploadFileRoutine(
         UploadFileRequestDto request,
         Action<ApiResult<UploadFileResponseDto>> onCompleted,
@@ -79,7 +188,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
         if (cat != "content" && cat != "target" && cat != "target_ref")
             cat = "content";
         form.AddField("category", cat);
-        if (cat == "target" && !string.IsNullOrWhiteSpace(request.targetId))
+        if ((cat == "target" || cat == "target_ref") && !string.IsNullOrWhiteSpace(request.targetId))
             form.AddField("targetId", request.targetId.Trim());
         if (cat == "content" && !string.IsNullOrWhiteSpace(request.contentId))
             form.AddField("contentId", request.contentId.Trim());

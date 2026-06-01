@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Set
 
 
-DEFAULT_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
+DEFAULT_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "bmp", "mp4", "mov", "webm", "glb", "gltf", "txt"}
 
 
 def _set_env_from_file(env_path: Path) -> None:

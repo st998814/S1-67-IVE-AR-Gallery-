@@ -144,6 +144,7 @@ def test_delete_workspace_success(client, tmp_path):
     mock_cur.fetchall.side_effect = [
         [("vuforia-target-abc",)],
         [("http://127.0.0.1:5050/uploads/target/poster.jpg",)],
+        [],
         [("http://127.0.0.1:5050/uploads/content/image.jpg",)],
     ]
     mock_cur.rowcount = 1
@@ -175,6 +176,7 @@ def test_delete_workspace_vuforia_404_counts_as_deleted(client, tmp_path):
         [("missing-vu-target",)],
         [],
         [],
+        [],
     ]
     mock_cur.rowcount = 1
 
@@ -188,6 +190,46 @@ def test_delete_workspace_vuforia_404_counts_as_deleted(client, tmp_path):
 
     assert res.status_code == 200
     assert res.get_json()["deletedVuforiaTargets"] == 1
+
+
+def test_upload_target_reference_success(client, tmp_path):
+    app.config["UPLOAD_FOLDER"] = str(tmp_path)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.side_effect = [
+        (1,),
+        (
+            "poster-a",
+            "Poster A",
+            "Poster A",
+            "http://127.0.0.1:5050/uploads/target/poster-a.jpg",
+            "accepted",
+            datetime.now(timezone.utc),
+            "",
+            "",
+            "http://127.0.0.1:5050/uploads/target_ref/poster-a.jpg",
+        ),
+    ]
+
+    data = {"file": (io.BytesIO(b"ref-bytes"), "scene.jpg")}
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.post("/api/targets/poster-a/reference", data=data, content_type="multipart/form-data")
+
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["targetReferenceImageUrl"].endswith("/uploads/target_ref/poster-a.jpg")
+    assert (tmp_path / "target_ref" / "poster-a.jpg").is_file()
+
+
+def test_upload_target_reference_not_found(client, tmp_path):
+    app.config["UPLOAD_FOLDER"] = str(tmp_path)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = None
+
+    data = {"file": (io.BytesIO(b"ref-bytes"), "scene.jpg")}
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.post("/api/targets/missing/reference", data=data, content_type="multipart/form-data")
+
+    assert res.status_code == 404
 
 
 def test_delete_vuforia_target_requires_id():

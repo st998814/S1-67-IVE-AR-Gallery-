@@ -25,4 +25,10 @@ public interface IApiClient
         CreateContentRequestDto request,
         Action<ApiResult<CreateContentResponseDto>> onCompleted,
         float timeoutSeconds = 20f);
+
+    IApiRequestHandle UploadTargetReference(
+        string targetId,
+        UploadFileRequestDto request,
+        Action<ApiResult<UploadTargetReferenceResponseDto>> onCompleted,
+        float timeoutSeconds = 20f);
 }

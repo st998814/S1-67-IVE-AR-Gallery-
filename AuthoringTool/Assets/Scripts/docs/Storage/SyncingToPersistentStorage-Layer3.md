@@ -38,6 +38,7 @@ Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring
 | **`POST /api/upload`** | Multipart `file`, `category` (`content` \| `target` \| `target_ref`), optional **`targetId`** / **`contentId`**. |
 | **`POST /api/targets`** | JSON create/update; **`workspaceId`** / optional **`workspaceName`**. |
 | **`POST /api/targets/cloud`** | Vuforia + multipart image; **`workspaceId`** / **`workspaceName`**. |
+| **`POST /api/targets/<targetId>/reference`** | Optional real-world placement reference photo → **`uploads/target_ref/{targetId}.{ext}`** and **`targets.target_reference_image_url`**. |
 | **`POST /api/content`** | JSON; **`contentId`**, **`targetId`**, **`mediaUrl`**, transforms, meta. |
 | **`DELETE /api/workspaces/<workspace_id>`** | Cascade: Vuforia cloud targets (`vuforia_target_id` per row), upload URLs + files under **`PUBLIC_BASE_URL`**, **`targets`** (contents cascade), **`workspaces`**. Response includes **`deletedVuforiaTargets`**. Reserved **`default`** workspace returns **403**. |
 

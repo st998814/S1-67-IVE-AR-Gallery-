@@ -1578,13 +1578,34 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
+        AuthoredTargetInstance authored = ResolveAuthoredTargetForActiveSelection();
         TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
         if (activeDraft != null && activeDraft.bytes != null && activeDraft.isUnsaved)
         {
             string suffix = string.IsNullOrWhiteSpace(activeDraft.fileName) ? "" : $" ({activeDraft.fileName})";
-            targetReferenceStatusLabel.text = $"Unsaved{suffix}";
-            // Tailor to the UX: red for unsaved.
+            targetReferenceStatusLabel.text = $"Saved locally — sync to upload{suffix}";
             targetReferenceStatusLabel.style.color = new StyleColor(new Color32(220, 53, 69, 255));
+            return;
+        }
+
+        if (authored != null && authored.TargetReferenceRemoteDirty)
+        {
+            targetReferenceStatusLabel.text = "Saved locally — sync to upload";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(220, 53, 69, 255));
+            return;
+        }
+
+        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceImageUrl))
+        {
+            targetReferenceStatusLabel.text = "Uploaded";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(34, 197, 94, 255));
+            return;
+        }
+
+        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        {
+            targetReferenceStatusLabel.text = "Saved locally";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(229, 231, 235, 255));
             return;
         }
 
@@ -1596,6 +1617,8 @@ public class AuthoringUIController : MonoBehaviour
     {
         if (targetReferencePreviewImage == null)
             return;
+
+        EnsureTargetReferenceDraftHydratedFromAuthored();
 
         TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
         if (activeDraft == null || activeDraft.previewTexture == null)
@@ -1634,6 +1657,10 @@ public class AuthoringUIController : MonoBehaviour
             isUnsaved = true,
             previewTexture = CreatePreviewTexture(bytes)
         };
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored != null && !authored.TargetReferenceRemoteDirty && !string.IsNullOrWhiteSpace(authored.TargetReferenceImageUrl))
+            draft.isUnsaved = false;
 
         targetReferencesByTargetId[targetId] = draft;
         RefreshTargetReferenceUiForActiveTarget();
@@ -1899,10 +1926,106 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
+        string targetId = pendingTargetReferenceTargetId.Trim();
         string fileName = selectedFile.fileInfo != null ? selectedFile.fileInfo.name : "";
-        SetOrReplaceTargetReferenceDraft(pendingTargetReferenceTargetId, selectedFile.data, fileName);
+        if (!TryPersistTargetReferenceLocally(targetId, selectedFile.data, fileName, out string error))
+        {
+            ShowError(string.IsNullOrWhiteSpace(error) ? "Could not save target reference locally." : error);
+            pendingTargetReferenceTargetId = null;
+            UpdateTargetReferenceStatusLabel(showUploadingText: false);
+            return;
+        }
+
+        SetOrReplaceTargetReferenceDraft(targetId, selectedFile.data, fileName);
         pendingTargetReferenceTargetId = null;
         UpdateTargetReferenceStatusLabel(showUploadingText: false);
+        RequestWorkspaceSnapshotSave();
+    }
+
+    private bool TryPersistTargetReferenceLocally(string targetId, byte[] bytes, string fileName, out string errorMessage)
+    {
+        errorMessage = null;
+        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
+            || string.IsNullOrWhiteSpace(session.workspaceId))
+        {
+            errorMessage = "No active workspace session.";
+            return false;
+        }
+
+        var assetRepo = new WorkspaceAssetRepository();
+        if (!assetRepo.TryImportTargetReferenceImage(session.workspaceId.Trim(), fileName, bytes, null, out string relativePath, out errorMessage))
+            return false;
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored != null)
+        {
+            authored.TargetReferenceLocalPath = relativePath;
+            authored.TargetReferenceOriginalFileName = fileName ?? "";
+            authored.TargetReferenceRemoteDirty = true;
+            authored.RemoteDirty = true;
+        }
+
+        return true;
+    }
+
+    private AuthoredTargetInstance ResolveAuthoredTargetForActiveSelection()
+    {
+        return ResolveAuthoredTargetById(GetActiveTargetIdForSave());
+    }
+
+    private AuthoredTargetInstance ResolveAuthoredTargetById(string targetId)
+    {
+        if (string.IsNullOrWhiteSpace(targetId) || targetSelectionManager == null)
+            return null;
+
+        int index = targetSelectionManager.FindTargetIndexById(targetId.Trim());
+        if (index < 0)
+            return null;
+
+        GameObject go = targetSelectionManager.GetTargetAt(index);
+        return go != null ? go.GetComponent<AuthoredTargetInstance>() : null;
+    }
+
+    private void EnsureTargetReferenceDraftHydratedFromAuthored()
+    {
+        string targetId = GetActiveTargetIdForSave();
+        if (string.IsNullOrWhiteSpace(targetId))
+            return;
+
+        if (GetActiveTargetReferenceDraft() != null)
+            return;
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored == null || string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+            return;
+
+        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null)
+            return;
+
+        string full = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(
+            session.workspaceId.Trim(),
+            authored.TargetReferenceLocalPath);
+        if (string.IsNullOrWhiteSpace(full) || !System.IO.File.Exists(full))
+            return;
+
+        try
+        {
+            byte[] bytes = System.IO.File.ReadAllBytes(full);
+            SetOrReplaceTargetReferenceDraft(targetId, bytes, authored.TargetReferenceOriginalFileName);
+            if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
+                draft.isUnsaved = authored.TargetReferenceRemoteDirty;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"AuthoringUIController: could not load target reference preview: {ex.Message}");
+        }
+    }
+
+    private void RequestWorkspaceSnapshotSave()
+    {
+        WorkspaceAutoSaveService autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
     }
 
 private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)

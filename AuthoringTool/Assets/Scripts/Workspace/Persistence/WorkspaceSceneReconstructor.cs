@@ -166,9 +166,14 @@ namespace ARGallery.Workspace.Persistence
             authored.VuforiaTargetId = ts.vuforiaTargetId ?? "";
             authored.TargetName = ts.targetName ?? "";
             authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
+            authored.TargetReferenceLocalPath = ts.targetReferenceLocalPath ?? "";
+            authored.TargetReferenceImageUrl = ts.targetReferenceImageUrl ?? "";
             authored.OriginalFileName = ts.originalFileName ?? "";
+            authored.TargetReferenceOriginalFileName = ts.targetReferenceOriginalFileName ?? "";
             authored.PhysicalWidthM = ts.physicalWidthM > 1e-5f ? ts.physicalWidthM : 0.2f;
             authored.RemoteDirty = ts.remoteDirty;
+            authored.TargetReferenceRemoteDirty = !string.IsNullOrWhiteSpace(ts.targetReferenceLocalPath)
+                && string.IsNullOrWhiteSpace(ts.targetReferenceImageUrl);
             authored.LastRemoteSyncedAtUtc = ts.lastRemoteSyncedAtUtc ?? "";
 
             byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
