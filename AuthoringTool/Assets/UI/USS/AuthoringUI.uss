@@ -8,6 +8,13 @@
     overflow: visible;
 }
 
+.authoring-back-btn {
+    position: absolute;
+    left: 12px;
+    top: 52px;
+    z-index: 600;
+}
+
 .top-bar {
     height: 44px;
     min-height: 44px;
@@ -83,6 +90,52 @@
     -unity-text-align: middle-center;
 }
 .authoring-add-fab:hover { background-color: rgb(31, 41, 51); }
+
+.authoring-save-fab {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    padding: 0;
+    margin: 0;
+    border-radius: 28px;
+    background-color: rgba(18, 24, 33, 0.95);
+    border-width: 1px;
+    border-color: rgb(31, 41, 51);
+    justify-content: center;
+    align-items: center;
+    z-index: 600;
+    font-size: 0;
+}
+
+.authoring-save-fab:hover {
+    background-color: rgb(31, 41, 51);
+    border-color: rgb(140, 191, 255);
+}
+
+.authoring-save-fab:disabled {
+    opacity: 0.45;
+}
+
+.authoring-save-fab--busy {
+    opacity: 0.65;
+    border-color: rgb(77, 163, 255);
+}
+
+.authoring-save-fab__icon {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    flex-shrink: 0;
+    background-image: url("../Icons/AuthoringSaveDownload.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
+}
 
 /* Bottom-center manipulator panel (Move / Scale modes) */
 .manipulator-bottom-panel {

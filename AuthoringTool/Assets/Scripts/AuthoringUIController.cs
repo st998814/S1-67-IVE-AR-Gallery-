@@ -288,8 +288,17 @@ public class AuthoringUIController : MonoBehaviour
         if (browseButton != null) browseButton.clicked += OnBrowseButtonClicked;
         if (addContentButton != null) addContentButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
-        saveButton.clicked += OnSaveButtonClicked;
-        if (backToSwitcherButton != null) backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
+        if (saveButton != null)
+        {
+            saveButton.clicked += OnSaveButtonClicked;
+            saveButton.BringToFront();
+            ResetSaveFabFeedback();
+        }
+        if (backToSwitcherButton != null)
+        {
+            backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
+            backToSwitcherButton.BringToFront();
+        }
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
         if (leftPanelToggleButton != null) leftPanelToggleButton.clicked += OnLeftPanelToggleClicked;
         if (rightPanelToggleButton != null) rightPanelToggleButton.clicked += OnRightPanelToggleClicked;
@@ -2294,6 +2303,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             filePathInput.value = t;
     }
 
+    private const string SaveFabDefaultTooltip = "Save to server";
+
     void OnSaveButtonClicked()
     {
         if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
@@ -2306,13 +2317,51 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         apiClient = ResolveApiClient();
         if (apiClient == null || spawnerManager == null)
         {
-            saveButton.text = "Save Failed!";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2200);
+            ShowSaveFabFeedback("Save failed", "API client or spawner is not available.", isError: true);
             Debug.LogWarning("Save skipped: API client or spawner manager is not available.");
             return;
         }
 
         StartCoroutine(SaveAllDraftsRoutine());
+    }
+
+    private void ResetSaveFabFeedback()
+    {
+        if (saveButton == null)
+            return;
+        saveButton.tooltip = SaveFabDefaultTooltip;
+        saveButton.EnableInClassList("authoring-save-fab--busy", false);
+    }
+
+    private void SetSaveFabBusy(bool busy)
+    {
+        if (saveButton == null)
+            return;
+        saveButton.EnableInClassList("authoring-save-fab--busy", busy);
+        if (busy)
+            saveButton.tooltip = "Saving…";
+        else
+            saveButton.tooltip = SaveFabDefaultTooltip;
+    }
+
+    private void ShowSaveFabFeedback(string title, string message, bool isError = false)
+    {
+        if (saveButton != null)
+            saveButton.tooltip = $"{title}: {message}";
+
+        if (_syncStatusToast == null || _syncStatusTitle == null || _syncStatusMessage == null)
+            return;
+
+        CancelSyncToastHideRoutine();
+        ApplyRemoteSyncToastStyle(isError ? WorkspaceRemoteSyncToastKind.Failed : WorkspaceRemoteSyncToastKind.Synced);
+        _syncStatusTitle.style.display = DisplayStyle.Flex;
+        _syncStatusTitle.text = title;
+        _syncStatusMessage.text = message;
+        _syncStatusMessage.style.fontSize = 11;
+        _syncStatusMessage.style.unityFontStyleAndWeight = FontStyle.Normal;
+        _syncStatusToast.RemoveFromClassList("sync-toast--hidden");
+        _syncStatusToast.style.display = DisplayStyle.Flex;
+        _syncToastHideRoutine = StartCoroutine(HideSyncStatusToastAfterDelay(isError ? 8f : 4f));
     }
 
     void OnBackToSwitcherButtonClicked()
@@ -2341,14 +2390,18 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
     private IEnumerator SaveAllDraftsRoutine()
     {
         isSaveInProgress = true;
-        saveButton.text = "Saving...";
+        SetSaveFabBusy(true);
+        if (saveButton != null)
+            saveButton.SetEnabled(false);
 
         List<ContentDraftState> drafts = CollectPendingDrafts();
         if (drafts.Count == 0)
         {
-            saveButton.text = "Nothing to save";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(1600);
+            ShowSaveFabFeedback("Nothing to save", "No pending content drafts to upload.");
             isSaveInProgress = false;
+            if (saveButton != null)
+                saveButton.SetEnabled(true);
+            ResetSaveFabFeedback();
             ResolveRemoteSyncService()?.SyncNow();
             yield break;
         }
@@ -2397,18 +2450,22 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         if (failedCount == 0)
         {
-            saveButton.text = "Saved Successfully! ✓";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            ShowSaveFabFeedback("Saved", $"Persisted {successCount} item(s) to the server.");
             Debug.Log($"Save complete: persisted {successCount} draft(s).");
         }
         else
         {
-            saveButton.text = $"Save Partial ({successCount}/{drafts.Count})";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2600);
+            ShowSaveFabFeedback(
+                "Save partial",
+                $"Saved {successCount} of {drafts.Count}; {failedCount} failed.",
+                isError: true);
             Debug.LogWarning($"Save finished with failures: success={successCount}, failed={failedCount}.");
         }
 
         isSaveInProgress = false;
+        if (saveButton != null)
+            saveButton.SetEnabled(true);
+        ResetSaveFabFeedback();
     }
 
     private List<ContentDraftState> CollectPendingDrafts()
