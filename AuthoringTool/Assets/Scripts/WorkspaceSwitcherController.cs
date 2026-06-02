@@ -159,7 +159,7 @@ namespace ARGallery.AppFlow
 
             BindUi(root);
             HideDeleteConfirm();
-            SeedMockWorkspaces();
+            mockWorkspaces.Clear();
             RebuildCards();
             RefreshSelectionUi(forceImmediate: true);
             StartCoroutine(TryRefreshWorkspacesFromBackend());
@@ -469,110 +469,6 @@ namespace ARGallery.AppFlow
         private void SeedMockWorkspaces()
         {
             mockWorkspaces.Clear();
-
-            var byId = new Dictionary<string, WorkspaceSessionContext>(StringComparer.OrdinalIgnoreCase);
-            var insertionOrder = new List<string>();
-            var diskOnlyPending = new List<(WorkspaceSessionContext session, string updatedAtUtc)>();
-
-            void RegisterSeed(WorkspaceSessionContext ctx)
-            {
-                string id = ctx.workspaceId.Trim();
-                if (byId.ContainsKey(id))
-                    return;
-                byId[id] = ctx.Clone();
-                insertionOrder.Add(id);
-            }
-
-            void MergeDiskMetadata(string workspaceId, WorkspaceIndexEntry entry)
-            {
-                if (entry == null || string.IsNullOrWhiteSpace(workspaceId))
-                    return;
-                if (!byId.TryGetValue(workspaceId.Trim(), out WorkspaceSessionContext ctx) || ctx == null)
-                    return;
-                if (!string.IsNullOrWhiteSpace(entry.workspaceName))
-                    ctx.workspaceName = entry.workspaceName.Trim();
-                if (!string.IsNullOrWhiteSpace(entry.thumbnailKey))
-                    ctx.thumbnailKey = entry.thumbnailKey.Trim();
-            }
-
-            var providerWorkspaces = Workspace.WorkspaceDataServices.Provider.GetAvailableWorkspaces();
-            if (providerWorkspaces != null)
-            {
-                for (int i = 0; i < providerWorkspaces.Count; i++)
-                {
-                    Workspace.WorkspaceDraftState ws = providerWorkspaces[i];
-                    if (ws == null || string.IsNullOrWhiteSpace(ws.workspaceId) || ws.target == null || string.IsNullOrWhiteSpace(ws.target.targetId))
-                        continue;
-
-                    RegisterSeed(new WorkspaceSessionContext
-                    {
-                        workspaceId = ws.workspaceId.Trim(),
-                        workspaceName = string.IsNullOrWhiteSpace(ws.workspaceName) ? ws.workspaceId.Trim() : ws.workspaceName.Trim(),
-                        targetId = ws.target.targetId.Trim(),
-                        targetImageUrl = ws.target.targetImageUrl ?? "",
-                        isNewWorkspace = false,
-                        setupState = WorkspaceSetupState.Ready
-                    });
-                }
-            }
-
-            var snapshotRepo = new WorkspaceSnapshotRepository();
-            IReadOnlyList<WorkspaceIndexEntry> diskIndex = snapshotRepo.LoadAllIndexEntries();
-            for (int i = 0; i < diskIndex.Count; i++)
-            {
-                WorkspaceIndexEntry entry = diskIndex[i];
-                if (entry == null || string.IsNullOrWhiteSpace(entry.workspaceId))
-                    continue;
-
-                string wid = entry.workspaceId.Trim();
-                if (byId.ContainsKey(wid))
-                {
-                    MergeDiskMetadata(wid, entry);
-                    continue;
-                }
-
-                if (TryBuildSessionFromDiskWorkspace(wid, entry, out WorkspaceSessionContext diskSession))
-                    diskOnlyPending.Add((diskSession, entry.updatedAtUtc ?? ""));
-            }
-
-            diskOnlyPending.Sort((a, b) => CompareIndexUpdatedDesc(a.updatedAtUtc, b.updatedAtUtc));
-            for (int i = 0; i < diskOnlyPending.Count; i++)
-                RegisterSeed(diskOnlyPending[i].session);
-
-            if (insertionOrder.Count == 0)
-            {
-                var hidden = Workspace.MockWorkspaceProvider.LoadHiddenSeedWorkspaceIds();
-                if (!hidden.Contains("ws-wall-001"))
-                    RegisterSeed(new WorkspaceSessionContext
-                    {
-                        workspaceId = "ws-wall-001",
-                        workspaceName = "Target on Wall",
-                        targetId = "target-wall-001",
-                        isNewWorkspace = false,
-                        setupState = WorkspaceSetupState.Ready
-                    });
-                if (!hidden.Contains("ws-floor-001"))
-                    RegisterSeed(new WorkspaceSessionContext
-                    {
-                        workspaceId = "ws-floor-001",
-                        workspaceName = "Target on Floor",
-                        targetId = "target-floor-001",
-                        isNewWorkspace = false,
-                        setupState = WorkspaceSetupState.Ready
-                    });
-                if (!hidden.Contains("ws-ceiling-001"))
-                    RegisterSeed(new WorkspaceSessionContext
-                    {
-                        workspaceId = "ws-ceiling-001",
-                        workspaceName = "Target on Ceiling",
-                        targetId = "target-ceiling-001",
-                        isNewWorkspace = false,
-                        setupState = WorkspaceSetupState.Ready
-                    });
-            }
-
-            for (int i = 0; i < insertionOrder.Count; i++)
-                mockWorkspaces.Add(byId[insertionOrder[i]]);
         }
 
         private static int CompareIndexUpdatedDesc(string a, string b)
@@ -1074,9 +970,10 @@ namespace ARGallery.AppFlow
 
             Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (server data if configured + snapshot folder + index + draft cache).");
 
-            SeedMockWorkspaces();
+            mockWorkspaces.Clear();
             RebuildCards();
             RefreshSelectionUi(forceImmediate: true);
+            StartCoroutine(TryRefreshWorkspacesFromBackend());
             workspaceDeleteBusy = false;
         }
 
