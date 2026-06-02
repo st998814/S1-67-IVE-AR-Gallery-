@@ -34,6 +34,8 @@ namespace ARGallery.Workspace.Persistence
         public string serverTargetId = "";
         public string vuforiaTargetId = "";
         public string targetName = "";
+        /// <summary>Public URL for target image (Layer 3 / WebGL fallback).</summary>
+        public string targetImageUrl = "";
         /// <summary>Relative path under workspace folder, e.g. assets/targets/&lt;id&gt;.png</summary>
         public string targetImageLocalPath = "";
         /// <summary>Relative path for optional real-world placement reference photo.</summary>

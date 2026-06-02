@@ -152,6 +152,7 @@ namespace ARGallery.Workspace.Persistence
                 serverTargetId = t.ServerTargetId ?? "",
                 vuforiaTargetId = t.VuforiaTargetId ?? "",
                 targetName = t.TargetName ?? "",
+                targetImageUrl = t.TargetImageUrl ?? "",
                 targetImageLocalPath = t.TargetImageLocalPath ?? "",
                 targetReferenceLocalPath = t.TargetReferenceLocalPath ?? "",
                 targetReferenceImageUrl = t.TargetReferenceImageUrl ?? "",

@@ -36,6 +36,7 @@ namespace ARGallery.AppFlow
         private readonly List<float> cardOpacityCurrent = new List<float>();
         private readonly List<float> cardOpacityTarget = new List<float>();
         private readonly Dictionary<string, Texture2D> thumbnailTextureCache = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> thumbnailDownloadsInFlight = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private int selectedIndex;
         private float stripOffsetCurrent;
         private float stripOffsetTarget;
@@ -354,6 +355,7 @@ namespace ARGallery.AppFlow
                         workspaceId = ws.workspaceId.Trim(),
                         workspaceName = string.IsNullOrWhiteSpace(ws.workspaceName) ? ws.workspaceId.Trim() : ws.workspaceName.Trim(),
                         targetId = ws.target.targetId.Trim(),
+                        targetImageUrl = ws.target.targetImageUrl ?? "",
                         isNewWorkspace = false,
                         setupState = WorkspaceSetupState.Ready
                     });
@@ -471,6 +473,7 @@ namespace ARGallery.AppFlow
                 thumbnailKey = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.thumbnailKey)
                     ? indexEntry.thumbnailKey.Trim()
                     : "",
+                targetImageUrl = WorkspaceDataServices.LocalStore.GetWorkspaceSnapshot(workspaceId.Trim())?.target?.targetImageUrl ?? "",
                 isNewWorkspace = false,
                 setupState = WorkspaceSetupState.Ready
             };
@@ -526,32 +529,80 @@ namespace ARGallery.AppFlow
         private Texture2D GetWorkspaceThumbnailTexture(WorkspaceSessionContext session)
         {
             string path = ResolveWorkspaceThumbnailPath(session);
-            if (string.IsNullOrWhiteSpace(path))
+            string url = session != null ? SafeUrl(session.targetImageUrl) : "";
+            string cacheKey = !string.IsNullOrWhiteSpace(path) ? path : (!string.IsNullOrWhiteSpace(url) ? "url:" + url : "");
+            if (string.IsNullOrWhiteSpace(cacheKey))
                 return null;
 
-            if (thumbnailTextureCache.TryGetValue(path, out Texture2D cached) && cached != null)
+            if (thumbnailTextureCache.TryGetValue(cacheKey, out Texture2D cached) && cached != null)
                 return cached;
 
-            try
+            if (!string.IsNullOrWhiteSpace(path))
             {
-                byte[] bytes = File.ReadAllBytes(path);
-                if (bytes == null || bytes.Length == 0)
-                    return null;
-
-                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                if (!texture.LoadImage(bytes, markNonReadable: false))
+                try
                 {
-                    Destroy(texture);
+                    byte[] bytes = File.ReadAllBytes(path);
+                    if (bytes == null || bytes.Length == 0)
+                        return null;
+
+                    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (!texture.LoadImage(bytes, markNonReadable: false))
+                    {
+                        Destroy(texture);
+                        return null;
+                    }
+
+                    thumbnailTextureCache[cacheKey] = texture;
+                    return texture;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"WorkspaceSwitcherController: failed to load thumbnail '{path}' for '{session.workspaceId}': {ex.Message}");
                     return null;
                 }
-
-                thumbnailTextureCache[path] = texture;
-                return texture;
             }
-            catch (Exception ex)
+
+            if (!thumbnailDownloadsInFlight.Contains(cacheKey))
             {
-                Debug.LogWarning($"WorkspaceSwitcherController: failed to load thumbnail '{path}' for '{session.workspaceId}': {ex.Message}");
-                return null;
+                thumbnailDownloadsInFlight.Add(cacheKey);
+                StartCoroutine(LoadWorkspaceThumbnailFromUrl(cacheKey, url));
+            }
+
+            return null;
+        }
+
+        private static string SafeUrl(string candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+                return "";
+            string trimmed = candidate.Trim();
+            return (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                ? trimmed
+                : "";
+        }
+
+        private IEnumerator LoadWorkspaceThumbnailFromUrl(string cacheKey, string url)
+        {
+            using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+            {
+                request.timeout = 15;
+                yield return request.SendWebRequest();
+                thumbnailDownloadsInFlight.Remove(cacheKey);
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogWarning($"WorkspaceSwitcherController: failed to download thumbnail from '{url}': {request.error}");
+                    yield break;
+                }
+
+                Texture2D texture = DownloadHandlerTexture.GetContent(request);
+                if (texture == null)
+                    yield break;
+
+                thumbnailTextureCache[cacheKey] = texture;
+                RebuildCards();
+                RefreshSelectionUi(forceImmediate: true);
             }
         }
 

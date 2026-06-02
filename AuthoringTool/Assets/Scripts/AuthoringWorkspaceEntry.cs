@@ -512,6 +512,10 @@ namespace ARGallery.AppFlow
 
         private void ApplyWorkspaceTargetVisual(GameObject targetObject, string targetImageUrl, WorkspaceSessionContext session)
         {
+            AuthoredTargetInstance authored = targetObject != null ? targetObject.GetComponent<AuthoredTargetInstance>() : null;
+            if (authored != null)
+                authored.TargetImageUrl = string.IsNullOrWhiteSpace(targetImageUrl) ? "" : targetImageUrl.Trim();
+
             if (session != null && session.targetImageBytes != null && session.targetImageBytes.Length > 0)
             {
                 if (targetWorkflowService.ApplyTargetImageBytes(targetObject, session.targetImageBytes))

@@ -189,6 +189,10 @@ public class TargetWorkflowService
         if (string.IsNullOrWhiteSpace(targetImageUrl))
             return null;
 
+        var authored = targetObject.GetComponent<AuthoredTargetInstance>();
+        if (authored != null)
+            authored.TargetImageUrl = targetImageUrl.Trim();
+
         return runner.StartCoroutine(ApplyTargetImageFromUrlRoutine(targetObject, targetImageUrl.Trim()));
     }
 

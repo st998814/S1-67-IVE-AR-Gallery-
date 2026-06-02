@@ -165,6 +165,7 @@ namespace ARGallery.Workspace.Persistence
             authored.ServerTargetId = ts.serverTargetId ?? "";
             authored.VuforiaTargetId = ts.vuforiaTargetId ?? "";
             authored.TargetName = ts.targetName ?? "";
+            authored.TargetImageUrl = ts.targetImageUrl ?? "";
             authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
             authored.TargetReferenceLocalPath = ts.targetReferenceLocalPath ?? "";
             authored.TargetReferenceImageUrl = ts.targetReferenceImageUrl ?? "";
@@ -179,6 +180,8 @@ namespace ARGallery.Workspace.Persistence
             byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
             if (imgBytes != null && imgBytes.Length > 0)
                 targetWorkflowService.ApplyTargetImageBytes(targetGo, imgBytes);
+            else if (!string.IsNullOrWhiteSpace(ts.targetImageUrl))
+                targetWorkflowService.ApplyTargetImageFromUrl(this, targetGo, ts.targetImageUrl.Trim());
             else
                 Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image bytes for '{canonicalId}' (path '{ts.targetImageLocalPath}').");
 

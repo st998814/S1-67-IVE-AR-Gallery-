@@ -14,6 +14,8 @@ namespace ARGallery.Workspace.Persistence
         public string ServerTargetId = "";
         public string VuforiaTargetId = "";
         public string TargetName = "";
+        /// <summary>Public URL after sync; used when local bytes/path are unavailable (e.g. WebGL).</summary>
+        public string TargetImageUrl = "";
         /// <summary>Relative path under workspace folder, e.g. assets/targets/&lt;id&gt;.png</summary>
         public string TargetImageLocalPath = "";
         /// <summary>Relative path under workspace folder for optional placement reference photo.</summary>
