@@ -108,6 +108,7 @@ namespace ARGallery.AppFlow
             ApplyWorkspaceNameFromSession();
             SyncDerivedFieldsFromTargetName();
             RefreshDisplayLabelFieldVisibility();
+            isBusy = false;
             currentStep = 0;
             RefreshWizardUi();
             UpdateUiState();

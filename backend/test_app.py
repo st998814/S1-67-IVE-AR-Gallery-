@@ -117,6 +117,95 @@ def test_delete_workspace_default_blocked(client):
     assert res.get_json()["errorCode"] == "VALIDATION_ERROR"
 
 
+def test_list_workspaces_success(client):
+    mock_cur = MagicMock()
+    now = datetime.now(timezone.utc)
+    mock_cur.fetchall.return_value = [
+        ("ws-floor-001", "Target on Floor", "ready", 1, now, now, 1, 2, "http://127.0.0.1:5050/uploads/target/floor.jpg"),
+        ("ws-wall-001", "Target on Wall", "ready", 1, now, now, 1, 0, ""),
+    ]
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.get("/api/workspaces")
+
+    assert res.status_code == 200
+    body = res.get_json()
+    assert "workspaces" in body
+    assert len(body["workspaces"]) == 2
+    assert body["workspaces"][0]["workspaceId"] == "ws-floor-001"
+    assert body["workspaces"][0]["targetCount"] == 1
+    assert body["workspaces"][0]["contentCount"] == 2
+    assert body["workspaces"][0]["thumbnailUrl"].endswith("/uploads/target/floor.jpg")
+
+
+def test_get_workspace_restore_payload_success(client):
+    now = datetime.now(timezone.utc)
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = ("ws-floor-001", "Target on Floor", "ready", 1, now, now)
+    mock_cur.fetchall.side_effect = [
+        [
+            (
+                "target-floor-001",
+                "ws-floor-001",
+                "Target on Floor",
+                "Target on Floor",
+                "http://127.0.0.1:5050/uploads/target/floor.jpg",
+                "",
+                0.2,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                "",
+                "",
+                "accepted",
+                now,
+                now,
+            )
+        ],
+        [
+            (
+                "content-floor-001",
+                "target-floor-001",
+                "ws-floor-001",
+                "image",
+                "http://127.0.0.1:5050/uploads/content/floor-content.jpg",
+                0.0,
+                0.0,
+                -0.5,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                "surface",
+                "jpg",
+                {},
+                "accepted",
+                now,
+                now,
+            )
+        ],
+    ]
+
+    with patch("app.get_db_connection", return_value=db_context(mock_cur)):
+        res = client.get("/api/workspaces/ws-floor-001")
+
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["workspace"]["workspaceId"] == "ws-floor-001"
+    assert len(body["targets"]) == 1
+    assert len(body["contents"]) == 1
+    assert body["targets"][0]["targetId"] == "target-floor-001"
+    assert body["contents"][0]["contentId"] == "content-floor-001"
+
+
 def test_delete_workspace_not_found(client):
     mock_cur = MagicMock()
     mock_cur.fetchone.return_value = None

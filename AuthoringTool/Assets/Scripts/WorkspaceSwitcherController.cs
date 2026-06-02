@@ -17,6 +17,73 @@ namespace ARGallery.AppFlow
     [RequireComponent(typeof(UIDocument))]
     public class WorkspaceSwitcherController : MonoBehaviour
     {
+        [Serializable]
+        private class WorkspaceListEnvelope
+        {
+            public WorkspaceSummaryDto[] workspaces;
+        }
+
+        [Serializable]
+        private class WorkspaceSummaryDto
+        {
+            public string workspaceId;
+            public string workspaceName;
+            public string state;
+            public int schemaVersion;
+            public string createdAtUtc;
+            public string updatedAtUtc;
+            public int targetCount;
+            public int contentCount;
+            public string thumbnailUrl;
+        }
+
+        [Serializable]
+        private class WorkspaceRestoreEnvelope
+        {
+            public WorkspaceDetailDto workspace;
+            public WorkspaceTargetDto[] targets;
+            public WorkspaceContentDto[] contents;
+        }
+
+        [Serializable]
+        private class WorkspaceDetailDto
+        {
+            public string workspaceId;
+            public string workspaceName;
+            public string state;
+            public int schemaVersion;
+            public string createdAtUtc;
+            public string updatedAtUtc;
+        }
+
+        [Serializable]
+        private class WorkspaceTargetDto
+        {
+            public string targetId;
+            public string workspaceId;
+            public string targetName;
+            public string displayLabel;
+            public string targetImageUrl;
+            public string targetReferenceImageUrl;
+            public float physicalWidthM;
+            public string vuforiaTargetId;
+            public string vuforiaStatus;
+            public string status;
+        }
+
+        [Serializable]
+        private class WorkspaceContentDto
+        {
+            public string contentId;
+            public string targetId;
+            public string workspaceId;
+            public string contentType;
+            public string mediaUrl;
+            public string renderKind;
+            public string assetFormat;
+            public string status;
+        }
+
         private const string LeftArrowButtonName = "LeftArrowButton";
         private const string RightArrowButtonName = "RightArrowButton";
         private const string WorkspaceCardsRowName = "WorkspaceCardsRow";
@@ -67,6 +134,7 @@ namespace ARGallery.AppFlow
         private string backendApiBaseUrl = "http://127.0.0.1:5050";
 
         private bool workspaceDeleteBusy;
+        private bool workspaceListRefreshInFlight;
 
         private void OnEnable()
         {
@@ -94,6 +162,7 @@ namespace ARGallery.AppFlow
             SeedMockWorkspaces();
             RebuildCards();
             RefreshSelectionUi(forceImmediate: true);
+            StartCoroutine(TryRefreshWorkspacesFromBackend());
         }
 
         private void OnDisable()
@@ -104,6 +173,7 @@ namespace ARGallery.AppFlow
             if (deleteConfirmDeleteButton != null) deleteConfirmDeleteButton.clicked -= OnDeleteConfirmDeleteClicked;
             if (backToLandingButton != null) backToLandingButton.clicked -= OnBackToLandingClicked;
             HideDeleteConfirm();
+            workspaceListRefreshInFlight = false;
         }
 
         private void OnDestroy()
@@ -193,6 +263,90 @@ namespace ARGallery.AppFlow
             deleteConfirmCancelButton.clicked += OnDeleteConfirmCancelClicked;
             deleteConfirmDeleteButton.clicked += OnDeleteConfirmDeleteClicked;
             deleteConfirmOverlay.BringToFront();
+        }
+
+        private IEnumerator TryRefreshWorkspacesFromBackend()
+        {
+            if (workspaceListRefreshInFlight || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+                yield break;
+
+            workspaceListRefreshInFlight = true;
+            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces";
+            using (UnityWebRequest request = UnityWebRequest.Get(url))
+            {
+                request.timeout = 15;
+                yield return request.SendWebRequest();
+                workspaceListRefreshInFlight = false;
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogWarning($"WorkspaceSwitcherController: backend workspace list unavailable ({request.responseCode}) {request.error}");
+                    yield break;
+                }
+
+                string body = request.downloadHandler != null ? request.downloadHandler.text : "";
+                WorkspaceListEnvelope envelope = JsonUtility.FromJson<WorkspaceListEnvelope>(body);
+                if (envelope == null || envelope.workspaces == null || envelope.workspaces.Length == 0)
+                    yield break;
+
+                var remote = new List<WorkspaceSessionContext>();
+                for (int i = 0; i < envelope.workspaces.Length; i++)
+                {
+                    WorkspaceSummaryDto row = envelope.workspaces[i];
+                    if (row == null || string.IsNullOrWhiteSpace(row.workspaceId))
+                        continue;
+
+                    WorkspaceSessionContext session = new WorkspaceSessionContext
+                    {
+                        workspaceId = row.workspaceId.Trim(),
+                        workspaceName = string.IsNullOrWhiteSpace(row.workspaceName) ? row.workspaceId.Trim() : row.workspaceName.Trim(),
+                        thumbnailKey = row.thumbnailUrl ?? "",
+                        targetImageUrl = row.thumbnailUrl ?? "",
+                        isNewWorkspace = false,
+                        setupState = WorkspaceSetupState.Ready
+                    };
+
+                    yield return PopulateWorkspaceSessionFromBackendDetail(session);
+                    if (!string.IsNullOrWhiteSpace(session.targetId))
+                        remote.Add(session);
+                }
+
+                if (remote.Count == 0)
+                    yield break;
+
+                mockWorkspaces.Clear();
+                mockWorkspaces.AddRange(remote);
+                selectedIndex = Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1);
+                RebuildCards();
+                RefreshSelectionUi(forceImmediate: true);
+            }
+        }
+
+        private IEnumerator PopulateWorkspaceSessionFromBackendDetail(WorkspaceSessionContext session)
+        {
+            if (session == null || string.IsNullOrWhiteSpace(session.workspaceId) || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+                yield break;
+
+            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(session.workspaceId.Trim())}";
+            using (UnityWebRequest request = UnityWebRequest.Get(url))
+            {
+                request.timeout = 15;
+                yield return request.SendWebRequest();
+                if (request.result != UnityWebRequest.Result.Success)
+                    yield break;
+
+                string body = request.downloadHandler != null ? request.downloadHandler.text : "";
+                WorkspaceRestoreEnvelope envelope = JsonUtility.FromJson<WorkspaceRestoreEnvelope>(body);
+                if (envelope == null || envelope.targets == null || envelope.targets.Length == 0 || envelope.targets[0] == null)
+                    yield break;
+
+                WorkspaceTargetDto firstTarget = envelope.targets[0];
+                session.targetId = string.IsNullOrWhiteSpace(firstTarget.targetId) ? "" : firstTarget.targetId.Trim();
+                if (string.IsNullOrWhiteSpace(session.targetImageUrl))
+                    session.targetImageUrl = firstTarget.targetImageUrl ?? "";
+                if (string.IsNullOrWhiteSpace(session.vuforiaTargetId))
+                    session.vuforiaTargetId = firstTarget.vuforiaTargetId ?? "";
+            }
         }
 
         private static void EnsureDeleteConfirmOverlay(VisualElement screenRoot)

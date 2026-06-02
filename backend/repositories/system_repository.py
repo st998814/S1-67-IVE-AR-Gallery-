@@ -19,6 +19,127 @@ class SystemRepository:
         cur.execute("SELECT 1 FROM workspaces WHERE workspace_id = %s;", (workspace_id,))
         return cur.fetchone() is not None
 
+    def list_workspaces(self, cur):
+        cur.execute(
+            """
+            SELECT
+                w.workspace_id,
+                w.workspace_name,
+                w.state::text,
+                w.schema_version,
+                w.created_at_utc,
+                w.updated_at_utc,
+                COALESCE(tc.target_count, 0) AS target_count,
+                COALESCE(cc.content_count, 0) AS content_count,
+                COALESCE(preview.target_image_url, '') AS thumbnail_url
+            FROM workspaces w
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS target_count
+                FROM targets t
+                WHERE t.workspace_id = w.workspace_id
+            ) tc ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS content_count
+                FROM contents c
+                INNER JOIN targets t ON t.target_id = c.target_id
+                WHERE t.workspace_id = w.workspace_id
+            ) cc ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT t.target_image_url
+                FROM targets t
+                WHERE t.workspace_id = w.workspace_id
+                  AND TRIM(COALESCE(t.target_image_url, '')) <> ''
+                ORDER BY t.updated_at_utc DESC, t.created_at_utc DESC
+                LIMIT 1
+            ) preview ON TRUE
+            ORDER BY w.updated_at_utc DESC, w.created_at_utc DESC, w.workspace_id ASC;
+            """
+        )
+        return cur.fetchall()
+
+    def get_workspace(self, cur, workspace_id: str):
+        cur.execute(
+            """
+            SELECT
+                workspace_id,
+                workspace_name,
+                state::text,
+                schema_version,
+                created_at_utc,
+                updated_at_utc
+            FROM workspaces
+            WHERE workspace_id = %s;
+            """,
+            (workspace_id,),
+        )
+        return cur.fetchone()
+
+    def list_workspace_targets(self, cur, workspace_id: str):
+        cur.execute(
+            """
+            SELECT
+                target_id,
+                workspace_id,
+                target_name,
+                display_label,
+                target_image_url,
+                target_reference_image_url,
+                physical_width_m,
+                local_position_x,
+                local_position_y,
+                local_position_z,
+                local_euler_x,
+                local_euler_y,
+                local_euler_z,
+                local_scale_x,
+                local_scale_y,
+                local_scale_z,
+                vuforia_target_id,
+                vuforia_status,
+                status,
+                created_at_utc,
+                updated_at_utc
+            FROM targets
+            WHERE workspace_id = %s
+            ORDER BY created_at_utc ASC, target_id ASC;
+            """,
+            (workspace_id,),
+        )
+        return cur.fetchall()
+
+    def list_workspace_contents(self, cur, workspace_id: str):
+        cur.execute(
+            """
+            SELECT
+                c.content_id,
+                c.target_id,
+                t.workspace_id,
+                c.content_type,
+                c.media_url,
+                c.local_position_x,
+                c.local_position_y,
+                c.local_position_z,
+                c.local_euler_x,
+                c.local_euler_y,
+                c.local_euler_z,
+                c.local_scale_x,
+                c.local_scale_y,
+                c.local_scale_z,
+                c.render_kind,
+                c.asset_format,
+                c.meta,
+                c.status,
+                c.created_at_utc,
+                c.updated_at_utc
+            FROM contents c
+            INNER JOIN targets t ON t.target_id = c.target_id
+            WHERE t.workspace_id = %s
+            ORDER BY c.created_at_utc ASC, c.content_id ASC;
+            """,
+            (workspace_id,),
+        )
+        return cur.fetchall()
+
     def count_workspace_contents(self, cur, workspace_id: str) -> int:
         cur.execute(
             """

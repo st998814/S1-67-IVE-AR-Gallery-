@@ -32,6 +32,26 @@ class SystemService:
                 body.update(self.repository.health_counts(cur))
         return body
 
+    def list_workspaces(self):
+        with self.db_connection_factory() as conn:
+            with conn.cursor() as cur:
+                return self.repository.list_workspaces(cur)
+
+    def get_workspace_restore_payload(self, workspace_id: str):
+        wid = (workspace_id or "").strip()
+        with self.db_connection_factory() as conn:
+            with conn.cursor() as cur:
+                workspace = self.repository.get_workspace(cur, wid)
+                if workspace is None:
+                    return None, "not_found"
+                targets = self.repository.list_workspace_targets(cur, wid)
+                contents = self.repository.list_workspace_contents(cur, wid)
+                return {
+                    "workspace": workspace,
+                    "targets": targets,
+                    "contents": contents,
+                }, None
+
     def delete_workspace(self, workspace_id: str):
         with self.db_connection_factory() as conn:
             with conn.cursor() as cur:
