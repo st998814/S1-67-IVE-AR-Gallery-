@@ -52,7 +52,10 @@ class TargetRepository:
                 workspace_id = EXCLUDED.workspace_id,
                 target_name = EXCLUDED.target_name,
                 display_label = EXCLUDED.display_label,
-                target_image_url = EXCLUDED.target_image_url,
+                target_image_url = CASE
+                    WHEN EXCLUDED.target_image_url <> '' THEN EXCLUDED.target_image_url
+                    ELSE targets.target_image_url
+                END,
                 physical_width_m = EXCLUDED.physical_width_m,
                 local_position_x = EXCLUDED.local_position_x,
                 local_position_y = EXCLUDED.local_position_y,

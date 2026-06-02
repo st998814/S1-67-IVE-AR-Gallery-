@@ -1832,6 +1832,11 @@ public class AuthoringUIController : MonoBehaviour
             RegisterTextDraft(localResult.draggableObject, textToDisplay);
             SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, "Text");
         }
+        else if (localResult.spawnedObject != null)
+        {
+            RegisterTextDraftForTransform(localResult.spawnedObject.transform, textToDisplay);
+            SetActiveAuthoringTransform(localResult.spawnedObject.transform, textToDisplay, "Text");
+        }
     }
 
     void OnBrowseButtonClicked()
@@ -2090,13 +2095,19 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         return;
     }
 
+    string label = type == SpawnContentType.Model ? "Model"
+        : type == SpawnContentType.Video ? "Video"
+        : "Image";
+
     if (outcome.draggableObject != null)
     {
         RegisterLocalDraft(outcome.draggableObject, type, selectedFile, displayName);
-        string label = type == SpawnContentType.Model ? "Model"
-            : type == SpawnContentType.Video ? "Video"
-            : "Image";
         SetActiveAuthoringObject(outcome.draggableObject, "", label);
+    }
+    else if (outcome.spawnedObject != null)
+    {
+        RegisterLocalDraftForTransform(outcome.spawnedObject.transform, type, selectedFile, displayName);
+        SetActiveAuthoringTransform(outcome.spawnedObject.transform, "", label);
     }
 
     if (filePathInput != null)
@@ -2166,6 +2177,43 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
+    private void SetActiveAuthoringTransform(Transform targetTransform, string mediaValue, string contentType)
+    {
+        if (targetTransform == null)
+            return;
+
+        activeDraggedObject = targetTransform.GetComponent<DraggableObject>();
+        authoringSpatialTarget = targetTransform;
+        activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
+
+        suppressSpatialUiCallbacks = true;
+        try
+        {
+            SyncTransformToInspector(targetTransform);
+        }
+        finally
+        {
+            suppressSpatialUiCallbacks = false;
+        }
+
+        ApplyInspectorModeContent();
+
+        if (contentType != null && contentType.StartsWith("Text", System.StringComparison.Ordinal))
+        {
+            if (youtubeUrlInput != null) youtubeUrlInput.value = "";
+            if (filePathInput != null)
+                filePathInput.value = string.IsNullOrWhiteSpace(mediaValue) ? "No file..." : mediaValue.Trim();
+        }
+        else
+        {
+            ApplyUrlToMediaFields(mediaValue);
+        }
+
+        if (contentTypeInput != null)
+            contentTypeInput.value = contentType;
+        Debug.Log("Now authoring " + targetTransform.gameObject.name);
+    }
+
     private ContentDraftState ResolveDraftForSelection(Transform selectedTransform, DraggableObject selectedDraggable)
     {
         if (selectedDraggable != null && contentDraftsByDraggable.TryGetValue(selectedDraggable, out ContentDraftState draggableDraft))
@@ -2203,6 +2251,38 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         contentDraftsByTransform[draggableObject.transform] = draft;
     }
 
+    private void RegisterTextDraftForTransform(Transform contentTransform, string textPayload)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterTextDraft(draggableObject, textPayload);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            contentType = SpawnContentType.Text,
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.textPayload = textPayload ?? "";
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
+    }
+
     private void RegisterRemoteBackedDraft(DraggableObject draggableObject, SpawnContentType contentType, string mediaUrl, string localFileName)
     {
         if (draggableObject == null)
@@ -2227,6 +2307,38 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterRemoteBackedDraftForTransform(Transform contentTransform, SpawnContentType contentType, string mediaUrl, string localFileName)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterRemoteBackedDraft(draggableObject, contentType, mediaUrl, localFileName);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.mediaUrl = mediaUrl ?? "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
     }
 
     private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
@@ -2256,6 +2368,41 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterLocalDraftForTransform(Transform contentTransform, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterLocalDraft(draggableObject, contentType, selectedFile, localFileName);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        string ext = selectedFile?.fileInfo != null ? (selectedFile.fileInfo.extension ?? "") : "";
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.localFileBytes = selectedFile?.data;
+        draft.localMimeType = GuessMimeTypeFromExtension(ext);
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = true;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
     }
 
     private static string GuessMimeTypeFromExtension(string extension) =>
@@ -2473,16 +2620,22 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         var drafts = new List<ContentDraftState>();
         var seenIds = new HashSet<string>();
 
-        foreach (ContentDraftState draft in contentDraftsByDraggable.Values)
+        void AddIfPending(ContentDraftState draft)
         {
             if (draft == null || string.IsNullOrWhiteSpace(draft.draftId))
-                continue;
+                return;
             if (!draft.isUnsaved && !draft.persistPending)
-                continue;
+                return;
             if (!seenIds.Add(draft.draftId))
-                continue;
+                return;
             drafts.Add(draft);
         }
+
+        foreach (ContentDraftState draft in contentDraftsByDraggable.Values)
+            AddIfPending(draft);
+
+        foreach (ContentDraftState draft in contentDraftsByTransform.Values)
+            AddIfPending(draft);
 
         return drafts;
     }
@@ -2737,6 +2890,15 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                 url,
                 localFileName: "youtube-link");
             SetActiveAuthoringObject(localResult.draggableObject, url, "Video");
+        }
+        else if (localResult.spawnedObject != null)
+        {
+            RegisterRemoteBackedDraftForTransform(
+                localResult.spawnedObject.transform,
+                SpawnContentType.Video,
+                url,
+                localFileName: "youtube-link");
+            SetActiveAuthoringTransform(localResult.spawnedObject.transform, url, "Video");
         }
 
         Debug.Log("Successfully spawned YouTube stream to AR wall.");

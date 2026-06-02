@@ -17,8 +17,8 @@ namespace ARGallery.Workspace.Persistence
     }
 
     /// <summary>
-    /// Layer 3: debounced backend sync after successful local snapshot saves (<see cref="WorkspaceAutoSaveService.SnapshotSaved"/>).
-    /// Single-flight with <see cref="SyncNow"/> for immediate flush. Does not modify backend repo layout.
+    /// Layer 3: remote sync after successful autosave snapshots (<see cref="WorkspaceAutoSaveService.SnapshotSaved"/>).
+    /// Uses single-flight execution with queued reruns when changes land during an active pass.
     /// </summary>
     public sealed class WorkspaceRemoteSyncService : MonoBehaviour
     {
@@ -28,7 +28,6 @@ namespace ARGallery.Workspace.Persistence
         public event Action<WorkspaceRemoteSyncToastKind, string> RemoteSyncToastChanged;
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
-        [SerializeField] [Min(5f)] private float remoteSyncDebounceSeconds = 20f;
         [SerializeField] private float apiTimeoutSeconds = 25f;
 
         private WorkspaceAutoSaveService _autoSave;
@@ -37,7 +36,6 @@ namespace ARGallery.Workspace.Persistence
         private readonly TargetWorkflowService _targetWorkflow = new TargetWorkflowService();
         private readonly ContentWorkflowService _contentWorkflow = new ContentWorkflowService();
 
-        private Coroutine _debounceCoroutine;
         private Coroutine _syncCoroutine;
         private bool _syncInProgress;
         private bool _pendingSyncRequested;
@@ -45,8 +43,6 @@ namespace ARGallery.Workspace.Persistence
         private string _lastUploadUrl;
         private string _lastFailReason;
         private bool _lastStepOk;
-
-        private float EffectiveDebounceSeconds => Mathf.Max(5f, remoteSyncDebounceSeconds);
 
         private void RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind kind, string message)
         {
@@ -67,12 +63,6 @@ namespace ARGallery.Workspace.Persistence
             if (_autoSave != null)
                 _autoSave.SnapshotSaved -= OnSnapshotSaved;
 
-            if (_debounceCoroutine != null)
-            {
-                StopCoroutine(_debounceCoroutine);
-                _debounceCoroutine = null;
-            }
-
             if (_syncCoroutine != null)
             {
                 StopCoroutine(_syncCoroutine);
@@ -88,31 +78,6 @@ namespace ARGallery.Workspace.Persistence
                 return;
             }
 
-            ScheduleDebouncedRemoteSync();
-        }
-
-        private void ScheduleDebouncedRemoteSync()
-        {
-            if (!isActiveAndEnabled)
-                return;
-
-            if (_debounceCoroutine != null)
-                StopCoroutine(_debounceCoroutine);
-
-            _debounceCoroutine = StartCoroutine(DebounceThenStartSyncRoutine());
-        }
-
-        private IEnumerator DebounceThenStartSyncRoutine()
-        {
-            yield return new WaitForSeconds(EffectiveDebounceSeconds);
-            _debounceCoroutine = null;
-
-            if (_syncInProgress)
-            {
-                _pendingSyncRequested = true;
-                yield break;
-            }
-
             StartSyncCoroutineIfIdle();
         }
 
@@ -122,12 +87,6 @@ namespace ARGallery.Workspace.Persistence
         /// </summary>
         public void SyncNow()
         {
-            if (_debounceCoroutine != null)
-            {
-                StopCoroutine(_debounceCoroutine);
-                _debounceCoroutine = null;
-            }
-
             if (_autoSave != null)
                 _autoSave.FlushSnapshotToDisk(suppressSnapshotSaved: true);
 
@@ -242,7 +201,7 @@ namespace ARGallery.Workspace.Persistence
 
             if (targetRowNeedsSync)
             {
-                string imageUrl = "";
+                string imageUrl = string.IsNullOrWhiteSpace(target.TargetImageUrl) ? "" : target.TargetImageUrl.Trim();
                 if (!string.IsNullOrWhiteSpace(target.TargetImageLocalPath))
                 {
                     string full = _assetRepo.ResolveFullPath(workspaceId, target.TargetImageLocalPath);
@@ -299,6 +258,8 @@ namespace ARGallery.Workspace.Persistence
 
                 if (apiOk)
                 {
+                    if (!string.IsNullOrWhiteSpace(imageUrl))
+                        target.TargetImageUrl = imageUrl.Trim();
                     target.RemoteDirty = false;
                     target.LastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
                 }

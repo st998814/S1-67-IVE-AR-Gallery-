@@ -1,6 +1,6 @@
 # Syncing to persistent storage (Layer 3)
 
-**Layer 3** is **remote** synchronization: pushing authored workspace state to the AR Gallery **backend** (Postgres + files under `uploads/`). It builds on **Layer 2** (local snapshot + assets — see **[LocalWorkspacePersistent-Layer2.md](LocalWorkspacePersistent-Layer2.md)**).
+**Layer 3** is now the durable source of truth: authored workspace state is persisted to the AR Gallery **backend** (Postgres + files under `uploads/`).
 
 Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring/AuthoringUILayout.md)**.
 
@@ -10,7 +10,7 @@ Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring
 
 - Persist targets, content rows, and uploaded media on the server so TablePlus / API consumers see the same data as the authoring tool after sync.
 - Support workspace-scoped records (`workspace_id` / `workspaceId`) and optional workspace row upsert on the server.
-- On workspace delete from the switcher, cascade server-side data via **`DELETE /api/workspaces/<workspace_id>`** before removing local snapshot folders.
+- On workspace delete from the switcher, cascade server-side data via **`DELETE /api/workspaces/<workspace_id>`**.
 
 ---
 
@@ -54,7 +54,7 @@ If **`psql` / TablePlus on `127.0.0.1:5432`** shows empty tables while **`/api/h
 
 ### Workspace delete
 
-Local **`WorkspaceDeletion`** always removes **`snapshot.json`** and workspace folder. With **`backendApiBaseUrl`** set on **`WorkspaceSwitcherController`**, the client calls **`DELETE /api/workspaces/...`** first; **404** is treated as OK (never synced).
+With **`backendApiBaseUrl`** set on **`WorkspaceSwitcherController`**, the client treats backend delete as authoritative; **404** is treated as OK (never synced).
 
 ---
 

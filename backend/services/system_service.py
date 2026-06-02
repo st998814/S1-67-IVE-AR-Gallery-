@@ -35,7 +35,19 @@ class SystemService:
     def list_workspaces(self):
         with self.db_connection_factory() as conn:
             with conn.cursor() as cur:
-                return self.repository.list_workspaces(cur)
+                rows = self.repository.list_workspaces(cur)
+                enriched = []
+                for row in rows:
+                    if row is None:
+                        continue
+                    workspace_id = row[0]
+                    thumbnail_url = row[8] or ""
+                    if not thumbnail_url:
+                        thumbnail_url = self._resolve_workspace_thumbnail_fallback(cur, workspace_id)
+                    if thumbnail_url:
+                        row = tuple(list(row[:8]) + [thumbnail_url])
+                    enriched.append(row)
+                return enriched
 
     def get_workspace_restore_payload(self, workspace_id: str):
         wid = (workspace_id or "").strip()
@@ -136,3 +148,37 @@ class SystemService:
         if not candidate.startswith(abs_root + os.sep) and candidate != abs_root:
             return None
         return candidate
+
+    def _resolve_workspace_thumbnail_fallback(self, cur, workspace_id: str) -> str:
+        wid = (workspace_id or "").strip()
+        if not wid:
+            return ""
+
+        targets = self.repository.list_workspace_targets(cur, wid)
+        if not targets:
+            return ""
+
+        target_upload_root = os.path.join(self.upload_folder, "target")
+        if not os.path.isdir(target_upload_root):
+            return ""
+
+        preferred_ext = [".jpg", ".jpeg", ".png", ".webp", ".gif"]
+        for row in targets:
+            if not row:
+                continue
+
+            existing_url = row[4] or ""
+            if existing_url:
+                return existing_url
+
+            target_id = (row[0] or "").strip()
+            if not target_id:
+                continue
+
+            for ext in preferred_ext:
+                candidate_file = f"{target_id}{ext}"
+                abs_path = os.path.join(target_upload_root, candidate_file)
+                if os.path.isfile(abs_path):
+                    return f"{self.public_base_url.rstrip('/')}/uploads/target/{candidate_file}"
+
+        return ""

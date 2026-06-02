@@ -114,45 +114,6 @@ namespace ARGallery.AppFlow
             }
 
             string workspaceId = ResolveWorkspaceId(session);
-            var snapshotRepo = new WorkspaceSnapshotRepository();
-            if (snapshotRepo.TryLoadSnapshot(workspaceId, out WorkspaceSnapshot snapshotForRebuild))
-            {
-                WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
-                if (reconstructor != null)
-                {
-                    bool completed = false;
-                    bool rebuildOk = false;
-                    reconstructor.BeginRebuildFromDisk(workspaceId, ok =>
-                    {
-                        rebuildOk = ok;
-                        completed = true;
-                    });
-
-                    while (!completed)
-                        yield return null;
-
-                    if (rebuildOk)
-                    {
-                        WorkspaceDomain.WorkspaceDraftState draftAfterRebuild = LoadWorkspaceDraft(workspaceId);
-                        // Draft may be mock-provider fallback (wrong targetId). Snapshot + session carry the real ids.
-                        string resolvedTargetId = ResolveAuthoringTargetId(draftAfterRebuild, session, workspaceId, snapshotForRebuild);
-                        if (string.IsNullOrWhiteSpace(resolvedTargetId))
-                        {
-                            Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot restored but could not resolve target id for workspace '{workspaceId}'.");
-                            yield break;
-                        }
-
-                        ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session, workspaceId, snapshotForRebuild, resolvedTargetId);
-                        yield break;
-                    }
-
-                    Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot rebuild reported failure for '{workspaceId}'. Falling back to draft-only entry.");
-                }
-                else
-                {
-                    Debug.LogWarning("AuthoringWorkspaceEntry: snapshot.json exists but WorkspaceSceneReconstructor is missing; using draft-only entry.");
-                }
-            }
 
             bool restoredFromBackend = false;
             yield return TryRebuildFromBackend(workspaceId, session, ok => restoredFromBackend = ok);
@@ -194,8 +155,7 @@ namespace ARGallery.AppFlow
         }
 
         /// <summary>
-        /// Resolves AR target id: session (switcher) → snapshot.json → draft.
-        /// Draft alone is unreliable for UUID workspaces because <see cref="Workspace.MockWorkspaceProvider"/> falls back to the default wall workspace ids.
+        /// Resolves AR target id from session or current draft.
         /// </summary>
         private static string ResolveAuthoringTargetId(
             WorkspaceDomain.WorkspaceDraftState workspace,
@@ -211,17 +171,6 @@ namespace ARGallery.AppFlow
                 string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snapshotOrNull);
                 if (!string.IsNullOrWhiteSpace(fromSnap))
                     return fromSnap.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(resolvedWorkspaceId))
-            {
-                var repo = new WorkspaceSnapshotRepository();
-                if (repo.TryLoadSnapshot(resolvedWorkspaceId.Trim(), out WorkspaceSnapshot snap))
-                {
-                    string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snap);
-                    if (!string.IsNullOrWhiteSpace(fromSnap))
-                        return fromSnap.Trim();
-                }
             }
 
             if (workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetId))

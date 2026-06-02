@@ -2,9 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using ARGallery.Workspace;
-using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
@@ -135,6 +132,7 @@ namespace ARGallery.AppFlow
 
         private bool workspaceDeleteBusy;
         private bool workspaceListRefreshInFlight;
+        private bool demoFallbackActive;
 
         private void OnEnable()
         {
@@ -281,13 +279,18 @@ namespace ARGallery.AppFlow
                 if (request.result != UnityWebRequest.Result.Success)
                 {
                     Debug.LogWarning($"WorkspaceSwitcherController: backend workspace list unavailable ({request.responseCode}) {request.error}");
+                    ApplyDemoFallbackForOffline();
                     yield break;
                 }
 
                 string body = request.downloadHandler != null ? request.downloadHandler.text : "";
                 WorkspaceListEnvelope envelope = JsonUtility.FromJson<WorkspaceListEnvelope>(body);
                 if (envelope == null || envelope.workspaces == null || envelope.workspaces.Length == 0)
+                {
+                    demoFallbackActive = false;
+                    ApplyWorkspaceList(new List<WorkspaceSessionContext>(), "No workspaces available.");
                     yield break;
+                }
 
                 var remote = new List<WorkspaceSessionContext>();
                 for (int i = 0; i < envelope.workspaces.Length; i++)
@@ -312,13 +315,14 @@ namespace ARGallery.AppFlow
                 }
 
                 if (remote.Count == 0)
+                {
+                    demoFallbackActive = false;
+                    ApplyWorkspaceList(new List<WorkspaceSessionContext>(), "No restorable workspaces available.");
                     yield break;
+                }
 
-                mockWorkspaces.Clear();
-                mockWorkspaces.AddRange(remote);
-                selectedIndex = Mathf.Clamp(selectedIndex, 0, mockWorkspaces.Count - 1);
-                RebuildCards();
-                RefreshSelectionUi(forceImmediate: true);
+                demoFallbackActive = false;
+                ApplyWorkspaceList(remote, "Selected: " + remote[0].workspaceName);
             }
         }
 
@@ -347,6 +351,61 @@ namespace ARGallery.AppFlow
                 if (string.IsNullOrWhiteSpace(session.vuforiaTargetId))
                     session.vuforiaTargetId = firstTarget.vuforiaTargetId ?? "";
             }
+        }
+
+        private void ApplyDemoFallbackForOffline()
+        {
+            List<WorkspaceSessionContext> demo = BuildReadOnlyDemoFallbackWorkspaces();
+            demoFallbackActive = demo.Count > 0;
+            string label = demoFallbackActive
+                ? "Offline demo mode (read-only)."
+                : "Backend unavailable.";
+            ApplyWorkspaceList(demo, label);
+        }
+
+        private static List<WorkspaceSessionContext> BuildReadOnlyDemoFallbackWorkspaces()
+        {
+            return new List<WorkspaceSessionContext>
+            {
+                new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-wall-001",
+                    workspaceName = "Demo - Target on Wall",
+                    targetId = "target-wall-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                },
+                new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-floor-001",
+                    workspaceName = "Demo - Target on Floor",
+                    targetId = "target-floor-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                },
+                new WorkspaceSessionContext
+                {
+                    workspaceId = "ws-ceiling-001",
+                    workspaceName = "Demo - Target on Ceiling",
+                    targetId = "target-ceiling-001",
+                    isNewWorkspace = false,
+                    setupState = WorkspaceSetupState.Ready
+                }
+            };
+        }
+
+        private void ApplyWorkspaceList(List<WorkspaceSessionContext> list, string emptyOrStatusLabel)
+        {
+            mockWorkspaces.Clear();
+            if (list != null && list.Count > 0)
+                mockWorkspaces.AddRange(list);
+
+            selectedIndex = Mathf.Clamp(selectedIndex, 0, Mathf.Max(0, mockWorkspaces.Count - 1));
+            RebuildCards();
+            RefreshSelectionUi(forceImmediate: true);
+
+            if (activeWorkspaceNameLabel != null && !string.IsNullOrWhiteSpace(emptyOrStatusLabel) && (mockWorkspaces.Count == 0 || demoFallbackActive))
+                activeWorkspaceNameLabel.text = emptyOrStatusLabel;
         }
 
         private static void EnsureDeleteConfirmOverlay(VisualElement screenRoot)
@@ -454,6 +513,12 @@ namespace ARGallery.AppFlow
 
             string id = pendingDeleteWorkspaceId.Trim();
             HideDeleteConfirm();
+            if (demoFallbackActive)
+            {
+                if (activeWorkspaceNameLabel != null)
+                    activeWorkspaceNameLabel.text = "Offline demo mode is read-only. Delete disabled.";
+                return;
+            }
             StartCoroutine(DeleteWorkspaceCoroutine(id));
         }
 
@@ -471,146 +536,15 @@ namespace ARGallery.AppFlow
             mockWorkspaces.Clear();
         }
 
-        private static int CompareIndexUpdatedDesc(string a, string b)
-        {
-            DateTime ta = TryParseIndexUtc(a);
-            DateTime tb = TryParseIndexUtc(b);
-            return tb.CompareTo(ta);
-        }
-
-        private static DateTime TryParseIndexUtc(string iso)
-        {
-            if (string.IsNullOrWhiteSpace(iso))
-                return DateTime.MinValue;
-            if (DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime dt))
-                return dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
-            return DateTime.MinValue;
-        }
-
-        /// <summary>
-        /// Disk-only row in workspace-index.json: resolve target id from snapshot.json so EDIT can enter authoring.
-        /// </summary>
-        private static bool TryBuildSessionFromDiskWorkspace(string workspaceId, WorkspaceIndexEntry indexEntry, out WorkspaceSessionContext session)
-        {
-            session = null;
-            if (string.IsNullOrWhiteSpace(workspaceId))
-                return false;
-
-            var repo = new WorkspaceSnapshotRepository();
-            if (!repo.TryLoadSnapshot(workspaceId.Trim(), out WorkspaceSnapshot snap) || snap == null)
-                return false;
-
-            string targetId = ResolvePrimaryTargetIdFromSnapshot(snap);
-            if (string.IsNullOrWhiteSpace(targetId))
-            {
-                WorkspaceDraftState draft = WorkspaceDataServices.LocalStore.GetWorkspaceSnapshot(workspaceId.Trim());
-                if (draft?.target != null && !string.IsNullOrWhiteSpace(draft.target.targetId))
-                    targetId = draft.target.targetId.Trim();
-            }
-
-            if (string.IsNullOrWhiteSpace(targetId))
-                return false;
-
-            string name = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.workspaceName)
-                ? indexEntry.workspaceName.Trim()
-                : (!string.IsNullOrWhiteSpace(snap.workspaceName) ? snap.workspaceName.Trim() : workspaceId.Trim());
-
-            session = new WorkspaceSessionContext
-            {
-                workspaceId = workspaceId.Trim(),
-                workspaceName = name,
-                targetId = targetId.Trim(),
-                thumbnailKey = indexEntry != null && !string.IsNullOrWhiteSpace(indexEntry.thumbnailKey)
-                    ? indexEntry.thumbnailKey.Trim()
-                    : "",
-                targetImageUrl = WorkspaceDataServices.LocalStore.GetWorkspaceSnapshot(workspaceId.Trim())?.target?.targetImageUrl ?? "",
-                isNewWorkspace = false,
-                setupState = WorkspaceSetupState.Ready
-            };
-            return true;
-        }
-
-        private static string ResolvePrimaryTargetIdFromSnapshot(WorkspaceSnapshot snap)
-        {
-            if (snap?.targets == null || snap.targets.Length == 0)
-                return "";
-
-            TargetSnapshot ts = snap.targets[0];
-            if (ts == null)
-                return "";
-
-            if (!string.IsNullOrWhiteSpace(ts.serverTargetId))
-                return ts.serverTargetId.Trim();
-            return ts.localTargetId != null ? ts.localTargetId.Trim() : "";
-        }
-
-        private string ResolveWorkspaceThumbnailPath(WorkspaceSessionContext session)
-        {
-            if (session == null || string.IsNullOrWhiteSpace(session.workspaceId))
-                return null;
-
-            string filePath = ResolveWorkspaceRelativePath(session.workspaceId, session.thumbnailKey);
-            if (!string.IsNullOrWhiteSpace(filePath))
-                return filePath;
-
-            filePath = ResolveWorkspaceRelativePath(session.workspaceId, session.targetImageRelativePath);
-            if (!string.IsNullOrWhiteSpace(filePath))
-                return filePath;
-
-            return null;
-        }
-
-        private string ResolveWorkspaceRelativePath(string workspaceId, string relativePath)
-        {
-            if (string.IsNullOrWhiteSpace(relativePath) || string.IsNullOrWhiteSpace(workspaceId))
-                return null;
-
-            string trimmed = relativePath.Trim();
-            if (File.Exists(trimmed))
-                return trimmed;
-
-            string resolved = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(workspaceId.Trim(), trimmed);
-            if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved))
-                return resolved;
-
-            return null;
-        }
-
         private Texture2D GetWorkspaceThumbnailTexture(WorkspaceSessionContext session)
         {
-            string path = ResolveWorkspaceThumbnailPath(session);
             string url = session != null ? SafeUrl(session.targetImageUrl) : "";
-            string cacheKey = !string.IsNullOrWhiteSpace(path) ? path : (!string.IsNullOrWhiteSpace(url) ? "url:" + url : "");
+            string cacheKey = !string.IsNullOrWhiteSpace(url) ? "url:" + url : "";
             if (string.IsNullOrWhiteSpace(cacheKey))
                 return null;
 
             if (thumbnailTextureCache.TryGetValue(cacheKey, out Texture2D cached) && cached != null)
                 return cached;
-
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                try
-                {
-                    byte[] bytes = File.ReadAllBytes(path);
-                    if (bytes == null || bytes.Length == 0)
-                        return null;
-
-                    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                    if (!texture.LoadImage(bytes, markNonReadable: false))
-                    {
-                        Destroy(texture);
-                        return null;
-                    }
-
-                    thumbnailTextureCache[cacheKey] = texture;
-                    return texture;
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"WorkspaceSwitcherController: failed to load thumbnail '{path}' for '{session.workspaceId}': {ex.Message}");
-                    return null;
-                }
-            }
 
             if (!thumbnailDownloadsInFlight.Contains(cacheKey))
             {
@@ -816,6 +750,8 @@ namespace ARGallery.AppFlow
         {
             if (mockWorkspaces.Count == 0)
             {
+                if (activeWorkspaceNameLabel != null && string.IsNullOrWhiteSpace(activeWorkspaceNameLabel.text))
+                    activeWorkspaceNameLabel.text = "No workspaces available.";
                 RefreshCarouselViewportLayout();
                 RefreshCarouselArrowState();
                 return;
@@ -910,6 +846,12 @@ namespace ARGallery.AppFlow
         {
             if (SceneTransitionService.IsTransitioning)
                 return;
+            if (demoFallbackActive)
+            {
+                if (activeWorkspaceNameLabel != null)
+                    activeWorkspaceNameLabel.text = "Offline demo mode is read-only. Reconnect backend to create workspaces.";
+                return;
+            }
 
             WorkspaceSessionContext newWorkspace = AppFlowController.BuildNewWorkspaceSession("New Workspace");
             AppFlowController.SetWorkspaceSession(newWorkspace);
@@ -961,14 +903,7 @@ namespace ARGallery.AppFlow
                 }
             }
 
-            if (!WorkspaceDeletion.TryDeleteWorkspaceEverywhere(id, out string err))
-            {
-                Debug.LogWarning($"WorkspaceSwitcherController: local workspace delete failed: {err}");
-                workspaceDeleteBusy = false;
-                yield break;
-            }
-
-            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' (server data if configured + snapshot folder + index + draft cache).");
+            Debug.Log($"WorkspaceSwitcherController: deleted workspace '{id}' on backend.");
 
             mockWorkspaces.Clear();
             RebuildCards();

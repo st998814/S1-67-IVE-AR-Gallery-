@@ -9,6 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 from app import app
+from repositories.target_repository import TargetRepository
 
 
 @pytest.fixture
@@ -438,6 +439,32 @@ def test_target_success(client):
     body = res.get_json()
     assert body["targetId"] == "poster-a"
     assert body["status"] == "created"
+
+
+def test_target_upsert_preserves_existing_target_image_url_when_payload_is_empty():
+    repo = TargetRepository()
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = ("poster-a", "Poster A", "Main wall poster", "http://existing/image.jpg", "accepted", datetime.now(timezone.utc))
+
+    repo.upsert_target(
+        mock_cur,
+        target_id="poster-a",
+        workspace_id="ws-1",
+        target_name="Poster A",
+        display_label="Main wall poster",
+        target_image_url="",
+        physical_width_m=1.0,
+        local_position=(0.0, 0.0, 0.0),
+        local_euler=(0.0, 0.0, 0.0),
+        local_scale=(1.0, 1.0, 1.0),
+        meta={"schemaVersion": "v1"},
+        status="accepted",
+    )
+
+    sql = mock_cur.execute.call_args[0][0]
+    assert "target_image_url = CASE" in sql
+    assert "WHEN EXCLUDED.target_image_url <> '' THEN EXCLUDED.target_image_url" in sql
+    assert "ELSE targets.target_image_url" in sql
 
 
 def test_cloud_target_missing_file(client):

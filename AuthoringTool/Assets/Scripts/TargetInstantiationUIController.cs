@@ -97,8 +97,6 @@ namespace ARGallery.AppFlow
         private File selectedTargetImageFile;
         private Texture2D previewTexture;
 
-        private readonly WorkspaceAssetRepository workspaceAssetRepository = new WorkspaceAssetRepository();
-        private readonly WorkspaceSnapshotRepository workspaceSnapshotRepository = new WorkspaceSnapshotRepository();
 
         private const int StepCount = 2;
 
@@ -924,7 +922,6 @@ namespace ARGallery.AppFlow
 
             selectedTargetImageFile = selected;
             UpdateImagePreview();
-            ImportSelectedTargetImageToPersistentStorage();
             if (currentStep == 0)
                 SetStatus("Image ready. Use the arrow to continue.", TargetSetupStatusKind.Info);
             else
@@ -934,30 +931,6 @@ namespace ARGallery.AppFlow
         private bool HasValidSelectedTargetImage()
         {
             return selectedTargetImageFile != null && selectedTargetImageFile.data != null && selectedTargetImageFile.data.Length > 0;
-        }
-
-        private void ImportSelectedTargetImageToPersistentStorage()
-        {
-            if (!HasValidSelectedTargetImage())
-                return;
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null || string.IsNullOrWhiteSpace(session.workspaceId))
-            {
-                Debug.LogWarning("TargetInstantiationUIController: no workspace session; skipped copying target image under persistentDataPath.");
-                return;
-            }
-
-            string fileName = ResolveSelectedFileName();
-            string sourcePath = "";
-            if (selectedTargetImageFile.fileInfo != null && !string.IsNullOrWhiteSpace(selectedTargetImageFile.fileInfo.fullName))
-                sourcePath = selectedTargetImageFile.fileInfo.fullName.Trim();
-
-            if (!workspaceAssetRepository.TryImportTargetImage(session.workspaceId.Trim(), fileName, selectedTargetImageFile.data, sourcePath, out string relativePath, out string error))
-            {
-                Debug.LogWarning($"TargetInstantiationUIController: target image import failed: {error}");
-                return;
-            }
-
-            AppFlowController.SetWorkspaceTargetImageLocalPath(relativePath);
         }
 
         private string ResolveSelectedFileName()
@@ -1020,11 +993,6 @@ namespace ARGallery.AppFlow
 
             WorkspaceDomain.WorkspaceDataServices.LocalStore.UpdateWorkspace(draft, markDirty: true);
 
-            string indexName = resolvedWorkspaceName;
-            string thumb = string.IsNullOrWhiteSpace(session.thumbnailKey)
-                ? (session.targetImageRelativePath ?? "")
-                : session.thumbnailKey;
-            workspaceSnapshotRepository.UpsertWorkspaceIndexEntry(session.workspaceId.Trim(), indexName, thumb);
         }
 
         private static string NormalizeTargetId(string targetIdInput, string fallbackName)
