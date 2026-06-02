@@ -35,7 +35,7 @@
                             </ui:Button>
                             <ui:DropdownField name="TargetPostureDropdown" label="Placement" class="target-setup-field target-setup-field--compact" />
                             <ui:Label text="Where authored content sits relative to the image." class="target-setup-hint target-setup-hint--tight" />
-                            <ui:FloatField name="PhysicalWidthInput" label="Physical width (m)" value="0.2" class="target-setup-field target-setup-field--compact" />
+                            <ui:TextField name="PhysicalWidthInput" label="Physical width (m)" value="0.2" class="target-setup-field target-setup-field--compact" />
                         </ui:VisualElement>
 
                         <ui:VisualElement name="StepNamesPanel" class="target-setup-step-card target-setup-step-card--hidden">
@@ -73,6 +73,12 @@
 
                 <ui:VisualElement name="StatusBanner" class="target-setup-status target-setup-status--idle">
                     <ui:Label name="StatusLabel" text="Click the image area to upload, then use the arrow to continue." class="target-setup-status__text" />
+                </ui:VisualElement>
+
+                <ui:Button name="VirtualKeyboardToggleButton" text="Show Keyboard" class="target-setup-keyboard-toggle" />
+                <ui:VisualElement name="VirtualKeyboardPanel" class="target-setup-keyboard target-setup-keyboard--hidden">
+                    <ui:Label name="VirtualKeyboardTargetLabel" text="Select a field to type." class="target-setup-keyboard__target" />
+                    <ui:VisualElement name="VirtualKeyboardKeysContainer" class="target-setup-keyboard__keys" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

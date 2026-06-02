@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -26,6 +27,8 @@ namespace ARGallery.CameraControl
     [DefaultExecutionOrder(2000)]
     public sealed class RuntimeCameraController : MonoBehaviour
     {
+        private const string AuthoringSceneName = "AuthoringToolScene";
+
         [Header("Movement")]
         [SerializeField] private float moveSpeed = 5f;
         [SerializeField] private float boostMultiplier = 2.25f;
@@ -77,6 +80,14 @@ namespace ARGallery.CameraControl
 
         private void Update()
         {
+            if (!string.Equals(SceneManager.GetActiveScene().name, AuthoringSceneName, System.StringComparison.Ordinal))
+            {
+                if (_isLooking)
+                    EndLook();
+                DraggableObject.ReleaseCameraInteraction();
+                return;
+            }
+
 #if !ENABLE_INPUT_SYSTEM
             return;
 #else

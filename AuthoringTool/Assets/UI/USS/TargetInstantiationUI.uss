@@ -257,6 +257,14 @@
     min-height: 38px;
 }
 
+.target-setup-field--active > VisualElement,
+.target-setup-field--active > .unity-base-field__input,
+.target-setup-field--active.unity-base-field__aligned {
+    border-color: rgb(77, 163, 255);
+    border-width: 2px;
+    background-color: rgb(246, 250, 255);
+}
+
 .target-setup-field .unity-text-field__input,
 .target-setup-field .unity-base-text-field__input,
 .target-setup-field .unity-base-popup-field__input,
@@ -381,4 +389,81 @@
 
 .target-setup-status--success .target-setup-status__text {
     color: rgb(220, 252, 231);
+}
+
+.target-setup-keyboard-toggle {
+    margin-top: 8px;
+    align-self: flex-end;
+    min-width: 140px;
+    height: 32px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: rgba(27, 34, 43, 0.92);
+    border-width: 1px;
+    border-color: rgb(52, 66, 82);
+    border-radius: 7px;
+    color: rgb(196, 220, 255);
+    -unity-font-style: bold;
+}
+
+.target-setup-keyboard-toggle:hover {
+    border-color: rgb(77, 163, 255);
+    color: rgb(230, 237, 243);
+}
+
+.target-setup-keyboard {
+    margin-top: 8px;
+    width: 100%;
+    max-width: 680px;
+    align-self: center;
+    padding: 10px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgb(52, 66, 82);
+    background-color: rgba(15, 20, 26, 0.92);
+}
+
+.target-setup-keyboard--hidden {
+    display: none;
+}
+
+.target-setup-keyboard__target {
+    font-size: 12px;
+    color: rgb(167, 196, 255);
+    margin-bottom: 8px;
+}
+
+.target-setup-keyboard__keys {
+    flex-direction: column;
+}
+
+.target-setup-keyboard__row {
+    flex-direction: row;
+    margin-bottom: 6px;
+}
+
+.target-setup-keyboard__key {
+    min-width: 32px;
+    height: 30px;
+    margin-right: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: rgb(27, 34, 43);
+    border-width: 1px;
+    border-color: rgb(52, 66, 82);
+    border-radius: 6px;
+    color: rgb(230, 237, 243);
+    -unity-font-style: bold;
+}
+
+.target-setup-keyboard__key:hover {
+    border-color: rgb(77, 163, 255);
+}
+
+.target-setup-keyboard__key--wide {
+    min-width: 66px;
+}
+
+.target-setup-keyboard__key--extra-wide {
+    min-width: 104px;
 }

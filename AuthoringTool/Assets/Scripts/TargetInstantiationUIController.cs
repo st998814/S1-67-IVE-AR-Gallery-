@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using FrostweepGames.Plugins.WebGLFileBrowser;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
@@ -33,6 +35,10 @@ namespace ARGallery.AppFlow
         private const string AdvancedToggleButtonName = "AdvancedToggleButton";
         private const string AdvancedSectionName = "AdvancedSection";
         private const string UseCustomDisplayLabelToggleName = "UseCustomDisplayLabelToggle";
+        private const string VirtualKeyboardToggleButtonName = "VirtualKeyboardToggleButton";
+        private const string VirtualKeyboardPanelName = "VirtualKeyboardPanel";
+        private const string VirtualKeyboardTargetLabelName = "VirtualKeyboardTargetLabel";
+        private const string VirtualKeyboardKeysContainerName = "VirtualKeyboardKeysContainer";
 
         private enum TargetSetupStatusKind
         {
@@ -41,6 +47,17 @@ namespace ARGallery.AppFlow
             Busy,
             Error,
             Success
+        }
+
+        private enum ActiveInputTarget
+        {
+            None,
+            WorkspaceName,
+            TargetName,
+            TargetId,
+            DisplayLabel,
+            VuforiaTargetName,
+            PhysicalWidth
         }
 
         [SerializeField] private MonoBehaviour apiClientBehaviour;
@@ -56,7 +73,7 @@ namespace ARGallery.AppFlow
         private DropdownField targetPostureDropdown;
         private Button targetImagePreviewButton;
         private VisualElement targetImagePreviewMedia;
-        private FloatField physicalWidthInput;
+        private TextField physicalWidthInput;
         private TextField vuforiaTargetNameInput;
         private Button submitButton;
         private Button prevStepButton;
@@ -72,6 +89,11 @@ namespace ARGallery.AppFlow
         private VisualElement statusBanner;
         private VisualElement advancedSection;
         private Toggle useCustomDisplayLabelToggle;
+        private Button virtualKeyboardToggleButton;
+        private VisualElement virtualKeyboardPanel;
+        private Label virtualKeyboardTargetLabel;
+        private VisualElement virtualKeyboardKeysContainer;
+        private readonly List<Button> virtualKeyboardButtons = new List<Button>();
         private File selectedTargetImageFile;
         private Texture2D previewTexture;
 
@@ -83,10 +105,14 @@ namespace ARGallery.AppFlow
         private string lastTargetId = "";
         private bool isBusy;
         private bool advancedExpanded;
+        private bool keyboardVisible;
         private int currentStep;
+        private ActiveInputTarget activeInputTarget = ActiveInputTarget.None;
+        private string physicalWidthKeyboardBuffer = "0.2";
 
         private void OnEnable()
         {
+            ConfigureWebGlKeyboardCapture();
             sceneController = FindFirstObjectByType<TargetInstantiationSceneController>();
             apiClient = ResolveApiClient();
             EnsureFgFileBrowserPresent();
@@ -115,6 +141,235 @@ namespace ARGallery.AppFlow
             SetStatus("Click the image area to upload, then use the arrow to continue.", TargetSetupStatusKind.Idle);
         }
 
+        private static void ConfigureWebGlKeyboardCapture()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Keep keyboard ownership on the WebGL canvas so UIToolkit fields remain responsive.
+            WebGLInput.captureAllKeyboardInput = true;
+#endif
+        }
+
+        private static void EnsureTextFieldFocusOnPointerDown(TextField field)
+        {
+            if (field == null)
+                return;
+            field.RegisterCallback<PointerDownEvent>(_ => field.schedule.Execute(field.Focus).ExecuteLater(0));
+        }
+
+        private void OnWorkspaceNameFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.WorkspaceName);
+        }
+
+        private void OnTargetNameFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.TargetName);
+        }
+
+        private void OnTargetIdFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.TargetId);
+        }
+
+        private void OnDisplayLabelFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.DisplayLabel);
+        }
+
+        private void OnVuforiaTargetNameFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.VuforiaTargetName);
+        }
+
+        private void OnPhysicalWidthFocusIn(FocusInEvent _)
+        {
+            SetActiveInputTarget(ActiveInputTarget.PhysicalWidth);
+        }
+
+        private void SetActiveInputTarget(ActiveInputTarget target)
+        {
+            activeInputTarget = target;
+            if (target == ActiveInputTarget.PhysicalWidth && physicalWidthInput != null)
+                physicalWidthKeyboardBuffer = Safe(physicalWidthInput.value);
+            RefreshActiveInputVisuals();
+            RefreshVirtualKeyboardUi();
+        }
+
+        private void RefreshActiveInputVisuals()
+        {
+            SetFieldActive(workspaceNameInput, activeInputTarget == ActiveInputTarget.WorkspaceName);
+            SetFieldActive(targetNameInput, activeInputTarget == ActiveInputTarget.TargetName);
+            SetFieldActive(targetIdInput, activeInputTarget == ActiveInputTarget.TargetId);
+            SetFieldActive(displayLabelInput, activeInputTarget == ActiveInputTarget.DisplayLabel);
+            SetFieldActive(vuforiaTargetNameInput, activeInputTarget == ActiveInputTarget.VuforiaTargetName);
+            SetFieldActive(physicalWidthInput, activeInputTarget == ActiveInputTarget.PhysicalWidth);
+        }
+
+        private static void SetFieldActive(VisualElement field, bool isActive)
+        {
+            if (field == null)
+                return;
+            field.EnableInClassList("target-setup-field--active", isActive);
+        }
+
+        private void OnVirtualKeyboardToggleClicked()
+        {
+            keyboardVisible = !keyboardVisible;
+            RefreshVirtualKeyboardUi();
+        }
+
+        private void BuildVirtualKeyboard()
+        {
+            if (virtualKeyboardKeysContainer == null || virtualKeyboardKeysContainer.childCount > 0)
+                return;
+
+            AddKeyboardRow(new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "-" });
+            AddKeyboardRow(new[] { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p" });
+            AddKeyboardRow(new[] { "a", "s", "d", "f", "g", "h", "j", "k", "l" });
+            AddKeyboardRow(new[] { "z", "x", "c", "v", "b", "n", "m" });
+            AddKeyboardRow(new[] { "Space", "Backspace", "Clear", "Done" });
+        }
+
+        private void AddKeyboardRow(string[] keys)
+        {
+            if (virtualKeyboardKeysContainer == null || keys == null || keys.Length == 0)
+                return;
+
+            var row = new VisualElement();
+            row.AddToClassList("target-setup-keyboard__row");
+            virtualKeyboardKeysContainer.Add(row);
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                string key = keys[i];
+                Button button = new Button(() => OnVirtualKeyPressed(key)) { text = key };
+                button.AddToClassList("target-setup-keyboard__key");
+                if (string.Equals(key, "Space", StringComparison.Ordinal))
+                    button.AddToClassList("target-setup-keyboard__key--extra-wide");
+                else if (string.Equals(key, "Backspace", StringComparison.Ordinal) || string.Equals(key, "Clear", StringComparison.Ordinal) || string.Equals(key, "Done", StringComparison.Ordinal))
+                    button.AddToClassList("target-setup-keyboard__key--wide");
+                row.Add(button);
+                virtualKeyboardButtons.Add(button);
+            }
+        }
+
+        private void OnVirtualKeyPressed(string key)
+        {
+            if (isBusy || activeInputTarget == ActiveInputTarget.None || string.IsNullOrWhiteSpace(key))
+                return;
+
+            if (activeInputTarget == ActiveInputTarget.PhysicalWidth)
+            {
+                ApplyVirtualKeyToPhysicalWidth(key);
+                return;
+            }
+
+            TextField target = GetActiveTextField();
+            if (target == null)
+                return;
+
+            string value = target.value ?? "";
+            switch (key)
+            {
+                case "Backspace":
+                    if (value.Length > 0)
+                        value = value.Substring(0, value.Length - 1);
+                    break;
+                case "Clear":
+                    value = "";
+                    break;
+                case "Space":
+                    value += " ";
+                    break;
+                case "Done":
+                    target.Blur();
+                    return;
+                default:
+                    value += key;
+                    break;
+            }
+
+            target.value = value;
+            target.Focus();
+        }
+
+        private TextField GetActiveTextField()
+        {
+            switch (activeInputTarget)
+            {
+                case ActiveInputTarget.WorkspaceName: return workspaceNameInput;
+                case ActiveInputTarget.TargetName: return targetNameInput;
+                case ActiveInputTarget.TargetId: return targetIdInput;
+                case ActiveInputTarget.DisplayLabel: return displayLabelInput;
+                case ActiveInputTarget.VuforiaTargetName: return vuforiaTargetNameInput;
+                default: return null;
+            }
+        }
+
+        private void ApplyVirtualKeyToPhysicalWidth(string key)
+        {
+            if (physicalWidthInput == null)
+                return;
+
+            string buffer = physicalWidthKeyboardBuffer ?? "";
+            switch (key)
+            {
+                case "Backspace":
+                    if (buffer.Length > 0)
+                        buffer = buffer.Substring(0, buffer.Length - 1);
+                    break;
+                case "Clear":
+                    buffer = "";
+                    break;
+                case "Done":
+                    physicalWidthInput.Blur();
+                    return;
+                case "Space":
+                    break;
+                default:
+                    if (key.Length == 1 && ((key[0] >= '0' && key[0] <= '9') || key[0] == '.'))
+                    {
+                        if (key[0] == '.' && buffer.Contains("."))
+                            break;
+                        buffer += key;
+                    }
+                    break;
+            }
+
+            physicalWidthKeyboardBuffer = buffer;
+            physicalWidthInput.value = buffer;
+            physicalWidthInput.Focus();
+            RefreshStepSummary();
+        }
+
+        private void RefreshVirtualKeyboardUi()
+        {
+            if (virtualKeyboardPanel != null)
+                virtualKeyboardPanel.EnableInClassList("target-setup-keyboard--hidden", !keyboardVisible);
+            if (virtualKeyboardToggleButton != null)
+                virtualKeyboardToggleButton.text = keyboardVisible ? "Hide Keyboard" : "Show Keyboard";
+            if (virtualKeyboardTargetLabel != null)
+                virtualKeyboardTargetLabel.text = "Typing in: " + ResolveActiveFieldLabel();
+
+            bool hasTarget = activeInputTarget != ActiveInputTarget.None;
+            for (int i = 0; i < virtualKeyboardButtons.Count; i++)
+                virtualKeyboardButtons[i].SetEnabled(!isBusy && hasTarget);
+        }
+
+        private string ResolveActiveFieldLabel()
+        {
+            switch (activeInputTarget)
+            {
+                case ActiveInputTarget.WorkspaceName: return "Workspace name";
+                case ActiveInputTarget.TargetName: return "Target name";
+                case ActiveInputTarget.TargetId: return "Target ID";
+                case ActiveInputTarget.DisplayLabel: return "Display label";
+                case ActiveInputTarget.VuforiaTargetName: return "Vuforia target name";
+                case ActiveInputTarget.PhysicalWidth: return "Physical width (m)";
+                default: return "Select a field first";
+            }
+        }
+
         private void ApplyWorkspaceNameFromSession()
         {
             if (workspaceNameInput == null)
@@ -132,8 +387,15 @@ namespace ARGallery.AppFlow
             if (nextStepButton != null) nextStepButton.clicked -= OnNextStepClicked;
             if (backToSwitcherButton != null) backToSwitcherButton.clicked -= OnBackToSwitcherClicked;
             if (advancedToggleButton != null) advancedToggleButton.clicked -= OnAdvancedToggleClicked;
+            if (virtualKeyboardToggleButton != null) virtualKeyboardToggleButton.clicked -= OnVirtualKeyboardToggleClicked;
             if (useCustomDisplayLabelToggle != null) useCustomDisplayLabelToggle.UnregisterValueChangedCallback(OnUseCustomDisplayLabelChanged);
             if (targetNameInput != null) targetNameInput.UnregisterValueChangedCallback(OnTargetNameChanged);
+            if (workspaceNameInput != null) workspaceNameInput.UnregisterCallback<FocusInEvent>(OnWorkspaceNameFocusIn);
+            if (targetNameInput != null) targetNameInput.UnregisterCallback<FocusInEvent>(OnTargetNameFocusIn);
+            if (targetIdInput != null) targetIdInput.UnregisterCallback<FocusInEvent>(OnTargetIdFocusIn);
+            if (displayLabelInput != null) displayLabelInput.UnregisterCallback<FocusInEvent>(OnDisplayLabelFocusIn);
+            if (vuforiaTargetNameInput != null) vuforiaTargetNameInput.UnregisterCallback<FocusInEvent>(OnVuforiaTargetNameFocusIn);
+            if (physicalWidthInput != null) physicalWidthInput.UnregisterCallback<FocusInEvent>(OnPhysicalWidthFocusIn);
             WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
         }
 
@@ -155,7 +417,7 @@ namespace ARGallery.AppFlow
             targetPostureDropdown = root.Q<DropdownField>(TargetPostureDropdownName);
             targetImagePreviewButton = root.Q<Button>(TargetImagePreviewButtonName);
             targetImagePreviewMedia = root.Q<VisualElement>(TargetImagePreviewMediaName);
-            physicalWidthInput = root.Q<FloatField>(PhysicalWidthInputName);
+            physicalWidthInput = root.Q<TextField>(PhysicalWidthInputName);
             vuforiaTargetNameInput = root.Q<TextField>(VuforiaTargetNameInputName);
             submitButton = root.Q<Button>(SubmitButtonName);
             prevStepButton = root.Q<Button>(PrevStepButtonName);
@@ -171,6 +433,10 @@ namespace ARGallery.AppFlow
             statusBanner = root.Q<VisualElement>(StatusBannerName);
             statusLabel = root.Q<Label>(StatusLabelName);
             useCustomDisplayLabelToggle = root.Q<Toggle>(UseCustomDisplayLabelToggleName);
+            virtualKeyboardToggleButton = root.Q<Button>(VirtualKeyboardToggleButtonName);
+            virtualKeyboardPanel = root.Q<VisualElement>(VirtualKeyboardPanelName);
+            virtualKeyboardTargetLabel = root.Q<Label>(VirtualKeyboardTargetLabelName);
+            virtualKeyboardKeysContainer = root.Q<VisualElement>(VirtualKeyboardKeysContainerName);
 
             if (submitButton != null) submitButton.clicked += OnSubmitClicked;
             if (targetImagePreviewButton != null) targetImagePreviewButton.clicked += OnBrowseTargetImageClicked;
@@ -182,10 +448,25 @@ namespace ARGallery.AppFlow
                 backToSwitcherButton.BringToFront();
             }
             if (advancedToggleButton != null) advancedToggleButton.clicked += OnAdvancedToggleClicked;
+            if (virtualKeyboardToggleButton != null) virtualKeyboardToggleButton.clicked += OnVirtualKeyboardToggleClicked;
             if (useCustomDisplayLabelToggle != null)
                 useCustomDisplayLabelToggle.RegisterValueChangedCallback(OnUseCustomDisplayLabelChanged);
             if (targetNameInput != null)
                 targetNameInput.RegisterValueChangedCallback(OnTargetNameChanged);
+            if (workspaceNameInput != null) workspaceNameInput.RegisterCallback<FocusInEvent>(OnWorkspaceNameFocusIn);
+            if (targetNameInput != null) targetNameInput.RegisterCallback<FocusInEvent>(OnTargetNameFocusIn);
+            if (targetIdInput != null) targetIdInput.RegisterCallback<FocusInEvent>(OnTargetIdFocusIn);
+            if (displayLabelInput != null) displayLabelInput.RegisterCallback<FocusInEvent>(OnDisplayLabelFocusIn);
+            if (vuforiaTargetNameInput != null) vuforiaTargetNameInput.RegisterCallback<FocusInEvent>(OnVuforiaTargetNameFocusIn);
+            if (physicalWidthInput != null) physicalWidthInput.RegisterCallback<FocusInEvent>(OnPhysicalWidthFocusIn);
+            EnsureTextFieldFocusOnPointerDown(workspaceNameInput);
+            EnsureTextFieldFocusOnPointerDown(targetNameInput);
+            EnsureTextFieldFocusOnPointerDown(targetIdInput);
+            EnsureTextFieldFocusOnPointerDown(displayLabelInput);
+            EnsureTextFieldFocusOnPointerDown(vuforiaTargetNameInput);
+            EnsureTextFieldFocusOnPointerDown(physicalWidthInput);
+            BuildVirtualKeyboard();
+            RefreshVirtualKeyboardUi();
             WebGLFileBrowser.FilesWereOpenedEvent -= OnFilesOpened;
             WebGLFileBrowser.FilesWereOpenedEvent += OnFilesOpened;
             ConfigurePostureDropdown();
@@ -255,8 +536,18 @@ namespace ARGallery.AppFlow
             if (stepDot1 != null)
                 stepDot1.EnableInClassList("target-setup-step-dot--active", currentStep == 1);
 
-            if (!onTrackable)
+            if (onTrackable)
+            {
+                if (activeInputTarget != ActiveInputTarget.PhysicalWidth)
+                    SetActiveInputTarget(ActiveInputTarget.PhysicalWidth);
+            }
+            else
+            {
+                if (activeInputTarget == ActiveInputTarget.PhysicalWidth || activeInputTarget == ActiveInputTarget.None)
+                    SetActiveInputTarget(ActiveInputTarget.WorkspaceName);
+                workspaceNameInput?.schedule.Execute(() => workspaceNameInput.Focus()).ExecuteLater(0);
                 RefreshStepSummary();
+            }
         }
 
         private void RefreshStepSummary()
@@ -266,7 +557,7 @@ namespace ARGallery.AppFlow
 
             string fileName = HasValidSelectedTargetImage() ? ResolveSelectedFileName() : "—";
             string posture = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
-            float width = physicalWidthInput != null ? physicalWidthInput.value : 0f;
+            float width = ParsePhysicalWidthValue();
             stepSummaryLabel.text = $"Trackable: {fileName} · {posture} · {width:0.###} m wide";
         }
 
@@ -341,7 +632,7 @@ namespace ARGallery.AppFlow
             }
 
             string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
-            float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
+            float physicalWidth = ParsePhysicalWidthValue();
             bool hasTargetImage = HasValidSelectedTargetImage();
 
             if (!TryValidateStep1(out string step1Message))
@@ -445,12 +736,13 @@ namespace ARGallery.AppFlow
             if (nextStepButton != null) nextStepButton.SetEnabled(enabled && currentStep < StepCount - 1);
 
             RefreshWizardUi();
+            RefreshVirtualKeyboardUi();
         }
 
         private bool TryValidateStep1(out string validationMessage)
         {
             string postureValue = Safe(targetPostureDropdown != null ? targetPostureDropdown.value : "");
-            float physicalWidth = physicalWidthInput != null ? Mathf.Max(0f, physicalWidthInput.value) : 0f;
+            float physicalWidth = ParsePhysicalWidthValue();
             return TryValidateStep1Fields(postureValue, physicalWidth, HasValidSelectedTargetImage(), out validationMessage);
         }
 
@@ -594,6 +886,16 @@ namespace ARGallery.AppFlow
         private static string Safe(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
+        }
+
+        private float ParsePhysicalWidthValue()
+        {
+            string raw = Safe(physicalWidthInput != null ? physicalWidthInput.value : "");
+            if (string.IsNullOrWhiteSpace(raw))
+                return 0f;
+            if (!float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                return 0f;
+            return Mathf.Max(0f, parsed);
         }
 
         private void OnBrowseTargetImageClicked()
@@ -788,7 +1090,7 @@ namespace ARGallery.AppFlow
             imagePicker.style.height = 120;
             root.Add(imagePicker);
 
-            FloatField width = new FloatField("Physical Width (m, required)") { name = PhysicalWidthInputName, value = 0.2f };
+            TextField width = new TextField("Physical Width (m, required)") { name = PhysicalWidthInputName, value = "0.2" };
             width.style.marginBottom = 8;
             root.Add(width);
 
