@@ -719,7 +719,7 @@ namespace ARGallery.AppFlow
             {
                 if (targetWorkflowService.ApplyTargetImageBytes(targetObject, session.targetImageBytes))
                 {
-                    AuthoredTargetInstance authored = targetObject.GetComponent<AuthoredTargetInstance>();
+                    authored ??= targetObject.GetComponent<AuthoredTargetInstance>();
                     if (authored != null)
                         authored.TargetImageBytes = PersistenceByteUtility.CloneBytes(session.targetImageBytes);
                     return;
