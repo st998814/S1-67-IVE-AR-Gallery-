@@ -391,31 +391,75 @@
     color: rgb(220, 252, 231);
 }
 
-.target-setup-keyboard-toggle {
-    margin-top: 8px;
-    align-self: flex-end;
-    min-width: 140px;
-    height: 32px;
-    padding-left: 10px;
-    padding-right: 10px;
-    background-color: rgba(27, 34, 43, 0.92);
-    border-width: 1px;
-    border-color: rgb(52, 66, 82);
-    border-radius: 7px;
-    color: rgb(196, 220, 255);
-    -unity-font-style: bold;
+.target-setup-keyboard-fab-host {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 20px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    z-index: 550;
 }
 
-.target-setup-keyboard-toggle:hover {
+.target-setup-keyboard-fab {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    padding: 0;
+    margin: 0;
+    border-radius: 28px;
+    background-color: rgba(18, 24, 33, 0.95);
+    border-width: 1px;
+    border-color: rgb(31, 41, 51);
+    justify-content: center;
+    align-items: center;
+    font-size: 0;
+}
+
+.target-setup-keyboard-fab:hover {
+    background-color: rgb(31, 41, 51);
+    border-color: rgb(140, 191, 255);
+}
+
+.target-setup-keyboard-fab:disabled {
+    opacity: 0.45;
+}
+
+.target-setup-keyboard-fab--active {
     border-color: rgb(77, 163, 255);
-    color: rgb(230, 237, 243);
+    background-color: rgb(31, 41, 51);
+}
+
+.target-setup-keyboard-fab__icon {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    flex-shrink: 0;
+    background-image: url("../Icons/VirtualKeyboardFab.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.target-setup-keyboard-host {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 88px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+    z-index: 540;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .target-setup-keyboard {
-    margin-top: 8px;
     width: 100%;
     max-width: 680px;
-    align-self: center;
     padding: 10px;
     border-radius: 10px;
     border-width: 1px;

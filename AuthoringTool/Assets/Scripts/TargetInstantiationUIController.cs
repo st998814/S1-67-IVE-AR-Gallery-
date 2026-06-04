@@ -345,7 +345,11 @@ namespace ARGallery.AppFlow
             if (virtualKeyboardPanel != null)
                 virtualKeyboardPanel.EnableInClassList("target-setup-keyboard--hidden", !keyboardVisible);
             if (virtualKeyboardToggleButton != null)
-                virtualKeyboardToggleButton.text = keyboardVisible ? "Hide Keyboard" : "Show Keyboard";
+            {
+                virtualKeyboardToggleButton.text = "";
+                virtualKeyboardToggleButton.tooltip = keyboardVisible ? "Hide keyboard" : "Show keyboard";
+                virtualKeyboardToggleButton.EnableInClassList("target-setup-keyboard-fab--active", keyboardVisible);
+            }
             if (virtualKeyboardTargetLabel != null)
                 virtualKeyboardTargetLabel.text = "Typing in: " + ResolveActiveFieldLabel();
 
@@ -446,7 +450,11 @@ namespace ARGallery.AppFlow
                 backToSwitcherButton.BringToFront();
             }
             if (advancedToggleButton != null) advancedToggleButton.clicked += OnAdvancedToggleClicked;
-            if (virtualKeyboardToggleButton != null) virtualKeyboardToggleButton.clicked += OnVirtualKeyboardToggleClicked;
+            if (virtualKeyboardToggleButton != null)
+            {
+                virtualKeyboardToggleButton.clicked += OnVirtualKeyboardToggleClicked;
+                virtualKeyboardToggleButton.BringToFront();
+            }
             if (useCustomDisplayLabelToggle != null)
                 useCustomDisplayLabelToggle.RegisterValueChangedCallback(OnUseCustomDisplayLabelChanged);
             if (targetNameInput != null)
@@ -732,6 +740,7 @@ namespace ARGallery.AppFlow
             if (backToSwitcherButton != null) backToSwitcherButton.SetEnabled(enabled);
             if (prevStepButton != null) prevStepButton.SetEnabled(enabled && currentStep > 0);
             if (nextStepButton != null) nextStepButton.SetEnabled(enabled && currentStep < StepCount - 1);
+            if (virtualKeyboardToggleButton != null) virtualKeyboardToggleButton.SetEnabled(enabled);
 
             RefreshWizardUi();
             RefreshVirtualKeyboardUi();

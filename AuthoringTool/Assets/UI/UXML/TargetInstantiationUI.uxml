@@ -74,13 +74,20 @@
                 <ui:VisualElement name="StatusBanner" class="target-setup-status target-setup-status--idle">
                     <ui:Label name="StatusLabel" text="Click the image area to upload, then use the arrow to continue." class="target-setup-status__text" />
                 </ui:VisualElement>
-
-                <ui:Button name="VirtualKeyboardToggleButton" text="Show Keyboard" class="target-setup-keyboard-toggle" />
-                <ui:VisualElement name="VirtualKeyboardPanel" class="target-setup-keyboard target-setup-keyboard--hidden">
-                    <ui:Label name="VirtualKeyboardTargetLabel" text="Select a field to type." class="target-setup-keyboard__target" />
-                    <ui:VisualElement name="VirtualKeyboardKeysContainer" class="target-setup-keyboard__keys" />
-                </ui:VisualElement>
             </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="VirtualKeyboardPanelHost" picking-mode="Ignore" class="target-setup-keyboard-host">
+            <ui:VisualElement name="VirtualKeyboardPanel" class="target-setup-keyboard target-setup-keyboard--hidden">
+                <ui:Label name="VirtualKeyboardTargetLabel" text="Select a field to type." class="target-setup-keyboard__target" />
+                <ui:VisualElement name="VirtualKeyboardKeysContainer" class="target-setup-keyboard__keys" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="VirtualKeyboardFabHost" picking-mode="Ignore" class="target-setup-keyboard-fab-host">
+            <ui:Button name="VirtualKeyboardToggleButton" tooltip="Show keyboard" picking-mode="Position" class="target-setup-keyboard-fab">
+                <ui:VisualElement class="target-setup-keyboard-fab__icon" />
+            </ui:Button>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

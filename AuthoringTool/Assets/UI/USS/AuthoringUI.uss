@@ -131,7 +131,7 @@
     min-width: 26px;
     min-height: 26px;
     flex-shrink: 0;
-    background-image: url("../Icons/AuthoringSaveDownload.svg");
+    background-image: url("../Icons/AuthoringSaveCloud.svg");
     -unity-background-scale-mode: scale-to-fit;
     background-repeat: no-repeat;
     background-position: center;
