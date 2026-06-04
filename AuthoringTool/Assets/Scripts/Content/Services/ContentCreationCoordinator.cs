@@ -284,11 +284,14 @@ namespace ARGallery.Content
             DraggableObject drag = instance.GetComponent<DraggableObject>();
             DraggableObject.ConfigureForContentShell(drag);
 
-            string baseName = !string.IsNullOrWhiteSpace(originalFileName) ? Path.GetFileName(originalFileName) : Path.GetFileName(GetUrlPathForExtension(uploadedUrl) ?? "");
+            string resolvedUrl = ContentMediaUrlUtility.ResolveAbsoluteUrl(
+                uploadedUrl,
+                ContentMediaUrlUtility.ResolveBackendBaseUrl());
+            string baseName = !string.IsNullOrWhiteSpace(originalFileName) ? Path.GetFileName(originalFileName) : Path.GetFileName(GetUrlPathForExtension(resolvedUrl) ?? "");
             if (string.IsNullOrWhiteSpace(baseName)) baseName = "model";
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(baseName);
 
-            ModelLoadService.BeginLoadGlb(runner, uploadedUrl, root, outcome =>
+            ModelLoadService.BeginLoadGlb(runner, resolvedUrl, root, outcome =>
             {
                 if (!outcome.success) Debug.LogError("[ModelLoadService] " + outcome.message);
             });

@@ -9,6 +9,15 @@ public class ModelContentContainerRoot : MonoBehaviour
 {
     private Transform contentBodyCached;
 
+    public void NotifyGlbLoadCompleted(bool success)
+    {
+        if (!success)
+            return;
+
+        SpatialMappingCoordinator mapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+        mapping?.RefreshForCurrentSelection();
+    }
+
     /// <summary>Child that receives the loaded model root; falls back to this transform if missing.</summary>
     public Transform ContentBody
     {

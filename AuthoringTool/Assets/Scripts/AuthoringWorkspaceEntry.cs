@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using ARGallery.Content;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -83,6 +84,8 @@ namespace ARGallery.AppFlow
         [SerializeField] private bool createMissingTarget = true;
         [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
         [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
+
+        public string BackendApiBaseUrl => backendApiBaseUrl;
         [Header("Orientation Helper")]
         [SerializeField] private bool showOrientationHelper = false;
         [SerializeField] private float orientationHelperAxisLength = 0.35f;
@@ -342,7 +345,7 @@ namespace ARGallery.AppFlow
 
                 string body = request.downloadHandler != null ? request.downloadHandler.text : "";
                 WorkspaceRestoreEnvelope payload = JsonUtility.FromJson<WorkspaceRestoreEnvelope>(body);
-                WorkspaceSnapshot snapshot = BuildSnapshotFromBackendPayload(payload, workspaceId);
+                WorkspaceSnapshot snapshot = BuildSnapshotFromBackendPayload(payload, workspaceId, backendApiBaseUrl);
                 if (snapshot == null || snapshot.targets == null || snapshot.targets.Length == 0)
                     yield break;
 
@@ -375,7 +378,10 @@ namespace ARGallery.AppFlow
             }
         }
 
-        private static WorkspaceSnapshot BuildSnapshotFromBackendPayload(WorkspaceRestoreEnvelope payload, string fallbackWorkspaceId)
+        private static WorkspaceSnapshot BuildSnapshotFromBackendPayload(
+            WorkspaceRestoreEnvelope payload,
+            string fallbackWorkspaceId,
+            string apiBaseUrl)
         {
             if (payload == null || payload.workspace == null)
                 return null;
@@ -433,13 +439,19 @@ namespace ARGallery.AppFlow
                 if (c == null || string.IsNullOrWhiteSpace(c.contentId))
                     continue;
 
+                string mediaUrl = c.mediaUrl ?? "";
                 contents.Add(new ContentSnapshot
                 {
                     localContentId = c.contentId.Trim(),
                     serverContentId = c.contentId.Trim(),
                     targetId = c.targetId ?? "",
                     contentType = string.IsNullOrWhiteSpace(c.contentType) ? "image" : c.contentType.Trim(),
-                    mediaUrl = c.mediaUrl ?? "",
+                    mediaUrl = mediaUrl,
+                    originalFileName = ContentMediaUrlUtility.FileNameFromUrl(
+                        ContentMediaUrlUtility.ResolveAbsoluteUrl(
+                            mediaUrl,
+                            string.IsNullOrWhiteSpace(apiBaseUrl) ? ContentMediaUrlUtility.DefaultBackendBaseUrl : apiBaseUrl),
+                        "asset.bin"),
                     position = ToVector3Data(c.localPosition),
                     rotation = ToVector3Data(c.localEuler),
                     scale = ToVector3DataOrDefault(c.localScale, Vector3.one),
@@ -518,6 +530,22 @@ namespace ARGallery.AppFlow
                 AppFlowController.MarkWorkspaceReady(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from snapshot (index={index}).");
+            TrySelectFirstRestoredContent(manager.GetActiveTarget());
+        }
+
+        private static void TrySelectFirstRestoredContent(GameObject targetRoot)
+        {
+            if (targetRoot == null)
+                return;
+
+            Transform contentRoot = targetRoot.transform.Find("ContentRoot");
+            if (contentRoot == null || contentRoot.childCount == 0)
+                return;
+
+            Transform firstContent = contentRoot.GetChild(0);
+            AuthoringTransformCoordinator coordinator = FindFirstObjectByType<AuthoringTransformCoordinator>();
+            coordinator?.SelectContentTransform(firstContent, syncAuthoringUi: true);
+            FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
         }
 
         private void ApplyWorkspacePreset(GameObject targetRootObject, WorkspaceDomain.WorkspacePosture posture)
