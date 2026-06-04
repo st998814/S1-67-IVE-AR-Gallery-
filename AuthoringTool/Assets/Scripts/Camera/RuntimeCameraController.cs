@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -26,6 +27,8 @@ namespace ARGallery.CameraControl
     [DefaultExecutionOrder(2000)]
     public sealed class RuntimeCameraController : MonoBehaviour
     {
+        private const string AuthoringSceneName = "AuthoringToolScene";
+
         [Header("Movement")]
         [SerializeField] private float moveSpeed = 5f;
         [SerializeField] private float boostMultiplier = 2.25f;
@@ -77,6 +80,14 @@ namespace ARGallery.CameraControl
 
         private void Update()
         {
+            if (!string.Equals(SceneManager.GetActiveScene().name, AuthoringSceneName, System.StringComparison.Ordinal))
+            {
+                if (_isLooking)
+                    EndLook();
+                DraggableObject.ReleaseCameraInteraction();
+                return;
+            }
+
 #if !ENABLE_INPUT_SYSTEM
             return;
 #else
@@ -90,7 +101,7 @@ namespace ARGallery.CameraControl
                 authoringUI = FindFirstObjectByType<AuthoringUIController>();
 
             Vector2 mousePos = mouse.position.ReadValue();
-            if (IsBlockedByUi(mousePos) || IsBlockedBySceneInteraction(mousePos))
+            if (IsBlockedByUi(mousePos) || IsBlockedBySceneInteraction(mousePos) || IsUiToolkitTextOrNumericFieldFocused())
             {
                 if (_isLooking)
                     EndLook();
@@ -175,7 +186,36 @@ namespace ARGallery.CameraControl
         {
             if (authoringUI == null)
                 authoringUI = FindFirstObjectByType<AuthoringUIController>();
-            return authoringUI != null && authoringUI.IsPointerOverAuthoringUi(mouseScreenPos);
+            if (authoringUI != null && authoringUI.IsPointerOverAuthoringUi(mouseScreenPos))
+                return true;
+            return IsPointerOverAnyRuntimeUi(mouseScreenPos);
+        }
+
+        private static bool IsPointerOverAnyRuntimeUi(Vector2 mouseScreenPos)
+        {
+            UIDocument[] docs = Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None);
+            foreach (UIDocument doc in docs)
+            {
+                if (doc == null || !doc.enabled || doc.rootVisualElement == null)
+                    continue;
+
+                IPanel panel = doc.rootVisualElement.panel;
+                if (panel == null)
+                    continue;
+
+                Vector2 panelPoint = RuntimePanelUtils.ScreenToPanel(panel, mouseScreenPos);
+                VisualElement picked = panel.Pick(panelPoint);
+                if (picked == null)
+                    continue;
+
+                // Ignore purely transparent/hidden picks that shouldn't block scene controls.
+                if (picked.resolvedStyle.display == DisplayStyle.None || picked.resolvedStyle.visibility == Visibility.Hidden)
+                    continue;
+
+                return true;
+            }
+
+            return false;
         }
 
         private static bool IsUiToolkitTextOrNumericFieldFocused()

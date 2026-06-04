@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using GLTFast;
+using GLTFast.Materials;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -66,6 +67,8 @@ namespace ARGallery.Content
                 onCompleted?.Invoke(new LoadOutcome { success = false, message = "Invalid URL or container." });
                 yield break;
             }
+
+            glbUrl = ContentMediaUrlUtility.ResolveAbsoluteUrl(glbUrl, ContentMediaUrlUtility.ResolveBackendBaseUrl());
 
             Transform attach = container.ContentBody;
             if (attach == null)
@@ -176,7 +179,8 @@ namespace ARGallery.Content
                 return (false, $"Invalid URL for glTF resolver: {e.Message}");
             }
 
-            var gltf = new GltfImport();
+            IMaterialGenerator materialGenerator = CreateMaterialGenerator();
+            var gltf = new GltfImport(materialGenerator: materialGenerator);
             try
             {
                 bool loaded = await gltf.Load(glbBytes, uri, importSettings: null, cancellationToken: default)
@@ -189,14 +193,30 @@ namespace ARGallery.Content
                 if (!instanced)
                     return (false, "InstantiateMainSceneAsync returned false.");
 
+                Transform repairRoot = attachParent.parent != null ? attachParent.parent : attachParent;
+                GltfMaterialRepairUtility.RepairHierarchy(repairRoot);
+                GltfSceneNormalizationUtility.SanitizeLoadedHierarchy(repairRoot);
+
+                ModelContentContainerRoot containerRoot = repairRoot.GetComponent<ModelContentContainerRoot>();
+                containerRoot?.NotifyGlbLoadCompleted(true);
                 return (true, null);
             }
             catch (Exception e)
             {
                 return (false, e.Message);
             }
+
             // Intentionally not calling GltfImport.Dispose here: disposing right after instantiate can break materials;
             // tie disposal to container lifetime in a later iteration if needed.
+        }
+
+        private static IMaterialGenerator CreateMaterialGenerator()
+        {
+#if UNITY_EDITOR
+            return null;
+#else
+            return WebGlUrpLitMaterialGenerator.Instance;
+#endif
         }
     }
 }

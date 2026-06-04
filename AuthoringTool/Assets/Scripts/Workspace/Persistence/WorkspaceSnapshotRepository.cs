@@ -46,35 +46,11 @@ namespace ARGallery.Workspace.Persistence
                 errorMessage = "Snapshot or workspaceId is missing.";
                 return false;
             }
-
-            string id = snapshot.workspaceId.Trim();
-            string workspaceRoot = WorkspacePersistencePaths.GetWorkspaceRoot(id);
-            string path = WorkspacePersistencePaths.GetSnapshotPath(id);
-
-            try
-            {
-                Directory.CreateDirectory(workspaceRoot);
-
-                string utc = DateTime.UtcNow.ToString("o");
-                if (string.IsNullOrWhiteSpace(snapshot.createdAtUtc))
-                    snapshot.createdAtUtc = utc;
-                snapshot.updatedAtUtc = utc;
-
-                string json = JsonUtility.ToJson(snapshot, prettyPrint: true);
-                File.WriteAllText(path, json);
-
-                string preservedThumbnailKey = LoadThumbnailKeyForWorkspace(id);
-                UpsertIndexEntry(id, snapshot.workspaceName ?? id, snapshot.updatedAtUtc, preservedThumbnailKey);
-                if (logSuccess)
-                    Debug.Log($"[WorkspacePersistence] TrySaveSnapshot OK | path={path} | bytes≈{System.Text.Encoding.UTF8.GetByteCount(json)}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                Debug.LogWarning($"WorkspaceSnapshotRepository: save failed: {ex.Message}");
-                return false;
-            }
+            string utc = DateTime.UtcNow.ToString("o");
+            if (string.IsNullOrWhiteSpace(snapshot.createdAtUtc))
+                snapshot.createdAtUtc = utc;
+            snapshot.updatedAtUtc = utc;
+            return true;
         }
 
         public IReadOnlyList<WorkspaceIndexEntry> LoadAllIndexEntries()
@@ -123,9 +99,9 @@ namespace ARGallery.Workspace.Persistence
         /// <summary>Upserts one row in workspace-index.json without writing snapshot.json.</summary>
         public void UpsertWorkspaceIndexEntry(string workspaceId, string workspaceName, string thumbnailKey = "")
         {
-            if (string.IsNullOrWhiteSpace(workspaceId))
-                return;
-            UpsertIndexEntry(workspaceId.Trim(), workspaceName ?? workspaceId, DateTime.UtcNow.ToString("o"), thumbnailKey ?? "");
+            _ = workspaceId;
+            _ = workspaceName;
+            _ = thumbnailKey;
         }
 
         private void UpsertIndexEntry(string workspaceId, string workspaceName, string updatedAtUtc, string thumbnailKey)
@@ -180,22 +156,7 @@ namespace ARGallery.Workspace.Persistence
         public bool TrySaveIndex(out string errorMessage)
         {
             errorMessage = null;
-            try
-            {
-                WorkspaceIndexFile file = LoadOrCreateIndexFile();
-                string root = WorkspacePersistencePaths.GetPersistentWorkspacesRoot();
-                Directory.CreateDirectory(root);
-                string indexPath = WorkspacePersistencePaths.GetIndexPath();
-                file.schemaVersion = "v1";
-                string json = JsonUtility.ToJson(file, prettyPrint: true);
-                File.WriteAllText(indexPath, json);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                return false;
-            }
+            return true;
         }
 
         /// <summary>Optional: remove snapshot folder and index row.</summary>
@@ -207,31 +168,7 @@ namespace ARGallery.Workspace.Persistence
                 errorMessage = "workspaceId is empty.";
                 return false;
             }
-
-            try
-            {
-                string root = WorkspacePersistencePaths.GetWorkspaceRoot(workspaceId);
-                if (Directory.Exists(root))
-                    Directory.Delete(root, recursive: true);
-
-                WorkspaceIndexFile file = LoadOrCreateIndexFile();
-                if (file.entries == null || file.entries.Length == 0)
-                    return true;
-
-                List<WorkspaceIndexEntry> list = file.entries
-                    .Where(e => !string.Equals(e.workspaceId, workspaceId.Trim(), StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                file.entries = list.ToArray();
-
-                Directory.CreateDirectory(WorkspacePersistencePaths.GetPersistentWorkspacesRoot());
-                File.WriteAllText(WorkspacePersistencePaths.GetIndexPath(), JsonUtility.ToJson(file, prettyPrint: true));
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                return false;
-            }
+            return true;
         }
     }
 }

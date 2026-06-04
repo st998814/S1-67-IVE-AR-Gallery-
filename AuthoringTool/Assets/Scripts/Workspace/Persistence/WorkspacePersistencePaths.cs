@@ -18,6 +18,7 @@ namespace ARGallery.Workspace.Persistence
         public const string IndexFileName = "workspace-index.json";
         public const string AssetsFolderName = "assets";
         public const string TargetsAssetsFolderName = "targets";
+        public const string TargetReferencesAssetsFolderName = "target_refs";
         public const string ContentsAssetsFolderName = "contents";
 
         public static string GetPersistentWorkspacesRoot()
@@ -48,6 +49,11 @@ namespace ARGallery.Workspace.Persistence
         public static string GetContentsAssetsDirectory(string workspaceId)
         {
             return Path.Combine(GetWorkspaceRoot(workspaceId), AssetsFolderName, ContentsAssetsFolderName);
+        }
+
+        public static string GetTargetReferencesAssetsDirectory(string workspaceId)
+        {
+            return Path.Combine(GetWorkspaceRoot(workspaceId), AssetsFolderName, TargetReferencesAssetsFolderName);
         }
 
         /// <summary>Combine workspace root with a slash-separated relative path stored in JSON.</summary>

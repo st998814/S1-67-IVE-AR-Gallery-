@@ -1,6 +1,8 @@
 var webGlNativeFileBrowserLibrary = {
 
     initialize : function(version){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         document.callFBFunctionByName("initializeFBLibrary", null);
 
         if(typeof UTF8ToString === "function"){
@@ -11,16 +13,22 @@ var webGlNativeFileBrowserLibrary = {
     },
 
     openFileBrowserForLoad: function(typesFilter, isMultipleSelection, isFolder){    
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         var data = [ document.convertPtrToString(typesFilter), isMultipleSelection, isFolder ];
 
         document.callFBFunctionByName("openFileBrowserForLoad", data);
     },
     
     closeFileBrowserForOpen: function(){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         document.callFBFunctionByName("closeFileBrowserForOpen", null);
     },
 
     saveFile: function(fileName, data){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         document.callFBFunctionByName("saveFile", {
                 name: document.convertPtrToString(fileName),
                 data: document.convertPtrToString(data)
@@ -28,6 +36,8 @@ var webGlNativeFileBrowserLibrary = {
     },
 
     setLocalization: function(key, value){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         document.callFBFunctionByName("setLocalization", {
             key: document.convertPtrToString(key),
             value: document.convertPtrToString(value)
@@ -35,6 +45,8 @@ var webGlNativeFileBrowserLibrary = {
     },
 
     cleanup: function(){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return;
         if(document.fbStorage == null || document.fbStorage.initialized !== true)
             return;
 
@@ -45,6 +57,8 @@ var webGlNativeFileBrowserLibrary = {
     },
 
     loadFileData: function(fileName){
+        if(typeof document === "undefined" || typeof document.callFBFunctionByName !== "function")
+            return null;
         if(document.fbStorage == null || document.fbStorage.initialized !== true)
             return null;
 

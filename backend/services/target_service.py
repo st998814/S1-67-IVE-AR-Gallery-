@@ -31,8 +31,37 @@ class TargetService:
                     local_scale=data["local_scale"],
                     meta=data["meta"],
                     status=status,
+                    target_reference_image_url=data.get("target_reference_image_url") or "",
                 )
                 return row, status, existed
+
+    def upload_target_reference(self, target_id: str, file_storage, *, resolved_ext: str, upload_folder, public_base_url):
+        tid = (target_id or "").strip()
+        if not tid:
+            raise ValueError("targetId is required.")
+        if not resolved_ext:
+            raise ValueError("resolved_ext is required.")
+
+        image_bytes = file_storage.read()
+        if not image_bytes:
+            raise ValueError("Target reference image is empty.")
+
+        ref_dir = os.path.join(upload_folder, "target_ref")
+        os.makedirs(ref_dir, exist_ok=True)
+        dot_ext = resolved_ext if resolved_ext.startswith(".") else f".{resolved_ext}"
+        filename = self._disk_filename_for_target_image(tid, f"reference{dot_ext}")
+        save_path = os.path.join(ref_dir, filename)
+        with open(save_path, "wb") as out:
+            out.write(image_bytes)
+
+        file_url = f"{public_base_url.rstrip('/')}/uploads/target_ref/{filename}"
+
+        with self.db_connection_factory() as conn:
+            with conn.cursor() as cur:
+                if not self.repository.target_exists(cur, tid):
+                    return None
+                row = self.repository.update_target_reference_image_url(cur, tid, file_url)
+                return row
 
     def create_cloud_target(
         self,

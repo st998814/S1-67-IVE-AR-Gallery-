@@ -1,34 +1,93 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Style src="../USS/AppTheme.uss" />
+    <ui:Style src="../USS/AppFlowBackground.uss" />
+    <ui:Style src="../USS/WorkspaceSwitcherUI.uss" />
     <ui:Style src="../USS/TargetInstantiationUI.uss" />
-    <ui:VisualElement name="TargetSetupRoot" class="target-setup-root" style="flex-grow: 1; justify-content: center; align-items: center; background-color: rgb(8, 12, 26); padding-left: 28px; padding-right: 28px; padding-top: 24px; padding-bottom: 24px;">
-        <ui:VisualElement name="TargetSetupCard" class="target-setup-card" style="width: 100%; max-width: 860px; background-color: rgba(18, 24, 48, 0.92); border-top-left-radius: 16px; border-top-right-radius: 16px; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-top-color: rgba(133, 165, 255, 0.4); border-right-color: rgba(133, 165, 255, 0.4); border-bottom-color: rgba(133, 165, 255, 0.4); border-left-color: rgba(133, 165, 255, 0.4); padding-left: 28px; padding-right: 28px; padding-top: 24px; padding-bottom: 24px;">
-            <ui:Label text="Create the new workspace" style="font-size: 26px; -unity-font-style: bold; color: rgb(242, 247, 255); margin-bottom: 6px;" />
-            <ui:Label text="Create target before entering authoring workspace." style="font-size: 13px; color: rgba(196, 212, 255, 0.95); margin-bottom: 18px;" />
 
-            <ui:Label text="Required" style="color: rgb(242, 61, 21); font-size: 12px; -unity-font-style: bold; margin-bottom: 10px;" />
-            <ui:VisualElement class="target-setup-section">
-                <ui:TextField name="WorkspaceNameInput" label="Workspace Name" style="margin-bottom: 10px; -unity-property-field-label-width: 180px;" />
-                <ui:TextField name="TargetNameInput" label="Target Name" style="margin-bottom: 10px; -unity-property-field-label-width: 180px;" />
-                <ui:TextField name="DisplayLabelInput" label="Display Label" style="margin-bottom: 10px; -unity-property-field-label-width: 180px;" />
-                <ui:DropdownField name="TargetPostureDropdown" label="Target Posture" style="margin-bottom: 10px; -unity-property-field-label-width: 180px;" />
-                <ui:Button name="BrowseTargetImageButton" text="Choose Target Image..." style="height: 40px; min-width: 220px; margin-bottom: 10px; background-color: rgb(43, 70, 130); color: rgb(235, 244, 255); font-size: 13px;" />
-                <ui:Label name="SelectedTargetImageLabel" text="No target image selected." style="margin-bottom: 12px; color: rgba(196, 212, 255, 0.95); font-size: 12px;" />
-                <ui:FloatField name="PhysicalWidthInput" label="Physical Width (m)" value="0.2" style="margin-bottom: 14px; -unity-property-field-label-width: 180px;" />
+    <ui:VisualElement name="TargetSetupRoot" class="target-setup-root app-flow-wallpaper">
+        <ui:Button name="BackToSwitcherButton" tooltip="Back to workspaces" class="switcher-back-btn target-setup-back-btn">
+            <ui:VisualElement class="switcher-back-btn__icon" />
+        </ui:Button>
+
+        <ui:VisualElement name="TargetSetupBody" class="target-setup-body">
+            <ui:VisualElement class="target-setup-wizard">
+                <ui:VisualElement class="target-setup-nav-row">
+                    <ui:Button name="PrevStepButton" tooltip="Previous step" class="switcher-carousel-arrow switcher-carousel-arrow--left target-setup-nav-arrow target-setup-nav-arrow--prev">
+                        <ui:VisualElement class="switcher-carousel-arrow__icon switcher-carousel-arrow__icon--left" />
+                    </ui:Button>
+
+                    <ui:VisualElement class="target-setup-step-slot">
+                        <ui:VisualElement name="StepTrackablePanel" class="target-setup-step-card">
+                            <ui:Label text="Image Target" class="target-setup-step-title" />
+                            <ui:Label text="Choose the image Vuforia will track in the real world." class="target-setup-step-subtitle" />
+
+
+                            <ui:Button name="TargetImagePreviewButton" tooltip="Choose trackable image" class="target-setup-image-picker target-setup-image-picker--empty">
+                                <ui:VisualElement name="TargetImagePreviewMedia" class="target-setup-image-picker__media" />
+                                <ui:VisualElement class="target-setup-image-picker__overlay target-setup-image-picker__overlay--upload">
+                                    <ui:VisualElement class="target-setup-image-picker__icon target-setup-image-picker__icon--plus" />
+                                    <ui:Label text="Upload image" class="target-setup-image-picker__overlay-label" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="target-setup-image-picker__overlay target-setup-image-picker__overlay--change">
+                                    <ui:VisualElement class="target-setup-image-picker__icon target-setup-image-picker__icon--cycle" />
+                                    <ui:Label text="Change image" class="target-setup-image-picker__overlay-label" />
+                                </ui:VisualElement>
+                            </ui:Button>
+                            <ui:DropdownField name="TargetPostureDropdown" label="Placement" class="target-setup-field target-setup-field--compact" />
+                            <ui:Label text="Where authored content sits relative to the image." class="target-setup-hint target-setup-hint--tight" />
+                            <ui:TextField name="PhysicalWidthInput" label="Physical width (m)" value="0.2" class="target-setup-field target-setup-field--compact" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement name="StepNamesPanel" class="target-setup-step-card target-setup-step-card--hidden">
+                            <ui:Label text="Workspace &amp; target" class="target-setup-step-title" />
+                            <ui:Label text="Name your workspace, then register the target with Vuforia." class="target-setup-step-subtitle" />
+
+                            <ui:TextField name="WorkspaceNameInput" label="Workspace name" class="target-setup-field" />
+                            <ui:TextField name="TargetNameInput" label="Target name" class="target-setup-field" />
+
+                            <ui:Label name="StepSummaryLabel" text="" class="target-setup-summary" />
+
+                            <ui:Button name="AdvancedToggleButton" text="Advanced" class="target-setup-advanced-toggle" />
+                            <ui:VisualElement name="AdvancedSection" class="target-setup-advanced">
+                                <ui:TextField name="TargetIdInput" label="Target ID" class="target-setup-field" />
+                                <ui:Label text="Auto-generated from target name if left empty." class="target-setup-hint target-setup-hint--tight" />
+                                <ui:Toggle name="UseCustomDisplayLabelToggle" label="Use a different display label" class="target-setup-toggle" />
+                                <ui:TextField name="DisplayLabelInput" label="Display label" class="target-setup-field target-setup-field--conditional" />
+                                <ui:TextField name="VuforiaTargetNameInput" label="Vuforia target name" class="target-setup-field" />
+                                <ui:Label text="Optional override. Usually matches Target ID." class="target-setup-hint target-setup-hint--tight" />
+                            </ui:VisualElement>
+
+                            <ui:Button name="SubmitTargetButton" text="Create target &amp; continue" class="btn btn-primary target-setup-submit-btn" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:Button name="NextStepButton" tooltip="Next step" class="switcher-carousel-arrow switcher-carousel-arrow--right target-setup-nav-arrow target-setup-nav-arrow--next">
+                        <ui:VisualElement class="switcher-carousel-arrow__icon switcher-carousel-arrow__icon--right" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="target-setup-step-dots">
+                    <ui:VisualElement name="StepDot0" class="target-setup-step-dot target-setup-step-dot--active" />
+                    <ui:VisualElement name="StepDot1" class="target-setup-step-dot" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="StatusBanner" class="target-setup-status target-setup-status--idle">
+                    <ui:Label name="StatusLabel" text="Click the image area to upload, then use the arrow to continue." class="target-setup-status__text" />
+                </ui:VisualElement>
             </ui:VisualElement>
+        </ui:VisualElement>
 
-            <ui:Label text="Optional" style="color: rgb(9, 240, 94); font-size: 12px; -unity-font-style: bold; margin-bottom: 10px;" />
-            <ui:VisualElement class="target-setup-section">
-                <ui:TextField name="TargetIdInput" label="Target ID" style="margin-bottom: 10px; -unity-property-field-label-width: 180px;" />
-                <ui:TextField name="VuforiaTargetNameInput" label="Vuforia Target Name" style="margin-bottom: 14px; -unity-property-field-label-width: 180px;" />
+        <ui:VisualElement name="VirtualKeyboardPanelHost" picking-mode="Ignore" class="target-setup-keyboard-host">
+            <ui:VisualElement name="VirtualKeyboardPanel" class="target-setup-keyboard target-setup-keyboard--hidden">
+                <ui:Label name="VirtualKeyboardTargetLabel" text="Select a field to type." class="target-setup-keyboard__target" />
+                <ui:VisualElement name="VirtualKeyboardKeysContainer" class="target-setup-keyboard__keys" />
             </ui:VisualElement>
+        </ui:VisualElement>
 
-            <ui:Label name="StatusLabel" text="Create target to continue." style="margin-top: 6px; margin-bottom: 16px; min-height: 40px; color: rgb(167, 236, 216); font-size: 13px; white-space: normal;" />
-
-            <ui:VisualElement style="flex-direction: row; justify-content: flex-end; align-items: center;">
-                <ui:Button name="SubmitTargetButton" text="Create" style="height: 42px; min-width: 190px; -unity-font-style: bold; font-size: 13px; background-color: rgb(56, 126, 255); color: rgb(245, 250, 255);" />
-                <ui:Button name="CancelButton" text="Cancel" style="height: 42px; min-width: 120px; margin-left: 12px; -unity-font-style: bold; font-size: 13px; background-color: rgba(52, 60, 84, 0.95); color: rgb(223, 232, 248);" />
-            </ui:VisualElement>
+        <ui:VisualElement name="VirtualKeyboardFabHost" picking-mode="Ignore" class="target-setup-keyboard-fab-host">
+            <ui:Button name="VirtualKeyboardToggleButton" tooltip="Show keyboard" picking-mode="Position" class="target-setup-keyboard-fab">
+                <ui:VisualElement class="target-setup-keyboard-fab__icon" />
+            </ui:Button>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

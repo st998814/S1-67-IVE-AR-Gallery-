@@ -1,7 +1,11 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
-    <Style src="../USS/AuthoringUI.uss" />
-    <ui:VisualElement name="AuthoringRoot" class="authoring-root" picking-mode="Ignore" style="flex-direction: column; position: relative;">
-        <ui:VisualElement name="TopBar" class="top-bar" picking-mode="Position">
+    <Style src="project://database/Assets/UI/USS/AuthoringUI.uss?fileID=7433441132597879392&amp;guid=c56d1fae2e32346ec9dcd04ceefa1859&amp;type=3#AuthoringUI"/>
+    <Style src="project://database/Assets/UI/USS/WorkspaceSwitcherUI.uss?fileID=7433441132597879392&amp;guid=ddbde54ad879467693b6232a3022f2fc&amp;type=3#WorkspaceSwitcherUI"/>
+    <ui:VisualElement name="AuthoringRoot" picking-mode="Ignore" class="authoring-root" style="flex-direction: column; position: relative;">
+        <ui:Button name="BackToSwitcherButton" tooltip="Back to workspaces" picking-mode="Position" class="switcher-back-btn authoring-back-btn" style="top: 50px; left: 17px;">
+            <ui:VisualElement class="switcher-back-btn__icon"/>
+        </ui:Button>
+        <ui:VisualElement name="TopBar" picking-mode="Position" class="top-bar">
             <ui:VisualElement style="flex-direction: row; align-items: center;">
                 <ui:Label text="Workspace:" class="text-secondary" style="font-size: 11px; margin-right: 6px;"/>
                 <ui:Label name="WorkspaceNameLabel" text="Authoring" class="text-primary" style="-unity-font-style: bold; font-size: 12px;"/>
@@ -21,17 +25,13 @@
                         <ui:Label text="Universal" class="text-primary" style="font-size: 10px; -unity-text-align: middle-center;"/>
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <ui:Button name="BackToSwitcherButton" text="Return" class="button" style="height: 28px; min-width: 88px; -unity-font-style: bold; font-size: 11px;"/>
-                <ui:Button name="SaveButton" text="Save to Database" class="button" style="height: 28px; min-width: 132px; -unity-font-style: bold; font-size: 11px;"/>
             </ui:VisualElement>
         </ui:VisualElement>
-
-        <ui:VisualElement name="WorkspaceLayout" class="workspace-layout" picking-mode="Ignore">
+        <ui:VisualElement name="WorkspaceLayout" picking-mode="Ignore" class="workspace-layout">
             <ui:VisualElement name="CenterViewport" picking-mode="Ignore" style="flex-grow: 1;"/>
-
             <ui:VisualElement name="RightPanelContainer" picking-mode="Ignore" style="height: 100%; flex-direction: row;">
-                <ui:Button name="RightPanelToggle" text="&lt;" class="panel-toggle" picking-mode="Position" style="border-top-left-radius: 4px; border-bottom-left-radius: 4px;"/>
-                <ui:VisualElement name="RightPanelBody" class="panel panel--collapsed" picking-mode="Position" style="width: 320px; min-width: 320px; border-left-width: 1px;">
+                <ui:Button name="RightPanelToggle" text="&lt;" picking-mode="Position" class="panel-toggle" style="border-top-left-radius: 4px; border-bottom-left-radius: 4px;"/>
+                <ui:VisualElement name="RightPanelBody" picking-mode="Position" class="panel panel--collapsed" style="width: 320px; min-width: 320px; border-left-width: 1px;">
                     <ui:Label text="Inspector" class="text-primary" style="-unity-font-style: bold; font-size: 12px; margin-bottom: 8px;"/>
                     <ui:VisualElement style="flex-direction: row; column-gap: 6px; margin-bottom: 8px;">
                         <ui:Button name="InspectorTargetTabButton" text="Target" class="button button--active" style="flex-grow: 1; height: 24px; font-size: 10px;"/>
@@ -58,10 +58,10 @@
                         <ui:Label name="TargetPosYLabel" text="Y: at origin" class="text-primary" style="font-size: 11px; margin-bottom: 2px;"/>
                         <ui:Label name="TargetPosZLabel" text="Z: at origin" class="text-primary" style="font-size: 11px; margin-bottom: 6px;"/>
                     </ui:VisualElement>
-                    <ui:FloatField name="ScaleInput" label="Scale" value="1" class="input-field" style="display: none; margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;" readonly="true"/>
-                    <ui:Label name="PhysicalSizeLabel" text="" class="text-secondary" picking-mode="Ignore" style="font-size: 10px; margin-top: 6px; white-space: normal;"/>
+                    <ui:FloatField name="ScaleInput" label="Scale" value="1" readonly="true" class="input-field" style="display: none; margin-bottom: 2px; min-height: 24px; font-size: 11px; -unity-property-field-label-width: 100px;"/>
+                    <ui:Label name="PhysicalSizeLabel" text="" picking-mode="Ignore" class="text-secondary" style="font-size: 10px; margin-top: 6px; white-space: normal;"/>
                     <ui:VisualElement name="TargetReferenceContainer" style="display: none; flex-direction: column; margin-top: 10px;">
-                        <ui:Label text="Target Reference (optional):" class="text-secondary" style="-unity-font-style: bold; margin-top: 0px; margin-bottom: 6px; font-size: 11px;"/>
+                        <ui:Label text="Target Reference (optional):" class="text-secondary" style="-unity-font-style: bold; margin-top: 0; margin-bottom: 6px; font-size: 11px;"/>
                         <ui:Button name="BrowseTargetReferenceButton" text="Upload Reference" class="button" style="height: 26px; width: 100%; -unity-font-style: bold; font-size: 11px; margin-bottom: 6px;"/>
                         <ui:Image name="TargetReferencePreviewImage" scale-mode="ScaleToFit" style="display: none; height: 140px; margin-bottom: 6px; border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-color: rgb(31, 41, 51); border-top-left-radius: 4px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; background-color: rgba(17, 24, 39, 0.9);"/>
                         <ui:Label name="TargetReferenceStatusLabel" text="Not uploaded yet" class="text-disabled" style="font-size: 10px;"/>
@@ -69,22 +69,22 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
-
-        <ui:VisualElement name="SyncStatusToast" class="sync-toast sync-toast--hidden" picking-mode="Ignore" style="display: none; position: absolute; top: 52px; left: 12px; right: 12px; z-index: 500;">
-            <ui:VisualElement class="sync-toast__row" picking-mode="Ignore" style="flex-direction: row; justify-content: space-between; align-items: flex-start;">
-                <ui:VisualElement class="sync-toast__textCol" picking-mode="Ignore" style="flex-grow: 1; flex-direction: column; row-gap: 2px; padding-right: 4px;">
-                    <ui:Label name="SyncStatusTitle" class="sync-toast__title" text="" picking-mode="Ignore" style="font-size: 12px; -unity-font-style: bold; white-space: normal;"/>
-                    <ui:Label name="SyncStatusMessage" class="sync-toast__message" text="" picking-mode="Ignore" style="font-size: 11px; white-space: normal;"/>
+        <ui:VisualElement name="SyncStatusToast" picking-mode="Ignore" class="sync-toast sync-toast--hidden" style="display: none; position: absolute; top: 52px; left: 12px; right: 12px; z-index: 500;">
+            <ui:VisualElement picking-mode="Ignore" class="sync-toast__row" style="flex-direction: row; justify-content: space-between; align-items: flex-start;">
+                <ui:VisualElement picking-mode="Ignore" class="sync-toast__textCol" style="flex-grow: 1; flex-direction: column; row-gap: 2px; padding-right: 4px;">
+                    <ui:Label name="SyncStatusTitle" text="" picking-mode="Ignore" class="sync-toast__title" style="font-size: 12px; -unity-font-style: bold; white-space: normal;"/>
+                    <ui:Label name="SyncStatusMessage" text="" picking-mode="Ignore" class="sync-toast__message" style="font-size: 11px; white-space: normal;"/>
                 </ui:VisualElement>
-                <ui:Button name="SyncToastDismiss" text="×" class="sync-toast__dismiss" picking-mode="Position" style="width: 26px; min-width: 26px; height: 26px; min-height: 26px; margin-left: 4px; padding: 0; -unity-font-style: bold; font-size: 16px;"/>
+                <ui:Button name="SyncToastDismiss" text="×" picking-mode="Position" class="sync-toast__dismiss" style="width: 26px; min-width: 26px; height: 26px; min-height: 26px; margin-left: 4px; padding: 0; -unity-font-style: bold; font-size: 16px;"/>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="AuthoringFabHost" picking-mode="Ignore" style="position: absolute; left: 16px; bottom: 16px;">
-            <ui:Button name="AddContentFabButton" text="+" class="authoring-add-fab" picking-mode="Position"/>
+            <ui:Button name="AddContentFabButton" text="+" picking-mode="Position" class="authoring-add-fab"/>
         </ui:VisualElement>
-
-        <ui:VisualElement name="ManipulatorBottomPanel" class="manipulator-bottom-panel manipulator-bottom-panel--hidden" picking-mode="Position">
+        <ui:Button name="SaveButton" tooltip="Save to server" picking-mode="Position" class="authoring-save-fab">
+            <ui:VisualElement class="authoring-save-fab__icon"/>
+        </ui:Button>
+        <ui:VisualElement name="ManipulatorBottomPanel" picking-mode="Position" class="manipulator-bottom-panel manipulator-bottom-panel--hidden">
             <ui:VisualElement name="MoveControlsGroup" class="manipulator-bottom-panel__group">
                 <ui:Label text="Move content" class="manipulator-bottom-panel__title"/>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
@@ -113,16 +113,13 @@
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
-<!-- 替换为全新的 Bootstrap 风格加载遮罩 -->
     <ui:VisualElement name="loading-overlay" class="loading-overlay loading-overlay--hidden">
         <ui:VisualElement class="loading-card">
-            <ui:Label text="Loading..." class="loading-text" />
-            <!-- 未来如果你们需要做进度条，可以把进度条 UI 放在这个 Label 下面 -->
+            <ui:Label text="Loading..." class="loading-text"/>
         </ui:VisualElement>
     </ui:VisualElement>
-
     <ui:VisualElement name="error-toast" class="sync-toast sync-toast--failed sync-toast--hidden" style="position: absolute; top: 60px; right: 12px; width: 300px; max-width: 90%;">
-        <ui:Label name="error-label" text="Error: Something went wrong" class="sync-toast__title" style="-unity-font-style: bold; font-size: 14px; margin-bottom: 4px;" />
+        <ui:Label name="error-label" text="Error: Something went wrong" class="sync-toast__title" style="-unity-font-style: bold; font-size: 14px; margin-bottom: 4px;"/>
         <ui:Label text="Please check your connection and try again." class="sync-toast__message" style="font-size: 12px;"/>
     </ui:VisualElement>
 </ui:UXML>

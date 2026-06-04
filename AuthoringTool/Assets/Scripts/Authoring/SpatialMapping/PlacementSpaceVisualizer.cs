@@ -90,7 +90,7 @@ public sealed class PlacementSpaceVisualizer
             return;
 
         PlacementBoundsCalculator.FillLocalBoxCorners(bounds, _localCorners);
-        UpdateCornerBrackets(ResolveEdgeWidth(bounds.LocalCenter));
+        UpdateCornerBrackets(ResolveEdgeWidth(bounds.LocalCenter), ResolveCornerLegLength(bounds));
     }
 
     /// <summary>Updates line width for camera distance without rebuilding geometry.</summary>
@@ -99,7 +99,7 @@ public sealed class PlacementSpaceVisualizer
         if (!_isVisible || _lineSpaceRoot == null)
             return;
 
-        UpdateCornerBrackets(ResolveEdgeWidth(bounds.LocalCenter));
+        UpdateCornerBrackets(ResolveEdgeWidth(bounds.LocalCenter), ResolveCornerLegLength(bounds));
     }
 
     public bool TryRefreshFromTargetVisualLayout()
@@ -156,6 +156,19 @@ public sealed class PlacementSpaceVisualizer
             referenceDistance: 1.4f);
     }
 
+    /// <summary>Scales bracket legs with the placement volume so depth (Z) limits remain readable.</summary>
+    private float ResolveCornerLegLength(PlacementBoundsCalculator.Snapshot bounds)
+    {
+        Vector3 size = bounds.LocalSize;
+        float minDim = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
+        if (minDim < 1e-4f)
+            return _cornerLegLength;
+
+        float scaled = minDim * 0.12f;
+        float maxLeg = minDim * 0.4f;
+        return Mathf.Clamp(scaled, _cornerLegLength, maxLeg);
+    }
+
     private void BuildCornerBrackets()
     {
         _cornerBrackets.Clear();
@@ -174,11 +187,12 @@ public sealed class PlacementSpaceVisualizer
         }
     }
 
-    private void UpdateCornerBrackets(float edgeWidth)
+    private void UpdateCornerBrackets(float edgeWidth, float cornerLegLength)
     {
         if (_cornerBrackets.Count < BracketLineCount)
             return;
 
+        float leg = Mathf.Max(_cornerLegLength, cornerLegLength);
         Vector3 center = Vector3.zero;
         for (int i = 0; i < CornerCount; i++)
             center += _localCorners[i];
@@ -192,9 +206,9 @@ public sealed class PlacementSpaceVisualizer
             if (inward.sqrMagnitude < 1e-8f)
                 inward = Vector3.one;
 
-            Vector3 axisX = new Vector3(Mathf.Sign(inward.x) * _cornerLegLength, 0f, 0f);
-            Vector3 axisY = new Vector3(0f, Mathf.Sign(inward.y) * _cornerLegLength, 0f);
-            Vector3 axisZ = new Vector3(0f, 0f, Mathf.Sign(inward.z) * _cornerLegLength);
+            Vector3 axisX = new Vector3(Mathf.Sign(inward.x) * leg, 0f, 0f);
+            Vector3 axisY = new Vector3(0f, Mathf.Sign(inward.y) * leg, 0f);
+            Vector3 axisZ = new Vector3(0f, 0f, Mathf.Sign(inward.z) * leg);
 
             SetBracketLeg(lineIndex++, c, c + axisX, edgeWidth);
             SetBracketLeg(lineIndex++, c, c + axisY, edgeWidth);

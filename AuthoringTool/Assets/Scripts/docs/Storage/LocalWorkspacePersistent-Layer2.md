@@ -1,6 +1,6 @@
-# Local workspace persistence (Layer 2)
+# Local workspace persistence (Layer 2, deprecated)
 
-**Layer 2** is durable **local** workspace state under `Application.persistentDataPath`: JSON snapshots, binary assets, workspace index, debounced autosave, and disk deletion (including **`snapshot.json`**). It does **not** include remote/API sync—that is **[SyncingToPersistentStorage-Layer3.md](SyncingToPersistentStorage-Layer3.md)** (Layer 3).
+**Layer 2** previously stored durable local state under `Application.persistentDataPath`. Current runtime behavior is moving to backend-authoritative storage; L2 writes are disabled and this document remains as historical reference only.
 
 For **authoring chrome** (FAB, inspector, viewport), see **[AuthoringUILayout.md](../Authoring/AuthoringUILayout.md)**.
 

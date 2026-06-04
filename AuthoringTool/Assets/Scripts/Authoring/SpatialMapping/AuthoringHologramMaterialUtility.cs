@@ -51,6 +51,8 @@ public static class AuthoringHologramMaterialUtility
         Shader shader = Shader.Find(HologramShaderName);
         if (shader == null)
             shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+        if (shader == null)
+            return null;
 
         var material = new Material(shader) { name = "AuthoringHologramFill (Runtime)" };
         ConfigureTransparent(material);

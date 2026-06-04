@@ -36,6 +36,14 @@ public sealed class FrontSideConstraint : MonoBehaviour
     public float EffectiveMinimumLocalZ => frontOffset + additionalMinimumLocalZ;
     public float FrontDirectionSign => frontSideAxis == FrontSideAxis.PositiveLocalZ ? 1f : -1f;
 
+    /// <summary>
+    /// Aligns front-plane enforcement with the active posture preset minimum standoff (metres).
+    /// </summary>
+    public void SetFrontStandoffMetres(float standoffMetres)
+    {
+        frontOffset = Mathf.Max(0f, standoffMetres);
+    }
+
     private void Awake()
     {
         // Normalize to the project convention to avoid posture-dependent inversion.

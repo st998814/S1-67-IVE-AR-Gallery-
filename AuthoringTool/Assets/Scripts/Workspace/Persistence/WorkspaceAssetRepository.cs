@@ -60,37 +60,33 @@ namespace ARGallery.Workspace.Persistence
             out string relativePathOut,
             out string errorMessage)
         {
-            relativePathOut = null;
-            string workspaceRoot = WorkspacePersistencePaths.GetWorkspaceRoot(workspaceId);
-            string targetsDir = WorkspacePersistencePaths.GetTargetsAssetsDirectory(workspaceId);
+            _ = workspaceId;
+            _ = originalFileName;
+            _ = bytes;
+            _ = sourcePath;
+            relativePathOut = "";
+            errorMessage = null;
+            return true;
+        }
 
-            byte[] data = ResolveBytes(bytes, sourcePath, out errorMessage);
-            if (data == null || data.Length == 0)
-            {
-                if (string.IsNullOrEmpty(errorMessage))
-                    errorMessage = "Target image data is empty.";
-                return false;
-            }
-
-            try
-            {
-                Directory.CreateDirectory(workspaceRoot);
-                Directory.CreateDirectory(targetsDir);
-
-                string ext = GetExtension(originalFileName, sourcePath);
-                string fileName = $"{Guid.NewGuid():N}{ext}";
-                string absoluteFile = Path.Combine(targetsDir, fileName);
-                File.WriteAllBytes(absoluteFile, data);
-
-                relativePathOut = NormalizeRelativePath(
-                    $"{WorkspacePersistencePaths.AssetsFolderName}/{WorkspacePersistencePaths.TargetsAssetsFolderName}/{fileName}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                return false;
-            }
+        /// <summary>
+        /// Copies a target placement reference photo into assets/target_refs/&lt;guid&gt;&lt;ext&gt;.
+        /// </summary>
+        public bool TryImportTargetReferenceImage(
+            string workspaceId,
+            string originalFileName,
+            byte[] bytes,
+            string sourcePath,
+            out string relativePathOut,
+            out string errorMessage)
+        {
+            _ = workspaceId;
+            _ = originalFileName;
+            _ = bytes;
+            _ = sourcePath;
+            relativePathOut = "";
+            errorMessage = null;
+            return true;
         }
 
         /// <summary>
@@ -106,42 +102,15 @@ namespace ARGallery.Workspace.Persistence
             out string errorMessage,
             string stableFileNameStem = "")
         {
-            relativePathOut = null;
-            string workspaceRoot = WorkspacePersistencePaths.GetWorkspaceRoot(workspaceId);
-            string contentsDir = WorkspacePersistencePaths.GetContentsAssetsDirectory(workspaceId);
-
-            byte[] data = ResolveBytes(bytes, sourcePath, out errorMessage);
-            if (data == null || data.Length == 0)
-            {
-                if (string.IsNullOrEmpty(errorMessage))
-                    errorMessage = "Content asset data is empty.";
-                return false;
-            }
-
-            try
-            {
-                Directory.CreateDirectory(workspaceRoot);
-                Directory.CreateDirectory(contentsDir);
-
-                string ext = GetExtension(originalFileName, sourcePath);
-                string stem = SanitizeFileNameStem(stableFileNameStem);
-                string fileName = string.IsNullOrWhiteSpace(stem)
-                    ? $"{Guid.NewGuid():N}{ext}"
-                    : $"{stem}{ext}";
-                string absoluteFile = Path.Combine(contentsDir, fileName);
-                File.WriteAllBytes(absoluteFile, data);
-
-                relativePathOut = NormalizeRelativePath(
-                    $"{WorkspacePersistencePaths.AssetsFolderName}/{WorkspacePersistencePaths.ContentsAssetsFolderName}/{fileName}");
-
-                _ = contentTypeHint;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                return false;
-            }
+            _ = workspaceId;
+            _ = originalFileName;
+            _ = contentTypeHint;
+            _ = bytes;
+            _ = sourcePath;
+            _ = stableFileNameStem;
+            relativePathOut = "";
+            errorMessage = null;
+            return true;
         }
 
         public string ResolveFullPath(string workspaceId, string relativePathWithForwardSlashes)

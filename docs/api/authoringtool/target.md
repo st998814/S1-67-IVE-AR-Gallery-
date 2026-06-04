@@ -20,6 +20,7 @@ Creates or updates a target record directly from JSON.
 | `targetName` | string | yes | Internal/technical name. |
 | `displayLabel` | string | no | User-facing label; falls back to `targetId` when empty. |
 | `targetImageUrl` | string | no | Previously uploaded target image URL. |
+| `targetReferenceImageUrl` | string | no | Optional placement reference URL (see `POST …/reference`). |
 | `workspaceId` | string | no | Workspace id. Defaults to `default`. Must exist in `workspaces`. |
 | `physicalWidthM` | number | no | Physical width in meters. Defaults to `1.0`. |
 | `localPosition` | object | yes | `ApiVector3Dto` — local position. |
@@ -122,6 +123,42 @@ Uploads a target image, registers it in Vuforia Cloud Targets, and persists the 
   "vuforiaStatus": "TargetCreated"
 }
 ```
+
+---
+
+## `POST /api/targets/{targetId}/reference`
+
+Uploads an optional **real-world placement reference** photo (how the printed target sits in the environment). This is separate from the Vuforia trackable image.
+
+### Request
+
+**Content-Type:** `multipart/form-data`
+
+| Part / Field | Type | Required | Description |
+|--------------|------|----------|-------------|
+| `file` | file | yes | Reference photo (`png`, `jpg`, `jpeg`, `gif`, `webp`, …). |
+| `targetId` | string | yes | Path segment — canonical target id (must already exist in `targets`). |
+
+File is stored at **`uploads/target_ref/{targetId}.{ext}`** (overwrites on re-upload). The row field **`target_reference_image_url`** is updated.
+
+Alternative: `POST /api/upload` with `category=target_ref` and multipart `targetId`, then `POST /api/targets` with `targetReferenceImageUrl` — the dedicated route above performs both steps.
+
+### Response `200`
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `targetId` | string | Canonical target id. |
+| `targetReferenceImageUrl` | string | Public URL under `/uploads/target_ref/`. |
+| `status` | string | `accepted`. |
+
+### Errors
+
+| HTTP | When |
+|------|------|
+| `404` | Target id not found. |
+| `415` | Disallowed file extension. |
+
+---
 
 ### Backend configuration
 

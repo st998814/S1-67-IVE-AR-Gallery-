@@ -17,6 +17,27 @@ public static class AuthoringUiPickHelper
 
         Vector2 panelPos = RuntimePanelUtils.ScreenToPanel(root.panel, screenPosition);
         VisualElement picked = root.panel.Pick(panelPos);
-        return picked != null;
+        if (picked == null)
+            return false;
+
+        return IsBlockingPick(picked, root);
+    }
+
+    private static bool IsBlockingPick(VisualElement picked, VisualElement root)
+    {
+        for (VisualElement element = picked; element != null; element = element.parent)
+        {
+            if (element.resolvedStyle.display == DisplayStyle.None
+                || element.resolvedStyle.visibility == Visibility.Hidden)
+                continue;
+
+            if (element.pickingMode == PickingMode.Position)
+                return true;
+
+            if (element == root)
+                break;
+        }
+
+        return false;
     }
 }

@@ -43,6 +43,8 @@ public static class AuthoringLineVisualUtility
 
         if (shader == null)
             shader = Shader.Find("Standard");
+        if (shader == null)
+            return null;
 
         var material = new Material(shader)
         {

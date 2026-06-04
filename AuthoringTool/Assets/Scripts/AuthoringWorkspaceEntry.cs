@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
+using ARGallery.Content;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
+using UnityEngine.Networking;
 using WorkspaceDomain = global::ARGallery.Workspace;
 using WorkspacePresets = global::ARGallery.Workspace.Presets;
 using CameraControl = global::ARGallery.CameraControl;
@@ -14,8 +16,76 @@ namespace ARGallery.AppFlow
     /// </summary>
     public class AuthoringWorkspaceEntry : MonoBehaviour
     {
+        [Serializable]
+        private class WorkspaceRestoreEnvelope
+        {
+            public WorkspaceDetailDto workspace;
+            public WorkspaceTargetDto[] targets;
+            public WorkspaceContentDto[] contents;
+        }
+
+        [Serializable]
+        private class WorkspaceDetailDto
+        {
+            public string workspaceId;
+            public string workspaceName;
+            public string state;
+            public int schemaVersion;
+            public string createdAtUtc;
+            public string updatedAtUtc;
+        }
+
+        [Serializable]
+        private class WorkspaceTargetDto
+        {
+            public string targetId;
+            public string workspaceId;
+            public string targetName;
+            public string displayLabel;
+            public string targetImageUrl;
+            public string targetReferenceImageUrl;
+            public float physicalWidthM;
+            public SerializableVector3Dto localPosition;
+            public SerializableVector3Dto localEuler;
+            public SerializableVector3Dto localScale;
+            public string vuforiaTargetId;
+            public string vuforiaStatus;
+            public string status;
+            public string createdAtUtc;
+            public string updatedAtUtc;
+        }
+
+        [Serializable]
+        private class WorkspaceContentDto
+        {
+            public string contentId;
+            public string targetId;
+            public string workspaceId;
+            public string contentType;
+            public string mediaUrl;
+            public SerializableVector3Dto localPosition;
+            public SerializableVector3Dto localEuler;
+            public SerializableVector3Dto localScale;
+            public string renderKind;
+            public string assetFormat;
+            public string status;
+            public string createdAtUtc;
+            public string updatedAtUtc;
+        }
+
+        [Serializable]
+        private class SerializableVector3Dto
+        {
+            public float x;
+            public float y;
+            public float z;
+        }
+
         [SerializeField] private bool createMissingTarget = true;
         [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
+        [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
+
+        public string BackendApiBaseUrl => backendApiBaseUrl;
         [Header("Orientation Helper")]
         [SerializeField] private bool showOrientationHelper = false;
         [SerializeField] private float orientationHelperAxisLength = 0.35f;
@@ -47,45 +117,11 @@ namespace ARGallery.AppFlow
             }
 
             string workspaceId = ResolveWorkspaceId(session);
-            var snapshotRepo = new WorkspaceSnapshotRepository();
-            if (snapshotRepo.TryLoadSnapshot(workspaceId, out WorkspaceSnapshot snapshotForRebuild))
-            {
-                WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
-                if (reconstructor != null)
-                {
-                    bool completed = false;
-                    bool rebuildOk = false;
-                    reconstructor.BeginRebuildFromDisk(workspaceId, ok =>
-                    {
-                        rebuildOk = ok;
-                        completed = true;
-                    });
 
-                    while (!completed)
-                        yield return null;
-
-                    if (rebuildOk)
-                    {
-                        WorkspaceDomain.WorkspaceDraftState draftAfterRebuild = LoadWorkspaceDraft(workspaceId);
-                        // Draft may be mock-provider fallback (wrong targetId). Snapshot + session carry the real ids.
-                        string resolvedTargetId = ResolveAuthoringTargetId(draftAfterRebuild, session, workspaceId, snapshotForRebuild);
-                        if (string.IsNullOrWhiteSpace(resolvedTargetId))
-                        {
-                            Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot restored but could not resolve target id for workspace '{workspaceId}'.");
-                            yield break;
-                        }
-
-                        ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session, workspaceId, snapshotForRebuild, resolvedTargetId);
-                        yield break;
-                    }
-
-                    Debug.LogWarning($"AuthoringWorkspaceEntry: Snapshot rebuild reported failure for '{workspaceId}'. Falling back to draft-only entry.");
-                }
-                else
-                {
-                    Debug.LogWarning("AuthoringWorkspaceEntry: snapshot.json exists but WorkspaceSceneReconstructor is missing; using draft-only entry.");
-                }
-            }
+            bool restoredFromBackend = false;
+            yield return TryRebuildFromBackend(workspaceId, session, ok => restoredFromBackend = ok);
+            if (restoredFromBackend)
+                yield break;
 
             WorkspaceDomain.WorkspaceDraftState draft = LoadWorkspaceDraft(workspaceId);
             string canonicalTargetId = ResolveAuthoringTargetId(draft, session, workspaceId, null);
@@ -122,8 +158,7 @@ namespace ARGallery.AppFlow
         }
 
         /// <summary>
-        /// Resolves AR target id: session (switcher) → snapshot.json → draft.
-        /// Draft alone is unreliable for UUID workspaces because <see cref="Workspace.MockWorkspaceProvider"/> falls back to the default wall workspace ids.
+        /// Resolves AR target id from session or current draft.
         /// </summary>
         private static string ResolveAuthoringTargetId(
             WorkspaceDomain.WorkspaceDraftState workspace,
@@ -139,17 +174,6 @@ namespace ARGallery.AppFlow
                 string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snapshotOrNull);
                 if (!string.IsNullOrWhiteSpace(fromSnap))
                     return fromSnap.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(resolvedWorkspaceId))
-            {
-                var repo = new WorkspaceSnapshotRepository();
-                if (repo.TryLoadSnapshot(resolvedWorkspaceId.Trim(), out WorkspaceSnapshot snap))
-                {
-                    string fromSnap = ResolvePrimaryTargetIdFromSnapshot(snap);
-                    if (!string.IsNullOrWhiteSpace(fromSnap))
-                        return fromSnap.Trim();
-                }
             }
 
             if (workspace?.target != null && !string.IsNullOrWhiteSpace(workspace.target.targetId))
@@ -301,6 +325,163 @@ namespace ARGallery.AppFlow
             return 0.2f;
         }
 
+        private IEnumerator TryRebuildFromBackend(string workspaceId, WorkspaceSessionContext session, Action<bool> onDone)
+        {
+            onDone?.Invoke(false);
+            if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+                yield break;
+
+            WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
+            if (reconstructor == null)
+                yield break;
+
+            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(workspaceId.Trim())}";
+            using (UnityWebRequest request = UnityWebRequest.Get(url))
+            {
+                request.timeout = 20;
+                yield return request.SendWebRequest();
+                if (request.result != UnityWebRequest.Result.Success)
+                    yield break;
+
+                string body = request.downloadHandler != null ? request.downloadHandler.text : "";
+                WorkspaceRestoreEnvelope payload = JsonUtility.FromJson<WorkspaceRestoreEnvelope>(body);
+                WorkspaceSnapshot snapshot = BuildSnapshotFromBackendPayload(payload, workspaceId, backendApiBaseUrl);
+                if (snapshot == null || snapshot.targets == null || snapshot.targets.Length == 0)
+                    yield break;
+
+                bool completed = false;
+                bool rebuildOk = false;
+                reconstructor.BeginRebuild(snapshot, ok =>
+                {
+                    rebuildOk = ok;
+                    completed = true;
+                });
+
+                while (!completed)
+                    yield return null;
+
+                if (!rebuildOk)
+                    yield break;
+
+                WorkspaceDomain.WorkspaceDraftState draftAfterRebuild = LoadWorkspaceDraft(workspaceId);
+                string resolvedTargetId = ResolveAuthoringTargetId(draftAfterRebuild, session, workspaceId, snapshot);
+                if (string.IsNullOrWhiteSpace(resolvedTargetId))
+                    yield break;
+
+                if (session != null && string.IsNullOrWhiteSpace(session.targetId))
+                    session.targetId = resolvedTargetId;
+                if (session != null && string.IsNullOrWhiteSpace(session.targetImageUrl))
+                    session.targetImageUrl = snapshot.targets[0].targetImageUrl ?? "";
+
+                ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session, workspaceId, snapshot, resolvedTargetId);
+                onDone?.Invoke(true);
+            }
+        }
+
+        private static WorkspaceSnapshot BuildSnapshotFromBackendPayload(
+            WorkspaceRestoreEnvelope payload,
+            string fallbackWorkspaceId,
+            string apiBaseUrl)
+        {
+            if (payload == null || payload.workspace == null)
+                return null;
+
+            string workspaceId = string.IsNullOrWhiteSpace(payload.workspace.workspaceId)
+                ? fallbackWorkspaceId
+                : payload.workspace.workspaceId.Trim();
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return null;
+
+            var snapshot = new WorkspaceSnapshot
+            {
+                schemaVersion = "v1",
+                workspaceId = workspaceId,
+                workspaceName = string.IsNullOrWhiteSpace(payload.workspace.workspaceName) ? workspaceId : payload.workspace.workspaceName.Trim(),
+                createdAtUtc = payload.workspace.createdAtUtc ?? DateTime.UtcNow.ToString("o"),
+                updatedAtUtc = payload.workspace.updatedAtUtc ?? DateTime.UtcNow.ToString("o"),
+                remoteDirty = false,
+                lastRemoteSyncedAtUtc = payload.workspace.updatedAtUtc ?? "",
+                lastRemoteSyncError = "",
+                remoteSyncStatus = RemoteSyncStatus.Synced,
+            };
+
+            WorkspaceTargetDto[] sourceTargets = payload.targets ?? Array.Empty<WorkspaceTargetDto>();
+            var targets = new System.Collections.Generic.List<TargetSnapshot>(sourceTargets.Length);
+            for (int i = 0; i < sourceTargets.Length; i++)
+            {
+                WorkspaceTargetDto t = sourceTargets[i];
+                if (t == null || string.IsNullOrWhiteSpace(t.targetId))
+                    continue;
+
+                targets.Add(new TargetSnapshot
+                {
+                    localTargetId = t.targetId.Trim(),
+                    serverTargetId = t.targetId.Trim(),
+                    vuforiaTargetId = t.vuforiaTargetId ?? "",
+                    targetName = string.IsNullOrWhiteSpace(t.targetName) ? t.targetId.Trim() : t.targetName.Trim(),
+                    targetImageUrl = t.targetImageUrl ?? "",
+                    targetReferenceImageUrl = t.targetReferenceImageUrl ?? "",
+                    physicalWidthM = t.physicalWidthM > 1e-5f ? t.physicalWidthM : 0.2f,
+                    position = ToVector3Data(t.localPosition),
+                    rotation = ToVector3Data(t.localEuler),
+                    scale = ToVector3DataOrDefault(t.localScale, Vector3.one),
+                    remoteDirty = false,
+                    lastRemoteSyncedAtUtc = t.updatedAtUtc ?? "",
+                });
+            }
+            snapshot.targets = targets.ToArray();
+
+            WorkspaceContentDto[] sourceContents = payload.contents ?? Array.Empty<WorkspaceContentDto>();
+            var contents = new System.Collections.Generic.List<ContentSnapshot>(sourceContents.Length);
+            for (int i = 0; i < sourceContents.Length; i++)
+            {
+                WorkspaceContentDto c = sourceContents[i];
+                if (c == null || string.IsNullOrWhiteSpace(c.contentId))
+                    continue;
+
+                string mediaUrl = c.mediaUrl ?? "";
+                contents.Add(new ContentSnapshot
+                {
+                    localContentId = c.contentId.Trim(),
+                    serverContentId = c.contentId.Trim(),
+                    targetId = c.targetId ?? "",
+                    contentType = string.IsNullOrWhiteSpace(c.contentType) ? "image" : c.contentType.Trim(),
+                    mediaUrl = mediaUrl,
+                    originalFileName = ContentMediaUrlUtility.FileNameFromUrl(
+                        ContentMediaUrlUtility.ResolveAbsoluteUrl(
+                            mediaUrl,
+                            string.IsNullOrWhiteSpace(apiBaseUrl) ? ContentMediaUrlUtility.DefaultBackendBaseUrl : apiBaseUrl),
+                        "asset.bin"),
+                    position = ToVector3Data(c.localPosition),
+                    rotation = ToVector3Data(c.localEuler),
+                    scale = ToVector3DataOrDefault(c.localScale, Vector3.one),
+                    renderKind = c.renderKind ?? "",
+                    assetFormat = c.assetFormat ?? "",
+                    isUnsaved = false,
+                    uploadPending = false,
+                    persistPending = false,
+                    remoteDirty = false,
+                    lastRemoteSyncedAtUtc = c.updatedAtUtc ?? "",
+                });
+            }
+            snapshot.contents = contents.ToArray();
+            return snapshot;
+        }
+
+        private static Vector3Data ToVector3Data(SerializableVector3Dto value)
+        {
+            if (value == null)
+                return new Vector3Data(0f, 0f, 0f);
+            return new Vector3Data(value.x, value.y, value.z);
+        }
+
+        private static Vector3Data ToVector3DataOrDefault(SerializableVector3Dto value, Vector3 fallback)
+        {
+            if (value == null)
+                return new Vector3Data(fallback.x, fallback.y, fallback.z);
+            return new Vector3Data(value.x, value.y, value.z);
+        }
+
         /// <summary>
         /// After <see cref="WorkspaceSceneReconstructor"/> rebuilds from disk, targets/content already exist — only bind selection, posture, and visuals.
         /// </summary>
@@ -349,6 +530,22 @@ namespace ARGallery.AppFlow
                 AppFlowController.MarkWorkspaceReady(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from snapshot (index={index}).");
+            TrySelectFirstRestoredContent(manager.GetActiveTarget());
+        }
+
+        private static void TrySelectFirstRestoredContent(GameObject targetRoot)
+        {
+            if (targetRoot == null)
+                return;
+
+            Transform contentRoot = targetRoot.transform.Find("ContentRoot");
+            if (contentRoot == null || contentRoot.childCount == 0)
+                return;
+
+            Transform firstContent = contentRoot.GetChild(0);
+            AuthoringTransformCoordinator coordinator = FindFirstObjectByType<AuthoringTransformCoordinator>();
+            coordinator?.SelectContentTransform(firstContent, syncAuthoringUi: true);
+            FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
         }
 
         private void ApplyWorkspacePreset(GameObject targetRootObject, WorkspaceDomain.WorkspacePosture posture)
@@ -369,7 +566,11 @@ namespace ARGallery.AppFlow
 
             PlacementBoundsService placementBounds = FindFirstObjectByType<PlacementBoundsService>();
             if (placementBounds != null)
+            {
+                placementBounds.SetTargetContext(targetRoot, targetRoot.Find("ContentRoot"));
                 placementBounds.SetPosture(posture);
+                ReclampContentUnderTarget(targetRoot, placementBounds);
+            }
 
             SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
             if (spatialMapping != null)
@@ -410,6 +611,29 @@ namespace ARGallery.AppFlow
                 return new Vector3(0f, Mathf.Max(0f, ceilingTargetHeightOffset), 0f);
 
             return Vector3.zero;
+        }
+
+        private static void ReclampContentUnderTarget(Transform targetRoot, PlacementBoundsService placementBounds)
+        {
+            if (targetRoot == null || placementBounds == null)
+                return;
+
+            Transform contentRoot = targetRoot.Find("ContentRoot");
+            if (contentRoot == null)
+                return;
+
+            ContentTransformManipulator manipulator = FindFirstObjectByType<ContentTransformManipulator>();
+            for (int i = 0; i < contentRoot.childCount; i++)
+            {
+                Transform child = contentRoot.GetChild(i);
+                if (child == null)
+                    continue;
+
+                if (manipulator != null)
+                    manipulator.SetLocalPosition(child, child.localPosition);
+                else
+                    child.localPosition = placementBounds.ClampLocalPosition(child, child.localPosition);
+            }
         }
 
         private static void EnsureTargetHierarchyCompatibility(Transform targetRoot)
@@ -485,6 +709,10 @@ namespace ARGallery.AppFlow
 
         private void ApplyWorkspaceTargetVisual(GameObject targetObject, string targetImageUrl, WorkspaceSessionContext session)
         {
+            AuthoredTargetInstance authored = targetObject != null ? targetObject.GetComponent<AuthoredTargetInstance>() : null;
+            if (authored != null)
+                authored.TargetImageUrl = string.IsNullOrWhiteSpace(targetImageUrl) ? "" : targetImageUrl.Trim();
+
             if (session != null && session.targetImageBytes != null && session.targetImageBytes.Length > 0)
             {
                 if (targetWorkflowService.ApplyTargetImageBytes(targetObject, session.targetImageBytes))

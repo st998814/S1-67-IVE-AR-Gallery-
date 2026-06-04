@@ -288,8 +288,17 @@ public class AuthoringUIController : MonoBehaviour
         if (browseButton != null) browseButton.clicked += OnBrowseButtonClicked;
         if (addContentButton != null) addContentButton.clicked += OnBrowseButtonClicked;
         if (browseTargetImageButton != null) browseTargetImageButton.clicked += OnBrowseTargetImageButtonClicked;
-        saveButton.clicked += OnSaveButtonClicked;
-        if (backToSwitcherButton != null) backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
+        if (saveButton != null)
+        {
+            saveButton.clicked += OnSaveButtonClicked;
+            saveButton.BringToFront();
+            ResetSaveFabFeedback();
+        }
+        if (backToSwitcherButton != null)
+        {
+            backToSwitcherButton.clicked += OnBackToSwitcherButtonClicked;
+            backToSwitcherButton.BringToFront();
+        }
         if (createTargetButton != null) createTargetButton.clicked += OnCreateTargetButtonClicked;
         if (leftPanelToggleButton != null) leftPanelToggleButton.clicked += OnLeftPanelToggleClicked;
         if (rightPanelToggleButton != null) rightPanelToggleButton.clicked += OnRightPanelToggleClicked;
@@ -1578,13 +1587,34 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
+        AuthoredTargetInstance authored = ResolveAuthoredTargetForActiveSelection();
         TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
         if (activeDraft != null && activeDraft.bytes != null && activeDraft.isUnsaved)
         {
             string suffix = string.IsNullOrWhiteSpace(activeDraft.fileName) ? "" : $" ({activeDraft.fileName})";
-            targetReferenceStatusLabel.text = $"Unsaved{suffix}";
-            // Tailor to the UX: red for unsaved.
+            targetReferenceStatusLabel.text = $"Saved locally — sync to upload{suffix}";
             targetReferenceStatusLabel.style.color = new StyleColor(new Color32(220, 53, 69, 255));
+            return;
+        }
+
+        if (authored != null && authored.TargetReferenceRemoteDirty)
+        {
+            targetReferenceStatusLabel.text = "Saved locally — sync to upload";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(220, 53, 69, 255));
+            return;
+        }
+
+        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceImageUrl))
+        {
+            targetReferenceStatusLabel.text = "Uploaded";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(34, 197, 94, 255));
+            return;
+        }
+
+        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        {
+            targetReferenceStatusLabel.text = "Saved locally";
+            targetReferenceStatusLabel.style.color = new StyleColor(new Color32(229, 231, 235, 255));
             return;
         }
 
@@ -1596,6 +1626,8 @@ public class AuthoringUIController : MonoBehaviour
     {
         if (targetReferencePreviewImage == null)
             return;
+
+        EnsureTargetReferenceDraftHydratedFromAuthored();
 
         TargetReferenceDraft activeDraft = GetActiveTargetReferenceDraft();
         if (activeDraft == null || activeDraft.previewTexture == null)
@@ -1634,6 +1666,10 @@ public class AuthoringUIController : MonoBehaviour
             isUnsaved = true,
             previewTexture = CreatePreviewTexture(bytes)
         };
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored != null && !authored.TargetReferenceRemoteDirty && !string.IsNullOrWhiteSpace(authored.TargetReferenceImageUrl))
+            draft.isUnsaved = false;
 
         targetReferencesByTargetId[targetId] = draft;
         RefreshTargetReferenceUiForActiveTarget();
@@ -1796,6 +1832,11 @@ public class AuthoringUIController : MonoBehaviour
             RegisterTextDraft(localResult.draggableObject, textToDisplay);
             SetActiveAuthoringObject(localResult.draggableObject, textToDisplay, "Text");
         }
+        else if (localResult.spawnedObject != null)
+        {
+            RegisterTextDraftForTransform(localResult.spawnedObject.transform, textToDisplay);
+            SetActiveAuthoringTransform(localResult.spawnedObject.transform, textToDisplay, "Text");
+        }
     }
 
     void OnBrowseButtonClicked()
@@ -1899,10 +1940,106 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
+        string targetId = pendingTargetReferenceTargetId.Trim();
         string fileName = selectedFile.fileInfo != null ? selectedFile.fileInfo.name : "";
-        SetOrReplaceTargetReferenceDraft(pendingTargetReferenceTargetId, selectedFile.data, fileName);
+        if (!TryPersistTargetReferenceLocally(targetId, selectedFile.data, fileName, out string error))
+        {
+            ShowError(string.IsNullOrWhiteSpace(error) ? "Could not save target reference locally." : error);
+            pendingTargetReferenceTargetId = null;
+            UpdateTargetReferenceStatusLabel(showUploadingText: false);
+            return;
+        }
+
+        SetOrReplaceTargetReferenceDraft(targetId, selectedFile.data, fileName);
         pendingTargetReferenceTargetId = null;
         UpdateTargetReferenceStatusLabel(showUploadingText: false);
+        RequestWorkspaceSnapshotSave();
+    }
+
+    private bool TryPersistTargetReferenceLocally(string targetId, byte[] bytes, string fileName, out string errorMessage)
+    {
+        errorMessage = null;
+        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
+            || string.IsNullOrWhiteSpace(session.workspaceId))
+        {
+            errorMessage = "No active workspace session.";
+            return false;
+        }
+
+        var assetRepo = new WorkspaceAssetRepository();
+        if (!assetRepo.TryImportTargetReferenceImage(session.workspaceId.Trim(), fileName, bytes, null, out string relativePath, out errorMessage))
+            return false;
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored != null)
+        {
+            authored.TargetReferenceLocalPath = relativePath;
+            authored.TargetReferenceOriginalFileName = fileName ?? "";
+            authored.TargetReferenceRemoteDirty = true;
+            authored.RemoteDirty = true;
+        }
+
+        return true;
+    }
+
+    private AuthoredTargetInstance ResolveAuthoredTargetForActiveSelection()
+    {
+        return ResolveAuthoredTargetById(GetActiveTargetIdForSave());
+    }
+
+    private AuthoredTargetInstance ResolveAuthoredTargetById(string targetId)
+    {
+        if (string.IsNullOrWhiteSpace(targetId) || targetSelectionManager == null)
+            return null;
+
+        int index = targetSelectionManager.FindTargetIndexById(targetId.Trim());
+        if (index < 0)
+            return null;
+
+        GameObject go = targetSelectionManager.GetTargetAt(index);
+        return go != null ? go.GetComponent<AuthoredTargetInstance>() : null;
+    }
+
+    private void EnsureTargetReferenceDraftHydratedFromAuthored()
+    {
+        string targetId = GetActiveTargetIdForSave();
+        if (string.IsNullOrWhiteSpace(targetId))
+            return;
+
+        if (GetActiveTargetReferenceDraft() != null)
+            return;
+
+        AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
+        if (authored == null || string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+            return;
+
+        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null)
+            return;
+
+        string full = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(
+            session.workspaceId.Trim(),
+            authored.TargetReferenceLocalPath);
+        if (string.IsNullOrWhiteSpace(full) || !System.IO.File.Exists(full))
+            return;
+
+        try
+        {
+            byte[] bytes = System.IO.File.ReadAllBytes(full);
+            SetOrReplaceTargetReferenceDraft(targetId, bytes, authored.TargetReferenceOriginalFileName);
+            if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
+                draft.isUnsaved = authored.TargetReferenceRemoteDirty;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"AuthoringUIController: could not load target reference preview: {ex.Message}");
+        }
+    }
+
+    private void RequestWorkspaceSnapshotSave()
+    {
+        WorkspaceAutoSaveService autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
+        if (autoSave != null)
+            autoSave.NotifyWorkspaceChanged();
     }
 
 private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile)
@@ -1958,13 +2095,19 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         return;
     }
 
+    string label = type == SpawnContentType.Model ? "Model"
+        : type == SpawnContentType.Video ? "Video"
+        : "Image";
+
     if (outcome.draggableObject != null)
     {
         RegisterLocalDraft(outcome.draggableObject, type, selectedFile, displayName);
-        string label = type == SpawnContentType.Model ? "Model"
-            : type == SpawnContentType.Video ? "Video"
-            : "Image";
         SetActiveAuthoringObject(outcome.draggableObject, "", label);
+    }
+    else if (outcome.spawnedObject != null)
+    {
+        RegisterLocalDraftForTransform(outcome.spawnedObject.transform, type, selectedFile, displayName);
+        SetActiveAuthoringTransform(outcome.spawnedObject.transform, "", label);
     }
 
     if (filePathInput != null)
@@ -2034,6 +2177,43 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         Debug.Log("Now authoring " + targetObj.gameObject.name);
     }
 
+    private void SetActiveAuthoringTransform(Transform targetTransform, string mediaValue, string contentType)
+    {
+        if (targetTransform == null)
+            return;
+
+        activeDraggedObject = targetTransform.GetComponent<DraggableObject>();
+        authoringSpatialTarget = targetTransform;
+        activeContentDraft = ResolveDraftForSelection(authoringSpatialTarget, activeDraggedObject);
+
+        suppressSpatialUiCallbacks = true;
+        try
+        {
+            SyncTransformToInspector(targetTransform);
+        }
+        finally
+        {
+            suppressSpatialUiCallbacks = false;
+        }
+
+        ApplyInspectorModeContent();
+
+        if (contentType != null && contentType.StartsWith("Text", System.StringComparison.Ordinal))
+        {
+            if (youtubeUrlInput != null) youtubeUrlInput.value = "";
+            if (filePathInput != null)
+                filePathInput.value = string.IsNullOrWhiteSpace(mediaValue) ? "No file..." : mediaValue.Trim();
+        }
+        else
+        {
+            ApplyUrlToMediaFields(mediaValue);
+        }
+
+        if (contentTypeInput != null)
+            contentTypeInput.value = contentType;
+        Debug.Log("Now authoring " + targetTransform.gameObject.name);
+    }
+
     private ContentDraftState ResolveDraftForSelection(Transform selectedTransform, DraggableObject selectedDraggable)
     {
         if (selectedDraggable != null && contentDraftsByDraggable.TryGetValue(selectedDraggable, out ContentDraftState draggableDraft))
@@ -2071,6 +2251,38 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         contentDraftsByTransform[draggableObject.transform] = draft;
     }
 
+    private void RegisterTextDraftForTransform(Transform contentTransform, string textPayload)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterTextDraft(draggableObject, textPayload);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            contentType = SpawnContentType.Text,
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.textPayload = textPayload ?? "";
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
+    }
+
     private void RegisterRemoteBackedDraft(DraggableObject draggableObject, SpawnContentType contentType, string mediaUrl, string localFileName)
     {
         if (draggableObject == null)
@@ -2095,6 +2307,38 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterRemoteBackedDraftForTransform(Transform contentTransform, SpawnContentType contentType, string mediaUrl, string localFileName)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterRemoteBackedDraft(draggableObject, contentType, mediaUrl, localFileName);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.mediaUrl = mediaUrl ?? "";
+        draft.isUnsaved = true;
+        draft.uploadPending = false;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
     }
 
     private void RegisterLocalDraft(DraggableObject draggableObject, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
@@ -2124,6 +2368,41 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         contentDraftsByDraggable[draggableObject] = draft;
         contentDraftsByTransform[draggableObject.transform] = draft;
+    }
+
+    private void RegisterLocalDraftForTransform(Transform contentTransform, SpawnContentType contentType, FrostweepGames.Plugins.WebGLFileBrowser.File selectedFile, string localFileName)
+    {
+        if (contentTransform == null)
+            return;
+
+        DraggableObject draggableObject = contentTransform.GetComponent<DraggableObject>();
+        if (draggableObject != null)
+        {
+            RegisterLocalDraft(draggableObject, contentType, selectedFile, localFileName);
+            return;
+        }
+
+        ContentDraftState existing = ResolveDraftForSelection(contentTransform, null);
+        ContentDraftState draft = existing ?? new ContentDraftState
+        {
+            draftId = Guid.NewGuid().ToString("N"),
+            draggableObject = null,
+            contentTransform = contentTransform
+        };
+
+        string ext = selectedFile?.fileInfo != null ? (selectedFile.fileInfo.extension ?? "") : "";
+        draft.contentType = contentType;
+        draft.targetId = GetActiveTargetIdForSave();
+        draft.localFileName = localFileName ?? "";
+        draft.localFileBytes = selectedFile?.data;
+        draft.localMimeType = GuessMimeTypeFromExtension(ext);
+        draft.mediaUrl = "";
+        draft.isUnsaved = true;
+        draft.uploadPending = true;
+        draft.persistPending = true;
+        draft.lastError = "";
+
+        contentDraftsByTransform[contentTransform] = draft;
     }
 
     private static string GuessMimeTypeFromExtension(string extension) =>
@@ -2171,6 +2450,8 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             filePathInput.value = t;
     }
 
+    private const string SaveFabDefaultTooltip = "Save to server";
+
     void OnSaveButtonClicked()
     {
         if (!IsWorkspaceReadyForAuthoring(showBlockedMessage: true))
@@ -2183,13 +2464,51 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         apiClient = ResolveApiClient();
         if (apiClient == null || spawnerManager == null)
         {
-            saveButton.text = "Save Failed!";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2200);
+            ShowSaveFabFeedback("Save failed", "API client or spawner is not available.", isError: true);
             Debug.LogWarning("Save skipped: API client or spawner manager is not available.");
             return;
         }
 
         StartCoroutine(SaveAllDraftsRoutine());
+    }
+
+    private void ResetSaveFabFeedback()
+    {
+        if (saveButton == null)
+            return;
+        saveButton.tooltip = SaveFabDefaultTooltip;
+        saveButton.EnableInClassList("authoring-save-fab--busy", false);
+    }
+
+    private void SetSaveFabBusy(bool busy)
+    {
+        if (saveButton == null)
+            return;
+        saveButton.EnableInClassList("authoring-save-fab--busy", busy);
+        if (busy)
+            saveButton.tooltip = "Saving…";
+        else
+            saveButton.tooltip = SaveFabDefaultTooltip;
+    }
+
+    private void ShowSaveFabFeedback(string title, string message, bool isError = false)
+    {
+        if (saveButton != null)
+            saveButton.tooltip = $"{title}: {message}";
+
+        if (_syncStatusToast == null || _syncStatusTitle == null || _syncStatusMessage == null)
+            return;
+
+        CancelSyncToastHideRoutine();
+        ApplyRemoteSyncToastStyle(isError ? WorkspaceRemoteSyncToastKind.Failed : WorkspaceRemoteSyncToastKind.Synced);
+        _syncStatusTitle.style.display = DisplayStyle.Flex;
+        _syncStatusTitle.text = title;
+        _syncStatusMessage.text = message;
+        _syncStatusMessage.style.fontSize = 11;
+        _syncStatusMessage.style.unityFontStyleAndWeight = FontStyle.Normal;
+        _syncStatusToast.RemoveFromClassList("sync-toast--hidden");
+        _syncStatusToast.style.display = DisplayStyle.Flex;
+        _syncToastHideRoutine = StartCoroutine(HideSyncStatusToastAfterDelay(isError ? 8f : 4f));
     }
 
     void OnBackToSwitcherButtonClicked()
@@ -2218,14 +2537,18 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
     private IEnumerator SaveAllDraftsRoutine()
     {
         isSaveInProgress = true;
-        saveButton.text = "Saving...";
+        SetSaveFabBusy(true);
+        if (saveButton != null)
+            saveButton.SetEnabled(false);
 
         List<ContentDraftState> drafts = CollectPendingDrafts();
         if (drafts.Count == 0)
         {
-            saveButton.text = "Nothing to save";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(1600);
+            ShowSaveFabFeedback("Nothing to save", "No pending content drafts to upload.");
             isSaveInProgress = false;
+            if (saveButton != null)
+                saveButton.SetEnabled(true);
+            ResetSaveFabFeedback();
             ResolveRemoteSyncService()?.SyncNow();
             yield break;
         }
@@ -2274,18 +2597,22 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
         if (failedCount == 0)
         {
-            saveButton.text = "Saved Successfully! ✓";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2000);
+            ShowSaveFabFeedback("Saved", $"Persisted {successCount} item(s) to the server.");
             Debug.Log($"Save complete: persisted {successCount} draft(s).");
         }
         else
         {
-            saveButton.text = $"Save Partial ({successCount}/{drafts.Count})";
-            saveButton.schedule.Execute(() => { saveButton.text = "Save to Database"; }).StartingIn(2600);
+            ShowSaveFabFeedback(
+                "Save partial",
+                $"Saved {successCount} of {drafts.Count}; {failedCount} failed.",
+                isError: true);
             Debug.LogWarning($"Save finished with failures: success={successCount}, failed={failedCount}.");
         }
 
         isSaveInProgress = false;
+        if (saveButton != null)
+            saveButton.SetEnabled(true);
+        ResetSaveFabFeedback();
     }
 
     private List<ContentDraftState> CollectPendingDrafts()
@@ -2293,16 +2620,22 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         var drafts = new List<ContentDraftState>();
         var seenIds = new HashSet<string>();
 
-        foreach (ContentDraftState draft in contentDraftsByDraggable.Values)
+        void AddIfPending(ContentDraftState draft)
         {
             if (draft == null || string.IsNullOrWhiteSpace(draft.draftId))
-                continue;
+                return;
             if (!draft.isUnsaved && !draft.persistPending)
-                continue;
+                return;
             if (!seenIds.Add(draft.draftId))
-                continue;
+                return;
             drafts.Add(draft);
         }
+
+        foreach (ContentDraftState draft in contentDraftsByDraggable.Values)
+            AddIfPending(draft);
+
+        foreach (ContentDraftState draft in contentDraftsByTransform.Values)
+            AddIfPending(draft);
 
         return drafts;
     }
@@ -2557,6 +2890,15 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
                 url,
                 localFileName: "youtube-link");
             SetActiveAuthoringObject(localResult.draggableObject, url, "Video");
+        }
+        else if (localResult.spawnedObject != null)
+        {
+            RegisterRemoteBackedDraftForTransform(
+                localResult.spawnedObject.transform,
+                SpawnContentType.Video,
+                url,
+                localFileName: "youtube-link");
+            SetActiveAuthoringTransform(localResult.spawnedObject.transform, url, "Video");
         }
 
         Debug.Log("Successfully spawned YouTube stream to AR wall.");

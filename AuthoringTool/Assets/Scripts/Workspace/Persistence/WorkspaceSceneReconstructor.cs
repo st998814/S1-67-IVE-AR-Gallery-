@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using ARGallery.AppFlow;
+using ARGallery.Content;
 using ARGallery.Spawning;
 using UnityEngine;
 using UnityEngine.Video;
@@ -23,8 +24,10 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private GameObject textPrefabOverride;
         [SerializeField] private GameObject videoPrefabOverride;
         [SerializeField] private GameObject modelContainerPrefabOverride;
+        [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
+        private readonly ContentCreationCoordinator contentReleaseCoordinator = new ContentCreationCoordinator();
         private readonly WorkspaceAssetRepository assetRepository = new WorkspaceAssetRepository();
 
         /// <summary>Loads snapshot.json for <paramref name="workspaceId"/> then rebuilds asynchronously.</summary>
@@ -72,6 +75,8 @@ namespace ARGallery.Workspace.Persistence
                     yield return null;
                 }
             }
+
+            ClearAllContentUnderTargets();
 
             if (snapshot.contents != null)
             {
@@ -165,15 +170,23 @@ namespace ARGallery.Workspace.Persistence
             authored.ServerTargetId = ts.serverTargetId ?? "";
             authored.VuforiaTargetId = ts.vuforiaTargetId ?? "";
             authored.TargetName = ts.targetName ?? "";
+            authored.TargetImageUrl = ts.targetImageUrl ?? "";
             authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
+            authored.TargetReferenceLocalPath = ts.targetReferenceLocalPath ?? "";
+            authored.TargetReferenceImageUrl = ts.targetReferenceImageUrl ?? "";
             authored.OriginalFileName = ts.originalFileName ?? "";
+            authored.TargetReferenceOriginalFileName = ts.targetReferenceOriginalFileName ?? "";
             authored.PhysicalWidthM = ts.physicalWidthM > 1e-5f ? ts.physicalWidthM : 0.2f;
             authored.RemoteDirty = ts.remoteDirty;
+            authored.TargetReferenceRemoteDirty = !string.IsNullOrWhiteSpace(ts.targetReferenceLocalPath)
+                && string.IsNullOrWhiteSpace(ts.targetReferenceImageUrl);
             authored.LastRemoteSyncedAtUtc = ts.lastRemoteSyncedAtUtc ?? "";
 
             byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
             if (imgBytes != null && imgBytes.Length > 0)
                 targetWorkflowService.ApplyTargetImageBytes(targetGo, imgBytes);
+            else if (!string.IsNullOrWhiteSpace(ts.targetImageUrl))
+                targetWorkflowService.ApplyTargetImageFromUrl(this, targetGo, ts.targetImageUrl.Trim());
             else
                 Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image bytes for '{canonicalId}' (path '{ts.targetImageLocalPath}').");
 
@@ -200,11 +213,15 @@ namespace ARGallery.Workspace.Persistence
             targetSelectionManager.SetActiveTarget(idx);
 
             SpawnContentType spawnType = ParseContentType(cs.contentType);
+            string resolvedMediaUrl = ResolveMediaUrl(cs.mediaUrl);
+            string resolvedFileName = string.IsNullOrWhiteSpace(cs.originalFileName)
+                ? ContentMediaUrlUtility.FileNameFromUrl(resolvedMediaUrl, spawnType == SpawnContentType.Model ? "model.glb" : "asset.bin")
+                : cs.originalFileName;
             var request = new SpawnRequest
             {
                 contentType = spawnType,
                 targetId = targetKey,
-                originalFileName = string.IsNullOrWhiteSpace(cs.originalFileName) ? "asset.bin" : cs.originalFileName,
+                originalFileName = resolvedFileName,
                 hasTransformOverride = true,
                 transformOverride = new SpawnTransformData
                 {
@@ -228,9 +245,9 @@ namespace ARGallery.Workspace.Persistence
                 {
                     request.localFileBytes = bytes;
                 }
-                else if (!string.IsNullOrWhiteSpace(cs.mediaUrl))
+                else if (!string.IsNullOrWhiteSpace(resolvedMediaUrl))
                 {
-                    request.mediaUrl = cs.mediaUrl.Trim();
+                    request.mediaUrl = resolvedMediaUrl;
                 }
                 else
                 {
@@ -274,8 +291,64 @@ namespace ARGallery.Workspace.Persistence
             cube.transform.localPosition = cs.position.ToVector3();
             cube.transform.localEulerAngles = cs.rotation.ToVector3();
             cube.transform.localScale = Vector3.Max(cs.scale.ToVector3(), Vector3.one * 0.02f);
+            ApplyFallbackLitMaterial(cube);
 
             AttachAuthoredContent(cube, cs);
+        }
+
+        private void ClearAllContentUnderTargets()
+        {
+            ResolveTargetSelectionManager();
+            if (targetSelectionManager == null)
+                return;
+
+            int count = targetSelectionManager.TargetCount;
+            for (int i = 0; i < count; i++)
+            {
+                GameObject target = targetSelectionManager.GetTargetAt(i);
+                if (target == null)
+                    continue;
+
+                Transform contentRoot = target.transform.Find("ContentRoot");
+                if (contentRoot == null)
+                    continue;
+
+                for (int c = contentRoot.childCount - 1; c >= 0; c--)
+                {
+                    GameObject child = contentRoot.GetChild(c).gameObject;
+                    if (!contentReleaseCoordinator.ReleaseSpawnedContent(child))
+                        Destroy(child);
+                }
+            }
+        }
+
+        private string ResolveMediaUrl(string mediaUrl)
+        {
+            string baseUrl = ContentMediaUrlUtility.ResolveBackendBaseUrl();
+            if (!string.IsNullOrWhiteSpace(backendApiBaseUrl))
+                baseUrl = backendApiBaseUrl.Trim();
+            return ContentMediaUrlUtility.ResolveAbsoluteUrl(mediaUrl, baseUrl);
+        }
+
+        private static void ApplyFallbackLitMaterial(GameObject go)
+        {
+            if (go == null)
+                return;
+
+            Renderer renderer = go.GetComponent<Renderer>();
+            if (renderer == null)
+                return;
+
+            Material template = Resources.Load<Material>("GltfRuntimeLit");
+            if (template != null)
+            {
+                renderer.sharedMaterial = template;
+                return;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Lit");
+            if (shader != null)
+                renderer.sharedMaterial = new Material(shader);
         }
 
         private static void AttachAuthoredContent(GameObject go, ContentSnapshot cs)

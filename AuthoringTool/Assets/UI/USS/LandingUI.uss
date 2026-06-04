@@ -1,28 +1,63 @@
 .landing-root {
     justify-content: center;
     align-items: center;
-}
-
-.landing-stack {
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    max-width: 640px;
     padding-left: 24px;
     padding-right: 24px;
 }
 
 .landing-title {
-    margin-bottom: 12px;
-    letter-spacing: 0.2px;
+    font-size: 28px;
+    -unity-font-style: bold;
+    color: rgb(230, 237, 243);
+    margin-bottom: 10px;
+    -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .landing-subtitle {
-    margin-bottom: 24px;
-    text-align: center;
+    font-size: 14px;
+    color: rgb(154, 167, 179);
+    margin-bottom: 28px;
+    -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .landing-start-btn {
-    min-width: 180px;
-    height: 48px;
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    padding: 0;
+    margin: 0;
+    border-radius: 32px;
+    border-width: 1px;
+    border-color: rgb(52, 66, 82);
+    background-color: rgb(27, 34, 43);
+    justify-content: center;
+    align-items: center;
+    font-size: 0;
+    color: rgb(255, 255, 255);
+    -unity-font-style: normal;
+}
+
+.landing-start-btn:hover {
+    background-color: rgb(38, 48, 60);
+    border-color: rgb(140, 191, 255);
+}
+
+.landing-start-btn:active {
+    background-color: rgb(22, 28, 36);
+    border-color: rgb(196, 220, 255);
+}
+
+.landing-start-btn__icon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    flex-shrink: 0;
+    background-image: url("../Icons/LandingStartPower.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    background-position: center;
 }

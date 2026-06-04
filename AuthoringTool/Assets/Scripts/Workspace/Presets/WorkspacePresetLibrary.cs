@@ -51,13 +51,7 @@ namespace ARGallery.Workspace.Presets
                 new WorkspaceInteractionPreset(
                     lockRoll: true,
                     clampVerticalPan: true),
-                new WorkspacePlacementBoundaryPreset(
-                    new PlacementBoundaryPreset(
-                        horizontalScale: 1.15f,
-                        verticalScale: 1.1f,
-                        depthMeters: 1.25f,
-                        edgeMargin: 0.03f,
-                        minStandoffZ: 0.35f)));
+                new WorkspacePlacementBoundaryPreset(PlacementBoundaryPreset.FloorDefault));
         }
 
         private static WorkspacePreset BuildCeilingPreset()
@@ -74,13 +68,7 @@ namespace ARGallery.Workspace.Presets
                 new WorkspaceInteractionPreset(
                     lockRoll: true,
                     clampVerticalPan: true),
-                new WorkspacePlacementBoundaryPreset(
-                    new PlacementBoundaryPreset(
-                        horizontalScale: 1.15f,
-                        verticalScale: 1.1f,
-                        depthMeters: 1.25f,
-                        edgeMargin: 0.03f,
-                        minStandoffZ: 0.35f)));
+                new WorkspacePlacementBoundaryPreset(PlacementBoundaryPreset.CeilingDefault));
         }
     }
 }

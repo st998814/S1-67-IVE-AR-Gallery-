@@ -31,6 +31,9 @@ namespace ARGallery.AppFlow
             // Fallback: if UXML is not bound/imported correctly, build a minimal landing UI at runtime.
             EnsureLandingFallbackUi(root);
 
+            VisualElement screenRoot = root.Q<VisualElement>("LandingRoot") ?? root;
+            AppFlowWallpaper.Apply(screenRoot);
+
             startButton = root.Q<Button>(StartButtonName);
             if (startButton == null)
             {
@@ -65,26 +68,24 @@ namespace ARGallery.AppFlow
             root.style.flexGrow = 1f;
             root.style.justifyContent = Justify.Center;
             root.style.alignItems = Align.Center;
-            root.style.backgroundColor = Color.black;
+            AppFlowWallpaper.Apply(root);
 
-            var titleLabel = new Label("AR Authoring Tool Beta");
-            titleLabel.style.color = Color.white;
-            titleLabel.style.fontSize = 36;
-            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            titleLabel.style.marginBottom = 28;
+            root.AddToClassList("landing-root");
+            root.AddToClassList("app-flow-wallpaper");
+
+            var titleLabel = new Label("AR Authoring Tool") { name = "TitleLabel" };
+            titleLabel.AddToClassList("landing-title");
             root.Add(titleLabel);
 
-            var start = new Button { name = StartButtonName, text = "Start" };
-            start.style.width = 180;
-            start.style.height = 52;
-            start.style.color = Color.white;
-            start.style.fontSize = 18;
-            start.style.unityFontStyleAndWeight = FontStyle.Bold;
-            start.style.backgroundColor = new Color(1f, 1f, 1f, 0.12f);
-            start.style.borderTopLeftRadius = 10;
-            start.style.borderTopRightRadius = 10;
-            start.style.borderBottomLeftRadius = 10;
-            start.style.borderBottomRightRadius = 10;
+            var subtitle = new Label("Immersive AR Authoring Experience");
+            subtitle.AddToClassList("landing-subtitle");
+            root.Add(subtitle);
+
+            var start = new Button { name = StartButtonName, tooltip = "Get started" };
+            start.AddToClassList("landing-start-btn");
+            var icon = new VisualElement();
+            icon.AddToClassList("landing-start-btn__icon");
+            start.Add(icon);
             root.Add(start);
         }
     }

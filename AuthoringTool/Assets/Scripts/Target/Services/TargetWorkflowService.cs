@@ -160,6 +160,7 @@ public class TargetWorkflowService
             targetName = targetName,
             displayLabel = displayLabel,
             targetImageUrl = targetImageUrl ?? "",
+            targetReferenceImageUrl = ReadTargetReferenceImageUrl(targetObject),
             workspaceId = wid,
             workspaceName = wname,
             physicalWidthM = ResolvePhysicalWidthForSync(targetObject),
@@ -187,6 +188,10 @@ public class TargetWorkflowService
             return null;
         if (string.IsNullOrWhiteSpace(targetImageUrl))
             return null;
+
+        var authored = targetObject.GetComponent<AuthoredTargetInstance>();
+        if (authored != null)
+            authored.TargetImageUrl = targetImageUrl.Trim();
 
         return runner.StartCoroutine(ApplyTargetImageFromUrlRoutine(targetObject, targetImageUrl.Trim()));
     }
@@ -312,5 +317,14 @@ public class TargetWorkflowService
             return auth.PhysicalWidthM;
 
         return 0.2f;
+    }
+
+    private static string ReadTargetReferenceImageUrl(GameObject targetObject)
+    {
+        if (targetObject == null)
+            return "";
+
+        var auth = targetObject.GetComponent<AuthoredTargetInstance>();
+        return auth != null ? auth.TargetReferenceImageUrl ?? "" : "";
     }
 }

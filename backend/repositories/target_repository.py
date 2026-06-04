@@ -36,6 +36,7 @@ class TargetRepository:
         local_scale,
         meta,
         status,
+        target_reference_image_url="",
     ):
         cur.execute(
             """
@@ -44,14 +45,17 @@ class TargetRepository:
                 local_position_x, local_position_y, local_position_z,
                 local_euler_x, local_euler_y, local_euler_z,
                 local_scale_x, local_scale_y, local_scale_z,
-                meta, status
+                target_reference_image_url, meta, status
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (target_id) DO UPDATE SET
                 workspace_id = EXCLUDED.workspace_id,
                 target_name = EXCLUDED.target_name,
                 display_label = EXCLUDED.display_label,
-                target_image_url = EXCLUDED.target_image_url,
+                target_image_url = CASE
+                    WHEN EXCLUDED.target_image_url <> '' THEN EXCLUDED.target_image_url
+                    ELSE targets.target_image_url
+                END,
                 physical_width_m = EXCLUDED.physical_width_m,
                 local_position_x = EXCLUDED.local_position_x,
                 local_position_y = EXCLUDED.local_position_y,
@@ -62,10 +66,15 @@ class TargetRepository:
                 local_scale_x = EXCLUDED.local_scale_x,
                 local_scale_y = EXCLUDED.local_scale_y,
                 local_scale_z = EXCLUDED.local_scale_z,
+                target_reference_image_url = CASE
+                    WHEN EXCLUDED.target_reference_image_url <> '' THEN EXCLUDED.target_reference_image_url
+                    ELSE targets.target_reference_image_url
+                END,
                 meta = EXCLUDED.meta,
                 status = EXCLUDED.status,
                 updated_at_utc = NOW()
-            RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc;
+            RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc,
+                      vuforia_target_id, vuforia_status, target_reference_image_url;
             """,
             (
                 target_id,
@@ -77,6 +86,7 @@ class TargetRepository:
                 *local_position,
                 *local_euler,
                 *local_scale,
+                target_reference_image_url or "",
                 Json(meta),
                 status,
             ),
@@ -135,7 +145,7 @@ class TargetRepository:
                 status = EXCLUDED.status,
                 updated_at_utc = NOW()
             RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc,
-                      vuforia_target_id, vuforia_status;
+                      vuforia_target_id, vuforia_status, target_reference_image_url;
             """,
             (
                 target_id,
@@ -156,11 +166,24 @@ class TargetRepository:
         )
         return cur.fetchone()
 
+    def update_target_reference_image_url(self, cur, target_id: str, reference_image_url: str):
+        cur.execute(
+            """
+            UPDATE targets
+            SET target_reference_image_url = %s, updated_at_utc = NOW()
+            WHERE target_id = %s
+            RETURNING target_id, target_name, display_label, target_image_url, status, created_at_utc,
+                      vuforia_target_id, vuforia_status, target_reference_image_url;
+            """,
+            (reference_image_url, target_id),
+        )
+        return cur.fetchone()
+
     def list_targets(self, cur):
         cur.execute(
             """
             SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc,
-                   vuforia_target_id, vuforia_status
+                   vuforia_target_id, vuforia_status, target_reference_image_url
             FROM targets
             ORDER BY created_at_utc ASC, target_id ASC;
             """
@@ -171,7 +194,7 @@ class TargetRepository:
         cur.execute(
             """
             SELECT target_id, target_name, display_label, target_image_url, status, created_at_utc,
-                   vuforia_target_id, vuforia_status
+                   vuforia_target_id, vuforia_status, target_reference_image_url
             FROM targets
             WHERE vuforia_target_id = %s;
             """,

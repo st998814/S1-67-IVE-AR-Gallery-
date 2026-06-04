@@ -17,7 +17,7 @@ from blueprints.upload import upload_bp
 from config import get_config
 from db_pool import configure_pool, get_db_connection
 from logging_config import configure_logging, get_api_logger, get_db_logger
-from vuforia_service import VuforiaConfig, register_vuforia_target
+from vuforia_service import VuforiaConfig, delete_vuforia_target, register_vuforia_target
 
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +58,7 @@ app.config["PUBLIC_BASE_URL"] = PUBLIC_BASE_URL
 app.config["VUFORIA_CONFIG"] = VUFORIA_CONFIG
 app.config["GET_DB_CONNECTION"] = lambda: get_db_connection()
 app.config["REGISTER_VUFORIA_TARGET"] = lambda *args, **kwargs: register_vuforia_target(*args, **kwargs)
+app.config["DELETE_VUFORIA_TARGET"] = lambda *args, **kwargs: delete_vuforia_target(*args, **kwargs)
 app.config["ALLOWED_EXTENSIONS"] = ALLOWED_EXTENSIONS
 app.config["DB_NAME"] = DB_NAME
 

@@ -14,9 +14,18 @@ namespace ARGallery.Workspace.Persistence
         public string ServerTargetId = "";
         public string VuforiaTargetId = "";
         public string TargetName = "";
+        /// <summary>Public URL after sync; used when local bytes/path are unavailable (e.g. WebGL).</summary>
+        public string TargetImageUrl = "";
         /// <summary>Relative path under workspace folder, e.g. assets/targets/&lt;id&gt;.png</summary>
         public string TargetImageLocalPath = "";
+        /// <summary>Relative path under workspace folder for optional placement reference photo.</summary>
+        public string TargetReferenceLocalPath = "";
+        /// <summary>Public URL after last successful reference upload (Layer 3).</summary>
+        public string TargetReferenceImageUrl = "";
         public string OriginalFileName = "";
+        public string TargetReferenceOriginalFileName = "";
+        /// <summary>Layer 3: reference image needs backend upload.</summary>
+        public bool TargetReferenceRemoteDirty;
 
         /// <summary>Printed target width in meters (Vuforia / runtime convention). Drives TargetVisual quad scale.</summary>
         public float PhysicalWidthM = 0.2f;

@@ -10,6 +10,7 @@ from api.validators import (
     parse_vector,
     physical_width_from_payload,
     require_json_body,
+    resolve_reference_image_extension,
     workspace_id_from_payload,
 )
 from logging_config import get_api_logger
@@ -43,6 +44,9 @@ def create_target():
     target_image_url, err_msg = clean_text(data, "targetImageUrl")
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
+    target_reference_image_url, err_msg = clean_text(data, "targetReferenceImageUrl")
+    if err_msg:
+        return error_response(err_msg, "VALIDATION_ERROR", 400)
     local_position, err_msg = parse_vector(data, "localPosition")
     if err_msg:
         return error_response(err_msg, "VALIDATION_ERROR", 400)
@@ -74,6 +78,7 @@ def create_target():
                 "target_name": target_name,
                 "display_label": display_label,
                 "target_image_url": target_image_url,
+                "target_reference_image_url": target_reference_image_url,
                 "physical_width_m": physical_width_m,
                 "local_position": local_position,
                 "local_euler": local_euler,
@@ -158,7 +163,26 @@ def create_cloud_target():
     except VuforiaError as e:
         logger.warning("Vuforia target registration failed for '%s': %s", target_id, e)
         return error_response(str(e), "VUFORIA_ERROR", e.status_code or 502, e.details)
-    except (OSError, ValueError) as e:
+    except TimeoutError as e:
+        logger.warning("Cloud target registration timed out for '%s': %s", target_id, e)
+        return error_response(
+            "Vuforia target registration timed out. Try a smaller image or retry.",
+            "VUFORIA_TIMEOUT",
+            504,
+            str(e),
+        )
+    except OSError as e:
+        if "timed out" in str(e).lower():
+            logger.warning("Cloud target registration timed out for '%s': %s", target_id, e)
+            return error_response(
+                "Vuforia target registration timed out. Try a smaller image or retry.",
+                "VUFORIA_TIMEOUT",
+                504,
+                str(e),
+            )
+        logger.error("Cloud target save failed for '%s': %s", file.filename, e)
+        return error_response("Failed to save cloud target.", "SERVER_ERROR", 500, str(e))
+    except ValueError as e:
         logger.error("Cloud target save failed for '%s': %s", file.filename, e)
         return error_response("Failed to save cloud target.", "SERVER_ERROR", 500, str(e))
     except psycopg2.Error as e:
@@ -189,6 +213,58 @@ def resolve_target_by_vuforia_id():
     except psycopg2.Error as e:
         current_app.config["LOG_DATABASE_ERROR"]("resolve_target_by_vuforia_id", e)
         return error_response("Database error while resolving target.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
+
+
+@targets_bp.route("/<path:target_id>/reference", methods=["POST"])
+def upload_target_reference(target_id):
+    """Upload a real-world placement reference photo; stored under uploads/target_ref/."""
+    tid = (target_id or "").strip()
+    if not tid:
+        return error_response("targetId is required.", "VALIDATION_ERROR", 400)
+
+    if "file" not in request.files:
+        return error_response("No file part named 'file'.", "VALIDATION_ERROR", 400)
+
+    file = request.files["file"]
+    if file.filename == "":
+        return error_response("No selected file.", "VALIDATION_ERROR", 400)
+
+    resolved_ext = resolve_reference_image_extension(file, current_app.config["ALLOWED_EXTENSIONS"])
+    if not resolved_ext:
+        raw_ext = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+        logger.warning(
+            "Target reference upload rejected for '%s': filename=%r mimetype=%r ext=%r",
+            tid,
+            file.filename,
+            getattr(file, "mimetype", ""),
+            raw_ext,
+        )
+        return error_response(
+            f"Reference image type '.{raw_ext or '?'}' is not allowed. Use png, jpg, gif, or webp.",
+            "VALIDATION_ERROR",
+            415,
+        )
+
+    try:
+        row = _service().upload_target_reference(
+            tid,
+            file,
+            resolved_ext=resolved_ext,
+            upload_folder=current_app.config["UPLOAD_FOLDER"],
+            public_base_url=current_app.config["PUBLIC_BASE_URL"],
+        )
+        if row is None:
+            return error_response(f"Target '{tid}' was not found.", "NOT_FOUND", 404)
+        logger.info("Target reference uploaded for '%s'", tid)
+        return jsonify(target_response(row, "accepted")), 200
+    except ValueError as e:
+        return error_response(str(e), "VALIDATION_ERROR", 400)
+    except OSError as e:
+        logger.error("Target reference save failed for '%s': %s", tid, e)
+        return error_response("Failed to save target reference image.", "SERVER_ERROR", 500, str(e))
+    except psycopg2.Error as e:
+        current_app.config["LOG_DATABASE_ERROR"]("upload_target_reference", e)
+        return error_response("Database error while saving target reference.", "SERVER_ERROR", 500, {"pgcode": getattr(e, "pgcode", None)})
 
 
 @targets_bp.route("/<path:target_id>", methods=["DELETE"])

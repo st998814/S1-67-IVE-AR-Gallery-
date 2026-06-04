@@ -25,6 +25,8 @@ class UploadService:
         content_id_hint = (form.get("contentId") or "").strip()
         if url_segment == "target" and target_id_hint:
             filename = self._disk_filename_for_target_image(target_id_hint, file_storage.filename)
+        elif url_segment == "target_ref" and target_id_hint:
+            filename = self._disk_filename_for_target_image(target_id_hint, file_storage.filename)
         elif url_segment == "content" and content_id_hint:
             filename = self._disk_filename_for_content_asset(content_id_hint, file_storage.filename)
         else:
