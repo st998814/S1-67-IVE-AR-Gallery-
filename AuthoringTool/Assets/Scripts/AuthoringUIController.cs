@@ -2511,27 +2511,54 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         _syncToastHideRoutine = StartCoroutine(HideSyncStatusToastAfterDelay(isError ? 8f : 4f));
     }
 
+    private bool backToSwitcherInProgress;
+
     void OnBackToSwitcherButtonClicked()
     {
-        if (SceneTransitionService.IsTransitioning)
+        if (SceneTransitionService.IsTransitioning || backToSwitcherInProgress)
             return;
 
-        Debug.Log("[WorkspacePersistence] BackToSwitcher: flushing snapshot before ClearWorkspaceSession.");
-        bool hadSession = AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext sessionBefore)
-            && sessionBefore != null && !string.IsNullOrWhiteSpace(sessionBefore.workspaceId);
-        Debug.Log($"[WorkspacePersistence] BackToSwitcher: hadSession={hadSession} workspaceId={(hadSession ? sessionBefore.workspaceId : "(none)")}");
+        StartCoroutine(BackToSwitcherRoutine());
+    }
 
-        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
-        if (autoSave == null)
-            Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceAutoSaveService not found in scene — snapshot will not flush.");
-        else
-            autoSave.FlushSnapshotToDisk();
+    private IEnumerator BackToSwitcherRoutine()
+    {
+        backToSwitcherInProgress = true;
+        if (backToSwitcherButton != null)
+            backToSwitcherButton.SetEnabled(false);
 
-        ResolveRemoteSyncService()?.SyncNow();
+        try
+        {
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session)
+                || session == null
+                || string.IsNullOrWhiteSpace(session.workspaceId))
+            {
+                Debug.Log("[WorkspacePersistence] BackToSwitcher: no session — clearing and loading switcher.");
+                AppFlowController.ClearWorkspaceSession();
+                SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+                yield break;
+            }
 
-        AppFlowController.ClearWorkspaceSession();
-        Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
-        SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+            string workspaceId = session.workspaceId.Trim();
+            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
+            Debug.Log($"[WorkspacePersistence] BackToSwitcher: syncing workspace '{workspaceId}' before navigation.");
+
+            WorkspaceRemoteSyncService remoteSync = ResolveRemoteSyncService();
+            if (remoteSync != null)
+                yield return remoteSync.SyncWorkspaceAndWait(workspaceId, workspaceName);
+            else
+                Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceRemoteSyncService not found — skipping cloud sync.");
+
+            AppFlowController.ClearWorkspaceSession();
+            Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
+            SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+        }
+        finally
+        {
+            backToSwitcherInProgress = false;
+            if (backToSwitcherButton != null)
+                backToSwitcherButton.SetEnabled(true);
+        }
     }
 
     private IEnumerator SaveAllDraftsRoutine()

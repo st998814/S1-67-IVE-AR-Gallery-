@@ -44,6 +44,10 @@ namespace ARGallery.Workspace.Persistence
         private string _lastFailReason;
         private bool _lastStepOk;
 
+        /// <summary>Workspace ids for the active <see cref="RunRemoteSyncPass"/> (explicit or from session).</summary>
+        private string _activePassWorkspaceId;
+        private string _activePassWorkspaceName;
+
         private void RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind kind, string message)
         {
             RemoteSyncToastChanged?.Invoke(kind, message ?? "");
@@ -117,10 +121,11 @@ namespace ARGallery.Workspace.Persistence
             bool runAgain = false;
             try
             {
-                yield return StartCoroutine(RunRemoteSyncPass());
+                yield return StartCoroutine(RunRemoteSyncPass(null, null));
             }
             finally
             {
+                ClearActivePassWorkspaceContext();
                 _syncInProgress = false;
                 _syncCoroutine = null;
                 if (_pendingSyncRequested)
@@ -134,7 +139,58 @@ namespace ARGallery.Workspace.Persistence
                 _syncCoroutine = StartCoroutine(SyncCoroutineWrapper());
         }
 
-        private IEnumerator RunRemoteSyncPass()
+        /// <summary>
+        /// Runs one remote sync pass for <paramref name="workspaceId"/> without requiring app session after capture.
+        /// Does not flush local snapshots. Waits if another sync pass is already running.
+        /// </summary>
+        public IEnumerator SyncWorkspaceAndWait(string workspaceId, string workspaceName)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                yield break;
+
+            while (_syncInProgress)
+                yield return null;
+
+            _syncInProgress = true;
+            try
+            {
+                yield return StartCoroutine(RunRemoteSyncPass(workspaceId, workspaceName));
+            }
+            finally
+            {
+                ClearActivePassWorkspaceContext();
+                _syncInProgress = false;
+            }
+        }
+
+        private void ClearActivePassWorkspaceContext()
+        {
+            _activePassWorkspaceId = null;
+            _activePassWorkspaceName = null;
+        }
+
+        private bool TryResolveWorkspaceContext(string workspaceId, string workspaceName, out string resolvedId, out string resolvedName)
+        {
+            resolvedId = string.IsNullOrWhiteSpace(workspaceId) ? "" : workspaceId.Trim();
+            resolvedName = string.IsNullOrWhiteSpace(workspaceName) ? resolvedId : workspaceName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(resolvedId))
+                return true;
+
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
+                || string.IsNullOrWhiteSpace(session.workspaceId))
+            {
+                resolvedId = "";
+                resolvedName = "";
+                return false;
+            }
+
+            resolvedId = session.workspaceId.Trim();
+            resolvedName = string.IsNullOrWhiteSpace(session.workspaceName) ? resolvedId : session.workspaceName.Trim();
+            return true;
+        }
+
+        private IEnumerator RunRemoteSyncPass(string workspaceId, string workspaceName)
         {
             IApiClient api = ResolveApiClient();
             if (api == null)
@@ -143,13 +199,15 @@ namespace ARGallery.Workspace.Persistence
                 yield break;
             }
 
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
-                || string.IsNullOrWhiteSpace(session.workspaceId))
+            if (!TryResolveWorkspaceContext(workspaceId, workspaceName, out string resolvedWorkspaceId, out string resolvedWorkspaceName))
             {
                 Debug.LogWarning($"{LogPrefix}Sync skipped: no workspace session.");
                 RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Skipped, "Cloud sync skipped: no workspace session.");
                 yield break;
             }
+
+            _activePassWorkspaceId = resolvedWorkspaceId;
+            _activePassWorkspaceName = resolvedWorkspaceName;
 
             AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
             if (registry == null)
@@ -158,14 +216,14 @@ namespace ARGallery.Workspace.Persistence
                 yield break;
             }
 
-            string workspaceId = session.workspaceId.Trim();
-            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
+            string workspaceIdForPass = resolvedWorkspaceId;
+            string workspaceNameForPass = resolvedWorkspaceName;
 
             foreach (AuthoredTargetInstance target in registry.GetTargetsOrdered())
             {
                 if (target == null)
                     continue;
-                yield return StartCoroutine(SyncTargetToBackend(api, workspaceId, workspaceName, target));
+                yield return StartCoroutine(SyncTargetToBackend(api, workspaceIdForPass, workspaceNameForPass, target));
                 if (!_lastStepOk)
                 {
                     string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
@@ -178,7 +236,7 @@ namespace ARGallery.Workspace.Persistence
             {
                 if (content == null)
                     continue;
-                yield return StartCoroutine(SyncContentToBackend(api, workspaceId, content));
+                yield return StartCoroutine(SyncContentToBackend(api, workspaceIdForPass, content));
                 if (!_lastStepOk)
                 {
                     string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
@@ -187,7 +245,7 @@ namespace ARGallery.Workspace.Persistence
                 }
             }
 
-            PersistRemoteStateSuccess(workspaceId, workspaceName, registry);
+            PersistRemoteStateSuccess(workspaceIdForPass, workspaceNameForPass, registry);
         }
 
         private IEnumerator SyncTargetToBackend(IApiClient api, string workspaceId, string workspaceName, AuthoredTargetInstance target)
@@ -570,16 +628,12 @@ namespace ARGallery.Workspace.Persistence
             Debug.LogWarning($"{LogPrefix}{m}");
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Failed, m);
 
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
-                || string.IsNullOrWhiteSpace(session.workspaceId))
+            if (!TryResolveWorkspaceContext(_activePassWorkspaceId, _activePassWorkspaceName, out string workspaceId, out string workspaceName))
                 return;
 
             AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
             if (registry == null)
                 return;
-
-            string workspaceId = session.workspaceId.Trim();
-            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
 
             WorkspaceSnapshot existing = null;
             _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
