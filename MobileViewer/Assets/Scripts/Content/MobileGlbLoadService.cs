@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using GLTFast;
+using GLTFast.Materials;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -110,7 +111,7 @@ namespace MobileViewer.Content
                 return (false, $"Invalid URL for glTF resolver: {e.Message}");
             }
 
-            var gltf = new GltfImport();
+            var gltf = new GltfImport(materialGenerator: CreateMaterialGenerator());
             try
             {
                 bool loaded = await gltf.Load(glbBytes, uri, importSettings: null, cancellationToken: default)
@@ -127,12 +128,22 @@ namespace MobileViewer.Content
                     return (false, "InstantiateMainSceneAsync returned false.");
                 }
 
+                GltfMaterialRepairUtility.RepairHierarchy(attachParent);
                 return (true, null);
             }
             catch (Exception e)
             {
                 return (false, e.Message);
             }
+        }
+
+        private static IMaterialGenerator CreateMaterialGenerator()
+        {
+#if UNITY_EDITOR
+            return null;
+#else
+            return MobileUrpLitMaterialGenerator.Instance;
+#endif
         }
     }
 }

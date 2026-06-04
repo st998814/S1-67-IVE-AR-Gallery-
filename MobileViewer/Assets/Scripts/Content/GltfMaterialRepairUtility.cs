@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace ARGallery.Content
+namespace MobileViewer.Content
 {
     /// <summary>
-    /// Replaces glTFast materials whose shaders were stripped from WebGL builds (pink meshes).
+    /// Replaces glTFast materials whose shaders were stripped from mobile player builds (pink meshes).
     /// </summary>
     public static class GltfMaterialRepairUtility
     {
@@ -77,12 +77,17 @@ namespace ARGallery.Content
             if (material == null)
                 return false;
 
-            if (Application.platform == RuntimePlatform.WebGLPlayer
-                || Application.platform == RuntimePlatform.IPhonePlayer
-                || Application.platform == RuntimePlatform.Android)
+            if (UsesDevicePlayerBuild())
                 return true;
 
             return NeedsRepair(material);
+        }
+
+        private static bool UsesDevicePlayerBuild()
+        {
+            return Application.platform == RuntimePlatform.IPhonePlayer
+                || Application.platform == RuntimePlatform.Android
+                || Application.platform == RuntimePlatform.WebGLPlayer;
         }
 
         private static bool NeedsRepair(Material material)

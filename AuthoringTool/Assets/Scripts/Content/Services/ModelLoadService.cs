@@ -212,9 +212,11 @@ namespace ARGallery.Content
 
         private static IMaterialGenerator CreateMaterialGenerator()
         {
-            if (Application.platform == RuntimePlatform.WebGLPlayer)
-                return WebGlUrpLitMaterialGenerator.Instance;
+#if UNITY_EDITOR
             return null;
+#else
+            return WebGlUrpLitMaterialGenerator.Instance;
+#endif
         }
     }
 }
