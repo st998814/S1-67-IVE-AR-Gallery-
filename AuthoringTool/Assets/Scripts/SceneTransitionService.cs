@@ -77,8 +77,8 @@ namespace ARGallery.AppFlow
             AsyncOperation loadOp = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
             if (loadOp == null)
             {
-                Debug.LogError($"SceneTransitionService: failed to start loading scene '{sceneName}'.");
-                isTransitioning = false;
+                Debug.LogError($"SceneTransitionService: failed to start loading scene '{sceneName}'. Is it in Build Settings?");
+                yield return RecoverOverlayAfterFailedLoad(fadeInSeconds);
                 yield break;
             }
 
@@ -91,6 +91,13 @@ namespace ARGallery.AppFlow
             yield return FadeTo(0f, fadeInSeconds, blockInput: true);
             SetOverlayAlpha(0f, blockInput: false);
 
+            isTransitioning = false;
+        }
+
+        private IEnumerator RecoverOverlayAfterFailedLoad(float fadeInSeconds)
+        {
+            yield return FadeTo(0f, fadeInSeconds, blockInput: true);
+            SetOverlayAlpha(0f, blockInput: false);
             isTransitioning = false;
         }
 

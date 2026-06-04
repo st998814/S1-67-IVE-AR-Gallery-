@@ -483,7 +483,7 @@ namespace ARGallery.AppFlow
 
         private void OnBackToSwitcherClicked()
         {
-            if (isBusy)
+            if (isBusy || SceneTransitionService.IsTransitioning)
                 return;
             sceneController?.CancelToSwitcher();
         }
@@ -712,7 +712,8 @@ namespace ARGallery.AppFlow
                 isBusy = false;
                 UpdateUiState();
                 SetStatus("Target created. Opening authoring…", TargetSetupStatusKind.Success);
-                sceneController?.MarkReadyAndContinue(lastTargetId);
+                if (sceneController == null || !sceneController.MarkReadyAndContinue(lastTargetId))
+                    SetStatus("Could not open authoring (navigation busy). Try again.", TargetSetupStatusKind.Error);
             }, createTargetTimeoutSeconds);
         }
 

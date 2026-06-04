@@ -56,7 +56,7 @@ namespace ARGallery.AppFlow
                 return;
 
             AppFlowController.ClearWorkspaceSession();
-            SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+            AppFlowController.TransitionToWorkspaceSwitcher();
         }
 
         private static void EnsureLandingFallbackUi(VisualElement root)

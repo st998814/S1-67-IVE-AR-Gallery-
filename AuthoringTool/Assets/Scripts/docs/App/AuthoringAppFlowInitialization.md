@@ -42,9 +42,9 @@ Workspace meaning for this stage is normalized to:
 
 | File | Description |
 |------|-------------|
-| **AppFlowController.cs** | Central app-flow constants and helpers for scene names, workspace session set/get/clear, and new workspace session creation. |
+| **AppFlowController.cs** | Scene name constants, **live session** mutators (`SetWorkspaceTargetId`, `MarkWorkspaceReady`, …), `TryUpdateWorkspaceSession`, and **`TransitionTo*`** helpers (all use fade service). `TryGetWorkspaceSession` returns a **clone** — do not mutate it. |
 | **WorkspaceSessionContext.cs** | Session payload model passed across scenes (`workspaceId`, `workspaceName`, `targetId`, `isNewWorkspace`, optional thumbnail key). |
-| **SceneTransitionService.cs** | Reusable fade transition service (`FadeOut -> LoadScene -> FadeIn`) with input blocking and duplicate-trigger protection. |
+| **SceneTransitionService.cs** | Fade transition (`FadeOut -> LoadScene -> FadeIn`), duplicate-trigger protection, **fade-in recovery** if scene load fails to start. |
 
 ### 2. Landing scene entry — `Assets/Scenes/`, `Assets/UI/`, `Assets/Scripts/`
 

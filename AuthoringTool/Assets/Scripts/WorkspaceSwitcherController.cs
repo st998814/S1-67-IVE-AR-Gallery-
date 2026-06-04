@@ -528,7 +528,7 @@ namespace ARGallery.AppFlow
                 return;
 
             AppFlowController.ClearWorkspaceSession();
-            SceneTransitionService.TransitionToScene(AppFlowController.LandingSceneName);
+            AppFlowController.TransitionToLanding();
         }
 
         private void SeedMockWorkspaces()
@@ -855,7 +855,7 @@ namespace ARGallery.AppFlow
 
             WorkspaceSessionContext newWorkspace = AppFlowController.BuildNewWorkspaceSession("New Workspace");
             AppFlowController.SetWorkspaceSession(newWorkspace);
-            SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
+            AppFlowController.TransitionToTargetInstantiation();
         }
 
         private void OpenWorkspaceAtIndex(int index)
@@ -868,7 +868,7 @@ namespace ARGallery.AppFlow
             selected.isNewWorkspace = false;
             selected.setupState = WorkspaceSetupState.Ready;
             AppFlowController.SetWorkspaceSession(selected);
-            SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
+            AppFlowController.TransitionToAuthoring();
         }
 
         private IEnumerator DeleteWorkspaceCoroutine(string workspaceId)

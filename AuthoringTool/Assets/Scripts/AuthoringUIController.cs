@@ -2523,7 +2523,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             {
                 Debug.Log("[WorkspacePersistence] BackToSwitcher: no session — clearing and loading switcher.");
                 AppFlowController.ClearWorkspaceSession();
-                SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+                AppFlowController.TransitionToWorkspaceSwitcher();
                 yield break;
             }
 
@@ -2539,7 +2539,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
 
             AppFlowController.ClearWorkspaceSession();
             Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
-            SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+            AppFlowController.TransitionToWorkspaceSwitcher();
         }
         finally
         {

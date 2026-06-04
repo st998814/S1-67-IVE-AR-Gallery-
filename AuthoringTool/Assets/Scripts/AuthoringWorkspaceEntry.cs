@@ -112,7 +112,7 @@ namespace ARGallery.AppFlow
             {
                 Debug.Log("AuthoringWorkspaceEntry: Workspace setup is pending. Authoring entry is blocked.");
                 if (!SceneTransitionService.IsTransitioning)
-                    SceneTransitionService.TransitionToScene(AppFlowController.TargetInstantiationSceneName);
+                    AppFlowController.TransitionToTargetInstantiation();
                 yield break;
             }
 
@@ -223,8 +223,8 @@ namespace ARGallery.AppFlow
                 EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, targetName, session, physicalWidthM);
                 ApplyWorkspacePreset(manager.GetActiveTarget(), workspace.target.posture);
                 ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), workspace.target.targetImageUrl, session);
-                if (session != null && string.IsNullOrWhiteSpace(session.targetId))
-                    AppFlowController.MarkWorkspaceReady(targetId);
+                if (string.IsNullOrWhiteSpace(session?.targetId))
+                    AppFlowController.SetWorkspaceTargetId(targetId);
                 Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' (index={index}).");
                 return;
             }
@@ -268,8 +268,8 @@ namespace ARGallery.AppFlow
             }
 
             // Keep app-flow context aligned with provider-loaded target in mock-first mode.
-            if (session != null && string.IsNullOrWhiteSpace(session.targetId))
-                AppFlowController.MarkWorkspaceReady(targetId);
+            if (string.IsNullOrWhiteSpace(session?.targetId))
+                AppFlowController.SetWorkspaceTargetId(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Created and activated workspace target '{targetId}'.");
         }
@@ -366,11 +366,15 @@ namespace ARGallery.AppFlow
                 if (string.IsNullOrWhiteSpace(resolvedTargetId))
                     yield break;
 
-                if (session != null && string.IsNullOrWhiteSpace(session.targetId))
-                    session.targetId = resolvedTargetId;
-                if (session != null && string.IsNullOrWhiteSpace(session.targetImageUrl))
-                    session.targetImageUrl = snapshot.targets[0].targetImageUrl ?? "";
+                if (string.IsNullOrWhiteSpace(session?.targetId))
+                    AppFlowController.SetWorkspaceTargetId(resolvedTargetId);
+                if (snapshot.targets != null && snapshot.targets.Length > 0
+                    && string.IsNullOrWhiteSpace(session?.targetImageUrl))
+                {
+                    AppFlowController.SetWorkspaceTargetImageUrl(snapshot.targets[0].targetImageUrl ?? "");
+                }
 
+                AppFlowController.TryGetWorkspaceSession(out session);
                 ApplyWorkspaceContextAfterSnapshotRebuild(draftAfterRebuild, session, workspaceId, snapshot, resolvedTargetId);
                 onDone?.Invoke(true);
             }
@@ -524,8 +528,8 @@ namespace ARGallery.AppFlow
             ApplyWorkspacePreset(manager.GetActiveTarget(), posture);
             string imageUrl = workspace?.target != null ? workspace.target.targetImageUrl : "";
             ApplyWorkspaceTargetVisual(manager.GetActiveTarget(), imageUrl ?? "", session);
-            if (session != null && string.IsNullOrWhiteSpace(session.targetId))
-                AppFlowController.MarkWorkspaceReady(targetId);
+            if (string.IsNullOrWhiteSpace(session?.targetId))
+                AppFlowController.SetWorkspaceTargetId(targetId);
 
             Debug.Log($"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from snapshot (index={index}).");
             TrySelectFirstRestoredContent(manager.GetActiveTarget());

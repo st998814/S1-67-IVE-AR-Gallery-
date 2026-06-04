@@ -9,17 +9,22 @@ namespace ARGallery.AppFlow
     /// </summary>
     public class TargetInstantiationSceneController : MonoBehaviour
     {
-        public void MarkReadyAndContinue(string targetId)
+        public bool MarkReadyAndContinue(string targetId)
         {
+            if (SceneTransitionService.IsTransitioning)
+                return false;
+
             AppFlowController.MarkWorkspaceReady(targetId);
-            SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
+            return SceneTransitionService.TransitionToScene(AppFlowController.AuthoringSceneName);
         }
 
-        public void CancelToSwitcher()
+        public bool CancelToSwitcher()
         {
-            // Roll back pending workspace session when user cancels setup.
+            if (SceneTransitionService.IsTransitioning)
+                return false;
+
             AppFlowController.ClearWorkspaceSession();
-            SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+            return SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
         }
     }
 }
