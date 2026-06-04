@@ -17,7 +17,8 @@ namespace ARGallery.Workspace.Persistence
     }
 
     /// <summary>
-    /// Layer 3: remote sync after successful autosave snapshots (<see cref="WorkspaceAutoSaveService.SnapshotSaved"/>).
+    /// Layer 3: remote sync from in-scene <see cref="AuthoredObjectRegistry"/> (no local snapshot.json writes).
+    /// Debounced via <see cref="WorkspaceAutoSaveService.DebouncedWorkspaceChanged"/>.
     /// Uses single-flight execution with queued reruns when changes land during an active pass.
     /// </summary>
     public sealed class WorkspaceRemoteSyncService : MonoBehaviour
@@ -31,7 +32,6 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private float apiTimeoutSeconds = 25f;
 
         private WorkspaceAutoSaveService _autoSave;
-        private readonly WorkspaceSnapshotRepository _snapshotRepo = new WorkspaceSnapshotRepository();
         private readonly WorkspaceAssetRepository _assetRepo = new WorkspaceAssetRepository();
         private readonly TargetWorkflowService _targetWorkflow = new TargetWorkflowService();
         private readonly ContentWorkflowService _contentWorkflow = new ContentWorkflowService();
@@ -57,15 +57,15 @@ namespace ARGallery.Workspace.Persistence
         {
             _autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
             if (_autoSave != null)
-                _autoSave.SnapshotSaved += OnSnapshotSaved;
+                _autoSave.DebouncedWorkspaceChanged += OnDebouncedWorkspaceChanged;
             else
-                Debug.LogWarning($"{LogPrefix}WorkspaceAutoSaveService not found — auto remote sync disabled until present.");
+                Debug.LogWarning($"{LogPrefix}WorkspaceAutoSaveService not found — debounced remote sync disabled until present.");
         }
 
         private void OnDisable()
         {
             if (_autoSave != null)
-                _autoSave.SnapshotSaved -= OnSnapshotSaved;
+                _autoSave.DebouncedWorkspaceChanged -= OnDebouncedWorkspaceChanged;
 
             if (_syncCoroutine != null)
             {
@@ -74,7 +74,7 @@ namespace ARGallery.Workspace.Persistence
             }
         }
 
-        private void OnSnapshotSaved(WorkspaceSnapshot _)
+        private void OnDebouncedWorkspaceChanged()
         {
             if (_syncInProgress)
             {
@@ -86,14 +86,10 @@ namespace ARGallery.Workspace.Persistence
         }
 
         /// <summary>
-        /// Forces a local snapshot write without raising <see cref="WorkspaceAutoSaveService.SnapshotSaved"/>,
-        /// then runs one remote sync pass (or queues if a pass is already running).
+        /// Runs one remote sync pass immediately (or queues if a pass is already running). No local snapshot write.
         /// </summary>
         public void SyncNow()
         {
-            if (_autoSave != null)
-                _autoSave.FlushSnapshotToDisk(suppressSnapshotSaved: true);
-
             if (_syncInProgress)
             {
                 _pendingSyncRequested = true;
@@ -599,26 +595,7 @@ namespace ARGallery.Workspace.Persistence
 
         private void PersistRemoteStateSuccess(string workspaceId, string workspaceName, AuthoredObjectRegistry registry)
         {
-            WorkspaceSnapshot existing = null;
-            _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
-            WorkspaceSnapshot snap = WorkspaceStateSerializer.BuildSnapshot(workspaceId, workspaceName, registry, existing);
-            snap.remoteDirty = false;
-            snap.lastRemoteSyncError = "";
-            snap.lastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
-            snap.remoteSyncStatus = RemoteSyncStatus.Synced;
-
-            string snapshotPath = WorkspacePersistencePaths.GetSnapshotPath(workspaceId);
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
-            {
-                Debug.LogWarning($"{LogPrefix}Post-sync snapshot save failed: {err}");
-            }
-            else
-            {
-                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
-                // One line after upload (avoids duplicate TrySaveSnapshot OK in the same frame as completion).
-                Debug.Log($"[WorkspacePersistence] Remote sync completed successfully for workspace '{workspaceId}' | path={snapshotPath}");
-            }
-
+            Debug.Log($"{LogPrefix}Remote sync completed successfully for workspace '{workspaceId}'.");
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Synced, "Workspace synchronized with the server.");
         }
 
@@ -627,25 +604,6 @@ namespace ARGallery.Workspace.Persistence
             string m = string.IsNullOrWhiteSpace(message) ? "Remote sync failed." : message.Trim();
             Debug.LogWarning($"{LogPrefix}{m}");
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Failed, m);
-
-            if (!TryResolveWorkspaceContext(_activePassWorkspaceId, _activePassWorkspaceName, out string workspaceId, out string workspaceName))
-                return;
-
-            AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
-            if (registry == null)
-                return;
-
-            WorkspaceSnapshot existing = null;
-            _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
-            WorkspaceSnapshot snap = WorkspaceStateSerializer.BuildSnapshot(workspaceId, workspaceName, registry, existing);
-            snap.remoteDirty = true;
-            snap.lastRemoteSyncError = m;
-            snap.remoteSyncStatus = RemoteSyncStatus.Failed;
-
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
-                Debug.LogWarning($"{LogPrefix}Failed-state snapshot save error: {err}");
-            else
-                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
         }
 
         private IApiClient ResolveApiClient()
