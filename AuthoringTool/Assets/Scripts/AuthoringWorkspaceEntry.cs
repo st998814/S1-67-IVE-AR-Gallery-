@@ -296,8 +296,6 @@ namespace ARGallery.AppFlow
 
             if (!string.IsNullOrWhiteSpace(session.vuforiaTargetId))
                 auth.VuforiaTargetId = session.vuforiaTargetId.Trim();
-            if (!string.IsNullOrWhiteSpace(session.targetImageRelativePath))
-                auth.TargetImageLocalPath = session.targetImageRelativePath.Trim();
         }
 
         private static float ResolvePhysicalWidthMeters(
@@ -716,7 +714,12 @@ namespace ARGallery.AppFlow
             if (session != null && session.targetImageBytes != null && session.targetImageBytes.Length > 0)
             {
                 if (targetWorkflowService.ApplyTargetImageBytes(targetObject, session.targetImageBytes))
+                {
+                    AuthoredTargetInstance authored = targetObject.GetComponent<AuthoredTargetInstance>();
+                    if (authored != null)
+                        authored.TargetImageBytes = PersistenceByteUtility.CloneBytes(session.targetImageBytes);
                     return;
+                }
             }
             targetWorkflowService.ApplyTargetImageFromUrl(this, targetObject, targetImageUrl);
         }

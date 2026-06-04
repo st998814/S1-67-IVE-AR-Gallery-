@@ -1611,9 +1611,9 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
-        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        if (authored != null && authored.TargetReferenceBytes != null && authored.TargetReferenceBytes.Length > 0)
         {
-            targetReferenceStatusLabel.text = "Saved locally";
+            targetReferenceStatusLabel.text = "Ready to sync";
             targetReferenceStatusLabel.style.color = new StyleColor(new Color32(229, 231, 235, 255));
             return;
         }
@@ -1959,6 +1959,12 @@ public class AuthoringUIController : MonoBehaviour
     private bool TryPersistTargetReferenceLocally(string targetId, byte[] bytes, string fileName, out string errorMessage)
     {
         errorMessage = null;
+        if (bytes == null || bytes.Length == 0)
+        {
+            errorMessage = "Reference image is empty.";
+            return false;
+        }
+
         if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
             || string.IsNullOrWhiteSpace(session.workspaceId))
         {
@@ -1966,19 +1972,18 @@ public class AuthoringUIController : MonoBehaviour
             return false;
         }
 
-        var assetRepo = new WorkspaceAssetRepository();
-        if (!assetRepo.TryImportTargetReferenceImage(session.workspaceId.Trim(), fileName, bytes, null, out string relativePath, out errorMessage))
-            return false;
-
         AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
-        if (authored != null)
+        if (authored == null)
         {
-            authored.TargetReferenceLocalPath = relativePath;
-            authored.TargetReferenceOriginalFileName = fileName ?? "";
-            authored.TargetReferenceRemoteDirty = true;
-            authored.RemoteDirty = true;
+            errorMessage = "Active target not found.";
+            return false;
         }
 
+        authored.TargetReferenceBytes = PersistenceByteUtility.CloneBytes(bytes);
+        authored.TargetReferenceLocalPath = "";
+        authored.TargetReferenceOriginalFileName = fileName ?? "";
+        authored.TargetReferenceRemoteDirty = true;
+        authored.RemoteDirty = true;
         return true;
     }
 
@@ -2010,29 +2015,12 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
-        if (authored == null || string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        if (authored == null || authored.TargetReferenceBytes == null || authored.TargetReferenceBytes.Length == 0)
             return;
 
-        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null)
-            return;
-
-        string full = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(
-            session.workspaceId.Trim(),
-            authored.TargetReferenceLocalPath);
-        if (string.IsNullOrWhiteSpace(full) || !System.IO.File.Exists(full))
-            return;
-
-        try
-        {
-            byte[] bytes = System.IO.File.ReadAllBytes(full);
-            SetOrReplaceTargetReferenceDraft(targetId, bytes, authored.TargetReferenceOriginalFileName);
-            if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
-                draft.isUnsaved = authored.TargetReferenceRemoteDirty;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning($"AuthoringUIController: could not load target reference preview: {ex.Message}");
-        }
+        SetOrReplaceTargetReferenceDraft(targetId, authored.TargetReferenceBytes, authored.TargetReferenceOriginalFileName);
+        if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
+            draft.isUnsaved = authored.TargetReferenceRemoteDirty;
     }
 
     private void RequestWorkspaceSnapshotSave()

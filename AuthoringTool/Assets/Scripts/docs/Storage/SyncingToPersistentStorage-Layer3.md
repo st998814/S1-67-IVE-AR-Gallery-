@@ -18,10 +18,20 @@ Authoring **UI** behavior is documented in **[AuthoringUILayout.md](../Authoring
 
 | Area | Role |
 |------|------|
-| **WorkspaceRemoteSyncService** | Coroutine-driven pass: sync targets then contents when `RemoteDirty` / session valid; uses **`IApiClient`** (`HttpApiClient`). |
+| **WorkspaceRemoteSyncService** | Coroutine-driven pass: sync targets then contents from **`AuthoredObjectRegistry`** when `RemoteDirty`; uses **`IApiClient`** (`HttpApiClient`). Uploads from **in-memory bytes** (`TargetImageBytes`, `TargetReferenceBytes`, `AssetBytes`) or existing **http(s) URLs** — no `persistentDataPath` reads. |
+| **WorkspaceAutoSaveService** | Debounces edits → **`DebouncedWorkspaceChanged`** → schedules remote sync (no local `snapshot.json` write). |
 | **HttpApiClient** | `POST /api/upload` (multipart `category`, optional **`targetId`** / **`contentId`** for stable file names), `POST /api/targets`, `POST /api/content`; multipart **`POST /api/targets/cloud`** where used. |
 | **TargetWorkflowService** / **ContentWorkflowService** | Build JSON DTOs for create/update flows; target sync includes **`workspaceId`** / **`workspaceName`** from session. |
-| **Workspace session** | `AppFlowController` / `WorkspaceSessionContext` supplies **`workspaceId`** for API payloads. |
+| **Workspace session** | `AppFlowController` / `WorkspaceSessionContext` supplies **`workspaceId`** for API payloads; optional **`targetImageBytes`** for new target setup (WebGL-safe). |
+| **AuthoringWorkspaceEntry** | Opens workspace via **`GET /api/workspaces/{id}`** → in-memory **`WorkspaceSnapshot`** → **`WorkspaceSceneReconstructor.BeginRebuild`**. |
+| **Back to switcher** | **`AuthoringUIController`** captures workspace id, **`SyncWorkspaceAndWait`**, then clears session (no disk flush). |
+
+### WebGL / in-memory media
+
+- Spawned content keeps upload bytes on **`AuthoredContentInstance.AssetBytes`** until sync uploads and sets **`MediaUrl`**.
+- Target reference photos use **`AuthoredTargetInstance.TargetReferenceBytes`** (not disk under `assets/target_refs/`).
+- Target trackable images use session/`TargetImageBytes` or **`TargetImageUrl`** after cloud create or upload.
+- **`WorkspaceSceneReconstructor`** loads visuals from **URLs** in the backend payload only.
 
 ### Stable upload filenames (avoid duplicates)
 

@@ -32,7 +32,6 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private float apiTimeoutSeconds = 25f;
 
         private WorkspaceAutoSaveService _autoSave;
-        private readonly WorkspaceAssetRepository _assetRepo = new WorkspaceAssetRepository();
         private readonly TargetWorkflowService _targetWorkflow = new TargetWorkflowService();
         private readonly ContentWorkflowService _contentWorkflow = new ContentWorkflowService();
 
@@ -256,35 +255,22 @@ namespace ARGallery.Workspace.Persistence
             if (targetRowNeedsSync)
             {
                 string imageUrl = string.IsNullOrWhiteSpace(target.TargetImageUrl) ? "" : target.TargetImageUrl.Trim();
-                if (!string.IsNullOrWhiteSpace(target.TargetImageLocalPath))
+                byte[] targetImageBytes = PersistenceByteUtility.CloneBytes(target.TargetImageBytes);
+                if (PersistenceByteUtility.HasBytes(targetImageBytes))
                 {
-                    string full = _assetRepo.ResolveFullPath(workspaceId, target.TargetImageLocalPath);
-                    if (File.Exists(full))
+                    string uploadName = string.IsNullOrWhiteSpace(target.OriginalFileName)
+                        ? StableTargetDiskFileName(targetId, "target.jpg")
+                        : target.OriginalFileName.Trim();
+                    string stableUploadName = StableTargetDiskFileName(targetId, uploadName);
+                    yield return StartCoroutine(UploadBytesAndWait(api, targetImageBytes, stableUploadName, GuessMimeTypeFromName(stableUploadName), "target", targetId));
+                    if (string.IsNullOrWhiteSpace(_lastUploadUrl))
                     {
-                        byte[] bytes;
-                        try
-                        {
-                            bytes = File.ReadAllBytes(full);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"{LogPrefix}Target image read failed: {ex.Message}");
-                            yield break;
-                        }
-
-                        string uploadName = string.IsNullOrWhiteSpace(target.OriginalFileName)
-                            ? Path.GetFileName(full)
-                            : target.OriginalFileName.Trim();
-                        string stableUploadName = StableTargetDiskFileName(targetId, uploadName);
-                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, stableUploadName, GuessMimeTypeFromName(stableUploadName), "target", targetId));
-                        if (string.IsNullOrWhiteSpace(_lastUploadUrl))
-                        {
-                            Debug.LogWarning($"{LogPrefix}Target image upload failed for '{targetId}'.");
-                            yield break;
-                        }
-
-                        imageUrl = _lastUploadUrl.Trim();
+                        Debug.LogWarning($"{LogPrefix}Target image upload failed for '{targetId}'.");
+                        yield break;
                     }
+
+                    imageUrl = _lastUploadUrl.Trim();
+                    target.TargetImageBytes = null;
                 }
 
                 bool apiOk = false;
@@ -333,7 +319,8 @@ namespace ARGallery.Workspace.Persistence
         private IEnumerator SyncTargetReferenceToBackend(IApiClient api, string workspaceId, AuthoredTargetInstance target)
         {
             _lastStepOk = false;
-            if (target == null || string.IsNullOrWhiteSpace(target.TargetReferenceLocalPath))
+            byte[] bytes = PersistenceByteUtility.CloneBytes(target?.TargetReferenceBytes);
+            if (target == null || !PersistenceByteUtility.HasBytes(bytes))
             {
                 _lastStepOk = true;
                 yield break;
@@ -346,28 +333,10 @@ namespace ARGallery.Workspace.Persistence
             }
 
             string targetId = string.IsNullOrWhiteSpace(target.LocalTargetId) ? target.ServerTargetId : target.LocalTargetId;
-            string full = _assetRepo.ResolveFullPath(workspaceId, target.TargetReferenceLocalPath);
-            if (!File.Exists(full))
-            {
-                Debug.LogWarning($"{LogPrefix}Target reference file missing for '{targetId}' ({target.TargetReferenceLocalPath}).");
-                yield break;
-            }
-
-            byte[] bytes;
-            try
-            {
-                bytes = File.ReadAllBytes(full);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"{LogPrefix}Target reference read failed: {ex.Message}");
-                yield break;
-            }
-
             string uploadName = StableTargetDiskFileName(
                 targetId,
                 string.IsNullOrWhiteSpace(target.TargetReferenceOriginalFileName)
-                    ? Path.GetFileName(full)
+                    ? "target-reference.jpg"
                     : target.TargetReferenceOriginalFileName);
 
             bool apiOk = false;
@@ -397,7 +366,11 @@ namespace ARGallery.Workspace.Persistence
                 apiOk = false;
 
             if (apiOk)
+            {
                 target.TargetReferenceRemoteDirty = false;
+                target.TargetReferenceBytes = null;
+                target.TargetReferenceLocalPath = "";
+            }
 
             _lastStepOk = apiOk;
         }
@@ -441,52 +414,32 @@ namespace ARGallery.Workspace.Persistence
             }
             else if (normalized == "image" || normalized == "video" || normalized == "model")
             {
-                if (!string.IsNullOrWhiteSpace(c.MediaUrl) && (c.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                                                              || c.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                byte[] contentBytes = PersistenceByteUtility.CloneBytes(c.AssetBytes);
+                if (PersistenceByteUtility.HasBytes(contentBytes))
+                {
+                    string uploadName = string.IsNullOrWhiteSpace(c.OriginalFileName)
+                        ? $"{c.ServerContentId}.bin"
+                        : c.OriginalFileName.Trim();
+                    yield return StartCoroutine(UploadBytesAndWait(api, contentBytes, uploadName, GuessMimeTypeFromName(uploadName), "content", null, c.ServerContentId));
+                    if (string.IsNullOrWhiteSpace(_lastUploadUrl))
+                    {
+                        Debug.LogWarning($"{LogPrefix}Content upload failed for '{c.LocalContentId}'.");
+                        c.UploadPending = true;
+                        yield break;
+                    }
+
+                    mediaUrl = _lastUploadUrl.Trim();
+                    c.AssetBytes = null;
+                    c.AssetLocalPath = "";
+                }
+                else if (!string.IsNullOrWhiteSpace(c.MediaUrl) && (c.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                                                     || c.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
                 {
                     mediaUrl = c.MediaUrl.Trim();
                 }
-                else if (!string.IsNullOrWhiteSpace(c.AssetLocalPath))
-                {
-                    string full = _assetRepo.ResolveFullPath(workspaceId, c.AssetLocalPath);
-                    if (File.Exists(full))
-                    {
-                        byte[] bytes;
-                        try
-                        {
-                            bytes = File.ReadAllBytes(full);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"{LogPrefix}Content asset read failed: {ex.Message}");
-                            c.UploadPending = true;
-                            yield break;
-                        }
-
-                        string uploadName = string.IsNullOrWhiteSpace(c.OriginalFileName)
-                            ? Path.GetFileName(full)
-                            : c.OriginalFileName.Trim();
-                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, uploadName, GuessMimeTypeFromName(uploadName), "content", null, c.ServerContentId));
-                        if (string.IsNullOrWhiteSpace(_lastUploadUrl))
-                        {
-                            Debug.LogWarning($"{LogPrefix}Content upload failed for '{c.LocalContentId}'.");
-                            c.UploadPending = true;
-                            yield break;
-                        }
-
-                        mediaUrl = _lastUploadUrl.Trim();
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"{LogPrefix}Best-effort skip: no file for '{normalized}' content '{c.LocalContentId}'.");
-                        c.UploadPending = true;
-                        _lastStepOk = true;
-                        yield break;
-                    }
-                }
                 else
                 {
-                    Debug.LogWarning($"{LogPrefix}Best-effort skip: no media URL or asset path for '{c.LocalContentId}'.");
+                    Debug.LogWarning($"{LogPrefix}Best-effort skip: no in-memory bytes or http(s) media URL for '{c.LocalContentId}'.");
                     c.UploadPending = true;
                     _lastStepOk = true;
                     yield break;

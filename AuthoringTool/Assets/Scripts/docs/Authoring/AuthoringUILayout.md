@@ -5,7 +5,7 @@
 | Topic | Document |
 |-------|----------|
 | **Current authoring shell** (viewport, FAB, inspector, switcher styling) | **This file** — sections *Current authoring shell* and *Authoring UI summary*. |
-| **Local snapshot + disk persistence (Layer 2)** | [LocalWorkspacePersistent-Layer2.md](../Storage/LocalWorkspacePersistent-Layer2.md) |
+| **Layer 2 (removed from runtime; historical)** | [LocalWorkspacePersistent-Layer2.md](../Storage/LocalWorkspacePersistent-Layer2.md) |
 | **Remote sync + backend + DB (Layer 3)** | [SyncingToPersistentStorage-Layer3.md](../Storage/SyncingToPersistentStorage-Layer3.md) |
 | Placement / camera / transform behavior | [PlacementInteractionAndTransformAuthoring.md](PlacementInteractionAndTransformAuthoring.md), [RuntimeSceneCameraControl.md](RuntimeSceneCameraControl.md) |
 
@@ -24,7 +24,7 @@ Recent authoring chrome changes (source of truth for layout):
 - **Left column removed** — former content-library column and toggle are gone; the center viewport expands horizontally.
 - **Add control** — circular **+** FAB (`AddContentFabButton`) anchored **lower-left** of the authoring root; background matches panel tone (`AuthoringUI.uss`); invokes the same **`WebGLFileBrowser`** browse pipeline as legacy **Add Content** (`AuthoringUIController.OnBrowseButtonClicked`).
 - **Right panel** — inspector remains (Target / Content tabs, spatial fields, optional target reference). **Content Library** list block was removed from this panel; hierarchy selection is driven by scene/coordinator flows when no list is present (controller guards null `ListView`).
-- **Workspace switcher** — **DELETE** uses destructive styling (`switcher-action-danger` in `WorkspaceSwitcherUI.uss`; fallback styling in `WorkspaceSwitcherController` runtime UI). Optional **`backendApiBaseUrl`** triggers server workspace delete before local snapshot removal (see Layer 3 doc).
+- **Workspace switcher** — **DELETE** uses destructive styling (`switcher-action-danger` in `WorkspaceSwitcherUI.uss`; fallback styling in `WorkspaceSwitcherController` runtime UI). Optional **`backendApiBaseUrl`** triggers server **`DELETE /api/workspaces/{id}`** (see Layer 3 doc).
 
 ---
 

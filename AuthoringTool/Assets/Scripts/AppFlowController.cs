@@ -99,12 +99,13 @@ namespace ARGallery.AppFlow
             currentWorkspace.targetImageFileName = fileName ?? "";
         }
 
-        /// <summary>Sets copied-on-disk target image path (see WorkspaceAssetRepository). Forward slashes.</summary>
+        /// <summary>Legacy Layer 2 — local disk paths are no longer used (WebGL / L3-only).</summary>
+        [System.Obsolete("Local target image paths are disabled. Use SetWorkspaceTargetImage(bytes) or target URLs after upload.")]
         public static void SetWorkspaceTargetImageLocalPath(string relativePathWithForwardSlashes)
         {
             if (currentWorkspace == null)
                 return;
-            currentWorkspace.targetImageRelativePath = relativePathWithForwardSlashes ?? "";
+            currentWorkspace.targetImageRelativePath = "";
         }
 
         public static void SetWorkspaceVuforiaTargetId(string vuforiaCloudTargetId)

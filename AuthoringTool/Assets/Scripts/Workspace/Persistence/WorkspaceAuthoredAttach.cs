@@ -63,59 +63,34 @@ namespace ARGallery.Workspace.Persistence
                 ac.Title = string.IsNullOrWhiteSpace(request.originalFileName)
                     ? (request.contentType == SpawnContentType.Text ? ac.TextBody : ac.TargetId)
                     : request.originalFileName.Trim();
-                if (request.localFileBytes == null || request.localFileBytes.Length == 0)
-                    ac.AssetLocalPath = "";
+                RetainContentAssetBytes(ac, request);
             }
-
-            TryPersistLocalContentAsset(ac, request);
 
             ac.RemoteDirty = true;
             AuthoredObjectRegistry.RegisterContent(ac);
             return ac;
         }
 
-        /// <summary>
-        /// Copies <see cref="SpawnRequest.localFileBytes"/> under persistentDataPath so snapshot.json can reference a stable <see cref="AuthoredContentInstance.AssetLocalPath"/>.
-        /// </summary>
-        private static void TryPersistLocalContentAsset(AuthoredContentInstance ac, SpawnRequest request)
+        private static void RetainContentAssetBytes(AuthoredContentInstance ac, SpawnRequest request)
         {
             if (ac == null || request == null)
                 return;
             if (request.contentType == SpawnContentType.Text)
+            {
+                ac.AssetBytes = null;
+                ac.AssetLocalPath = "";
                 return;
+            }
+
             if (request.localFileBytes == null || request.localFileBytes.Length == 0)
-                return;
-
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
-                || string.IsNullOrWhiteSpace(session.workspaceId))
             {
-                Debug.LogWarning("[WorkspacePersistence] TryPersistLocalContentAsset: no workspace session — content bytes not copied to disk.");
+                ac.AssetBytes = null;
+                ac.AssetLocalPath = "";
                 return;
             }
 
-            string workspaceId = session.workspaceId.Trim();
-            string originalName = string.IsNullOrWhiteSpace(request.originalFileName) ? "content.bin" : request.originalFileName.Trim();
-            string hint = WorkspaceStateSerializer.ToSnapshotContentTypeLabel(request.contentType);
-            string stableStem = !string.IsNullOrWhiteSpace(ac.ServerContentId)
-                ? ac.ServerContentId.Trim()
-                : ac.LocalContentId?.Trim();
-
-            var repo = new WorkspaceAssetRepository();
-            if (!repo.TryImportContentAsset(
-                    workspaceId,
-                    originalName,
-                    hint,
-                    request.localFileBytes,
-                    "",
-                    out string relativePath,
-                    out string error,
-                    stableStem))
-            {
-                Debug.LogWarning($"[WorkspacePersistence] TryImportContentAsset failed: {error}");
-                return;
-            }
-
-            ac.AssetLocalPath = relativePath;
+            ac.AssetBytes = PersistenceByteUtility.CloneBytes(request.localFileBytes);
+            ac.AssetLocalPath = "";
         }
 
         /// <summary>
