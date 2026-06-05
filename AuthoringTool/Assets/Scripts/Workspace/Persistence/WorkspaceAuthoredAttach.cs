@@ -17,11 +17,19 @@ namespace ARGallery.Workspace.Persistence
                 return null;
 
             string id = targetId.Trim();
-            AuthoredTargetInstance auth = targetRoot.GetComponent<AuthoredTargetInstance>() ?? targetRoot.AddComponent<AuthoredTargetInstance>();
+            AuthoredTargetInstance auth = targetRoot.GetComponent<AuthoredTargetInstance>();
+            bool isNewComponent = auth == null;
+            if (auth == null)
+                auth = targetRoot.AddComponent<AuthoredTargetInstance>();
+
             auth.LocalTargetId = id;
             auth.ServerTargetId = id;
             auth.TargetName = string.IsNullOrWhiteSpace(targetDisplayName) ? id : targetDisplayName.Trim();
-            auth.RemoteDirty = true;
+
+            // First attach only: re-open / snapshot rebuild must preserve RemoteDirty + LastRemoteSyncedAtUtc.
+            if (isNewComponent)
+                auth.RemoteDirty = true;
+
             AuthoredObjectRegistry.RegisterTarget(auth);
             return auth;
         }
