@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using ARGallery.Content;
+using ARGallery.Workspace.Api;
 using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -16,76 +17,13 @@ namespace ARGallery.AppFlow
     /// </summary>
     public class AuthoringWorkspaceEntry : MonoBehaviour
     {
-        [Serializable]
-        private class WorkspaceRestoreEnvelope
-        {
-            public WorkspaceDetailDto workspace;
-            public WorkspaceTargetDto[] targets;
-            public WorkspaceContentDto[] contents;
-        }
-
-        [Serializable]
-        private class WorkspaceDetailDto
-        {
-            public string workspaceId;
-            public string workspaceName;
-            public string state;
-            public int schemaVersion;
-            public string createdAtUtc;
-            public string updatedAtUtc;
-        }
-
-        [Serializable]
-        private class WorkspaceTargetDto
-        {
-            public string targetId;
-            public string workspaceId;
-            public string targetName;
-            public string displayLabel;
-            public string targetImageUrl;
-            public string targetReferenceImageUrl;
-            public float physicalWidthM;
-            public SerializableVector3Dto localPosition;
-            public SerializableVector3Dto localEuler;
-            public SerializableVector3Dto localScale;
-            public string vuforiaTargetId;
-            public string vuforiaStatus;
-            public string status;
-            public string createdAtUtc;
-            public string updatedAtUtc;
-        }
-
-        [Serializable]
-        private class WorkspaceContentDto
-        {
-            public string contentId;
-            public string targetId;
-            public string workspaceId;
-            public string contentType;
-            public string mediaUrl;
-            public SerializableVector3Dto localPosition;
-            public SerializableVector3Dto localEuler;
-            public SerializableVector3Dto localScale;
-            public string renderKind;
-            public string assetFormat;
-            public string status;
-            public string createdAtUtc;
-            public string updatedAtUtc;
-        }
-
-        [Serializable]
-        private class SerializableVector3Dto
-        {
-            public float x;
-            public float y;
-            public float z;
-        }
-
         [SerializeField] private bool createMissingTarget = true;
         [SerializeField] private string defaultWorkspaceId = WorkspaceDomain.MockWorkspaceProvider.DefaultWorkspaceId;
-        [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
+        [SerializeField]
+        [Tooltip("Optional backend base URL override. Empty uses ContentMediaUrlUtility.DefaultBackendBaseUrl.")]
+        private string backendApiBaseUrl = "";
 
-        public string BackendApiBaseUrl => backendApiBaseUrl;
+        public string BackendApiBaseUrl => ContentMediaUrlUtility.ResolveBackendBaseUrl(backendApiBaseUrl);
         [Header("Orientation Helper")]
         [SerializeField] private bool showOrientationHelper = false;
         [SerializeField] private float orientationHelperAxisLength = 0.35f;
@@ -326,14 +264,14 @@ namespace ARGallery.AppFlow
         private IEnumerator TryRebuildFromBackend(string workspaceId, WorkspaceSessionContext session, Action<bool> onDone)
         {
             onDone?.Invoke(false);
-            if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+            if (string.IsNullOrWhiteSpace(workspaceId))
                 yield break;
 
             WorkspaceSceneReconstructor reconstructor = FindFirstObjectByType<WorkspaceSceneReconstructor>();
             if (reconstructor == null)
                 yield break;
 
-            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(workspaceId.Trim())}";
+            string url = ContentMediaUrlUtility.BuildWorkspaceDetailUrl(workspaceId, backendApiBaseUrl);
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
                 request.timeout = 20;
@@ -343,7 +281,7 @@ namespace ARGallery.AppFlow
 
                 string body = request.downloadHandler != null ? request.downloadHandler.text : "";
                 WorkspaceRestoreEnvelope payload = JsonUtility.FromJson<WorkspaceRestoreEnvelope>(body);
-                WorkspaceSnapshot snapshot = BuildSnapshotFromBackendPayload(payload, workspaceId, backendApiBaseUrl);
+                WorkspaceSnapshot snapshot = BuildSnapshotFromBackendPayload(payload, workspaceId, BackendApiBaseUrl);
                 if (snapshot == null || snapshot.targets == null || snapshot.targets.Length == 0)
                     yield break;
 
@@ -450,9 +388,7 @@ namespace ARGallery.AppFlow
                     contentType = string.IsNullOrWhiteSpace(c.contentType) ? "image" : c.contentType.Trim(),
                     mediaUrl = mediaUrl,
                     originalFileName = ContentMediaUrlUtility.FileNameFromUrl(
-                        ContentMediaUrlUtility.ResolveAbsoluteUrl(
-                            mediaUrl,
-                            string.IsNullOrWhiteSpace(apiBaseUrl) ? ContentMediaUrlUtility.DefaultBackendBaseUrl : apiBaseUrl),
+                        ContentMediaUrlUtility.ResolveAbsoluteUrl(mediaUrl, apiBaseUrl),
                         "asset.bin"),
                     position = ToVector3Data(c.localPosition),
                     rotation = ToVector3Data(c.localEuler),
@@ -470,14 +406,14 @@ namespace ARGallery.AppFlow
             return snapshot;
         }
 
-        private static Vector3Data ToVector3Data(SerializableVector3Dto value)
+        private static Vector3Data ToVector3Data(WorkspaceApiVector3Dto value)
         {
             if (value == null)
                 return new Vector3Data(0f, 0f, 0f);
             return new Vector3Data(value.x, value.y, value.z);
         }
 
-        private static Vector3Data ToVector3DataOrDefault(SerializableVector3Dto value, Vector3 fallback)
+        private static Vector3Data ToVector3DataOrDefault(WorkspaceApiVector3Dto value, Vector3 fallback)
         {
             if (value == null)
                 return new Vector3Data(fallback.x, fallback.y, fallback.z);

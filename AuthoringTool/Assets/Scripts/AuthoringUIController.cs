@@ -14,7 +14,6 @@ using UnityEngine.InputSystem;
 
 public class AuthoringUIController : MonoBehaviour
 {
-    public DatabaseManager dbManager;
     public GameObject videoPrefab;
     public StyleSheet mobileStyleSheet;
 
@@ -1711,35 +1710,6 @@ public class AuthoringUIController : MonoBehaviour
     [Tooltip("相对墙面沿法线微移，减轻与 TargetVisual 灰框 Z-fighting")]
     [SerializeField] private float spawnForwardOffsetFromWall = 0.008f;
     [SerializeField] private WorkspaceRemoteSyncService remoteSyncService;
-
-    /// <param name="alignToTargetFrame">图片应对齐场景中 TargetVisual 海报框的位置与缩放；文字一般保持 ContentRoot 原点。</param>
-    private void ParentNewContentToActiveTarget(GameObject instance, bool alignToTargetFrame)
-    {
-        Transform contentRoot = TryGetActiveContentRoot();
-        if (contentRoot == null)
-        {
-            Debug.LogWarning("AuthoringUIController: 未找到当前 Target 下的 ContentRoot，物体将挂在场景根下。");
-            return;
-        }
-
-        instance.transform.SetParent(contentRoot, false);
-
-        Transform targetVisual = contentRoot.parent != null ? contentRoot.parent.Find("TargetVisual") : null;
-        if (alignToTargetFrame && targetVisual != null)
-        {
-            instance.transform.localPosition = targetVisual.localPosition;
-            instance.transform.localRotation = targetVisual.localRotation;
-            instance.transform.localScale = targetVisual.localScale;
-            if (spawnForwardOffsetFromWall > 0f)
-                instance.transform.position += instance.transform.forward * spawnForwardOffsetFromWall;
-        }
-        else
-        {
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
-            instance.transform.localScale = Vector3.one;
-        }
-    }
 
     /// <summary>Inspector slot, or <see cref="Resources"/> at <see cref="ModelContentContainerResourcesPath"/>.</summary>
     private GameObject GetModelContentContainerPrefab()

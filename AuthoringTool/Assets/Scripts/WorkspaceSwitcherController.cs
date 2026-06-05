@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using ARGallery.Content;
+using ARGallery.Workspace.Api;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
@@ -32,53 +34,6 @@ namespace ARGallery.AppFlow
             public int targetCount;
             public int contentCount;
             public string thumbnailUrl;
-        }
-
-        [Serializable]
-        private class WorkspaceRestoreEnvelope
-        {
-            public WorkspaceDetailDto workspace;
-            public WorkspaceTargetDto[] targets;
-            public WorkspaceContentDto[] contents;
-        }
-
-        [Serializable]
-        private class WorkspaceDetailDto
-        {
-            public string workspaceId;
-            public string workspaceName;
-            public string state;
-            public int schemaVersion;
-            public string createdAtUtc;
-            public string updatedAtUtc;
-        }
-
-        [Serializable]
-        private class WorkspaceTargetDto
-        {
-            public string targetId;
-            public string workspaceId;
-            public string targetName;
-            public string displayLabel;
-            public string targetImageUrl;
-            public string targetReferenceImageUrl;
-            public float physicalWidthM;
-            public string vuforiaTargetId;
-            public string vuforiaStatus;
-            public string status;
-        }
-
-        [Serializable]
-        private class WorkspaceContentDto
-        {
-            public string contentId;
-            public string targetId;
-            public string workspaceId;
-            public string contentType;
-            public string mediaUrl;
-            public string renderKind;
-            public string assetFormat;
-            public string status;
         }
 
         private const string LeftArrowButtonName = "LeftArrowButton";
@@ -127,8 +82,8 @@ namespace ARGallery.AppFlow
         private string pendingDeleteWorkspaceId;
 
         [SerializeField]
-        [Tooltip("Backend base URL for DELETE /api/workspaces/{id} before removing local snapshot. Leave empty to only delete on-disk workspace data.")]
-        private string backendApiBaseUrl = "http://127.0.0.1:5050";
+        [Tooltip("Backend base URL for workspace list/detail/delete. Leave empty for offline demo mode (no backend calls).")]
+        private string backendApiBaseUrl = ContentMediaUrlUtility.DefaultBackendBaseUrl;
 
         private bool workspaceDeleteBusy;
         private bool workspaceListRefreshInFlight;
@@ -265,11 +220,11 @@ namespace ARGallery.AppFlow
 
         private IEnumerator TryRefreshWorkspacesFromBackend()
         {
-            if (workspaceListRefreshInFlight || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+            if (workspaceListRefreshInFlight || !ContentMediaUrlUtility.TryResolveConfiguredBackendBaseUrl(backendApiBaseUrl, out _))
                 yield break;
 
             workspaceListRefreshInFlight = true;
-            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces";
+            string url = ContentMediaUrlUtility.BuildWorkspaceListUrl(backendApiBaseUrl);
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
                 request.timeout = 15;
@@ -328,10 +283,11 @@ namespace ARGallery.AppFlow
 
         private IEnumerator PopulateWorkspaceSessionFromBackendDetail(WorkspaceSessionContext session)
         {
-            if (session == null || string.IsNullOrWhiteSpace(session.workspaceId) || string.IsNullOrWhiteSpace(backendApiBaseUrl))
+            if (session == null || string.IsNullOrWhiteSpace(session.workspaceId)
+                || !ContentMediaUrlUtility.TryResolveConfiguredBackendBaseUrl(backendApiBaseUrl, out _))
                 yield break;
 
-            string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(session.workspaceId.Trim())}";
+            string url = ContentMediaUrlUtility.BuildWorkspaceDetailUrl(session.workspaceId, backendApiBaseUrl);
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
                 request.timeout = 15;
@@ -883,9 +839,9 @@ namespace ARGallery.AppFlow
                 yield break;
             }
 
-            if (!string.IsNullOrWhiteSpace(backendApiBaseUrl))
+            if (ContentMediaUrlUtility.TryResolveConfiguredBackendBaseUrl(backendApiBaseUrl, out string deleteBaseUrl))
             {
-                string url = $"{backendApiBaseUrl.TrimEnd('/')}/api/workspaces/{Uri.EscapeDataString(id)}";
+                string url = $"{deleteBaseUrl}/api/workspaces/{Uri.EscapeDataString(id)}";
                 using (var uwr = new UnityWebRequest(url, "DELETE"))
                 {
                     uwr.downloadHandler = new DownloadHandlerBuffer();

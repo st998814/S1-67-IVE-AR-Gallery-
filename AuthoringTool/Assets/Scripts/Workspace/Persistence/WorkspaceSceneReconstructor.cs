@@ -23,7 +23,9 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private GameObject textPrefabOverride;
         [SerializeField] private GameObject videoPrefabOverride;
         [SerializeField] private GameObject modelContainerPrefabOverride;
-        [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
+        [SerializeField]
+        [Tooltip("Optional backend base URL override for relative media paths. Empty uses ContentMediaUrlUtility.DefaultBackendBaseUrl.")]
+        private string backendApiBaseUrl = "";
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
         private readonly ContentCreationCoordinator contentReleaseCoordinator = new ContentCreationCoordinator();
@@ -298,10 +300,9 @@ namespace ARGallery.Workspace.Persistence
 
         private string ResolveMediaUrl(string mediaUrl)
         {
-            string baseUrl = ContentMediaUrlUtility.ResolveBackendBaseUrl();
-            if (!string.IsNullOrWhiteSpace(backendApiBaseUrl))
-                baseUrl = backendApiBaseUrl.Trim();
-            return ContentMediaUrlUtility.ResolveAbsoluteUrl(mediaUrl, baseUrl);
+            return ContentMediaUrlUtility.ResolveAbsoluteUrl(
+                mediaUrl,
+                ContentMediaUrlUtility.ResolveBackendBaseUrl(backendApiBaseUrl));
         }
 
         private static void ApplyFallbackLitMaterial(GameObject go)

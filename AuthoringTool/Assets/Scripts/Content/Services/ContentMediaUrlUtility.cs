@@ -42,9 +42,38 @@ namespace ARGallery.Content
             return string.IsNullOrWhiteSpace(name) ? fallback : name;
         }
 
-        public static string ResolveBackendBaseUrl()
+        public static string ResolveBackendBaseUrl(string inspectorOverride = null)
         {
-            return DefaultBackendBaseUrl;
+            return string.IsNullOrWhiteSpace(inspectorOverride)
+                ? DefaultBackendBaseUrl
+                : inspectorOverride.Trim().TrimEnd('/');
+        }
+
+        /// <summary>
+        /// Returns false when <paramref name="inspectorOverride"/> is empty (offline / skip backend).
+        /// </summary>
+        public static bool TryResolveConfiguredBackendBaseUrl(string inspectorOverride, out string baseUrl)
+        {
+            if (string.IsNullOrWhiteSpace(inspectorOverride))
+            {
+                baseUrl = null;
+                return false;
+            }
+
+            baseUrl = inspectorOverride.Trim().TrimEnd('/');
+            return true;
+        }
+
+        public static string BuildWorkspaceDetailUrl(string workspaceId, string inspectorOverride = null)
+        {
+            string baseUrl = ResolveBackendBaseUrl(inspectorOverride);
+            return $"{baseUrl}/api/workspaces/{Uri.EscapeDataString(workspaceId.Trim())}";
+        }
+
+        public static string BuildWorkspaceListUrl(string inspectorOverride = null)
+        {
+            string baseUrl = ResolveBackendBaseUrl(inspectorOverride);
+            return $"{baseUrl}/api/workspaces";
         }
     }
 }
