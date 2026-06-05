@@ -90,11 +90,6 @@ public class AuthoringUIController : MonoBehaviour
     private Coroutine _errorToastCoroutine;
     private Coroutine _loadingHideRoutine;
     private float _loadingShownAt;
-    private GameObject _lastDeletedObject;
-    private AuthoredContentInstance _lastDeletedContentInstance;
-    private ContentDraftState _lastDeletedDraft;
-    private DraggableObject _lastDeletedDraggable;
-
     private VisualElement _syncStatusToast;
     private Label _syncStatusTitle;
     private Label _syncStatusMessage;
@@ -575,6 +570,36 @@ public class AuthoringUIController : MonoBehaviour
             contentDraftsByDraggable.Remove(draggable);
     }
 
+    private bool TryDeleteSelectedAuthoredContent()
+    {
+        if (authoringSpatialTarget == null)
+            return false;
+
+        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
+        if (ci == null)
+            return false;
+
+        Transform contentTransform = authoringSpatialTarget;
+        GameObject contentObject = contentTransform.gameObject;
+
+        AuthoredObjectRegistry.UnregisterContent(ci);
+        RemoveDraftForTransform(contentTransform);
+
+        authoringTransformCoordinator ??= ResolveAuthoringTransformCoordinator();
+        authoringTransformCoordinator?.ClearContentSelection(syncAuthoringUi: false);
+        ClearAuthoringSpatialSelection();
+
+        spawnerManager ??= BuildSpawnerManager();
+        if (spawnerManager == null || !spawnerManager.ReleaseSpawnedContent(contentObject))
+            Destroy(contentObject);
+
+        authoringTransformCoordinator?.RefreshActiveContentList();
+        FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
+        NotifyWorkspacePersistenceChanged();
+        UpdateAddContentButtonIcon();
+        return true;
+    }
+
     // --- TASK 6: 用于独立测试的 Update 方法 ---
     private void Update()
 {
@@ -593,69 +618,9 @@ public class AuthoringUIController : MonoBehaviour
         ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
     }
 
-    // Delete 键：隐藏内容（可撤回）
-    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
-        && !Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
-    {
-        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
-        if (ci != null)
-        {
-            // 真正销毁上一个待删除的物体（如果有）
-            if (_lastDeletedObject != null) Destroy(_lastDeletedObject);
-
-            _lastDeletedContentInstance = ci;
-            _lastDeletedDraggable = activeDraggedObject;
-            _lastDeletedDraft = activeContentDraft;
-            _lastDeletedObject = authoringSpatialTarget.gameObject;
-
-            AuthoredObjectRegistry.UnregisterContent(ci);
-            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
-                contentDraftsByTransform.Remove(authoringSpatialTarget);
-            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
-                contentDraftsByDraggable.Remove(activeDraggedObject);
-
-            _lastDeletedObject.SetActive(false);
-            ClearAuthoringSpatialSelection();
-            NotifyWorkspacePersistenceChanged();
-        }
-    }
-
-    // Shift + Delete：立即彻底销毁（不可撤回）
-    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
-        && Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
-    {
-        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
-        if (ci != null)
-        {
-            if (_lastDeletedObject != null) { Destroy(_lastDeletedObject); _lastDeletedObject = null; }
-            AuthoredObjectRegistry.UnregisterContent(ci);
-            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
-                contentDraftsByTransform.Remove(authoringSpatialTarget);
-            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
-                contentDraftsByDraggable.Remove(activeDraggedObject);
-            GameObject toDestroy = authoringSpatialTarget.gameObject;
-            ClearAuthoringSpatialSelection();
-            Destroy(toDestroy);
-            NotifyWorkspacePersistenceChanged();
-        }
-    }
-
-    // Ctrl + Z：恢复最后一次删除
-    if (Keyboard.current != null && Keyboard.current.ctrlKey.isPressed
-        && Keyboard.current.zKey.wasPressedThisFrame && _lastDeletedObject != null)
-    {
-        _lastDeletedObject.SetActive(true);
-        AuthoredObjectRegistry.RegisterContent(_lastDeletedContentInstance);
-        if (_lastDeletedDraggable != null && _lastDeletedDraft != null)
-            contentDraftsByDraggable[_lastDeletedDraggable] = _lastDeletedDraft;
-        if (_lastDeletedContentInstance != null && _lastDeletedDraft != null)
-            contentDraftsByTransform[_lastDeletedContentInstance.transform] = _lastDeletedDraft;
-        _lastDeletedObject = null;
-        _lastDeletedContentInstance = null;
-        _lastDeletedDraft = null;
-        _lastDeletedDraggable = null;
-        NotifyWorkspacePersistenceChanged();
-    }
+    // Delete: release pooled shells or destroy; unregister from sync registry.
+    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame)
+        TryDeleteSelectedAuthoredContent();
 
     // Keep inspector coordinates synced when moving target/content via 3D interaction.
     SyncSpatialInspectorRealtime();

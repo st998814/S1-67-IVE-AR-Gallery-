@@ -187,6 +187,12 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
     }
 
+    /// <summary>Re-scans ContentRoot children after spawn or destroy.</summary>
+    public void RefreshActiveContentList()
+    {
+        RefreshContentList();
+    }
+
     /// <summary>Clears current content selection (used when switching inspector to Target mode).</summary>
     public void ClearContentSelection(bool syncAuthoringUi = true)
     {
