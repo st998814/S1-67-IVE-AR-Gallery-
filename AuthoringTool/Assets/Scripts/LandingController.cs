@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -14,31 +15,41 @@ namespace ARGallery.AppFlow
 
         private void OnEnable()
         {
+            StartCoroutine(InitializeLandingUiDeferred());
+        }
+
+        private IEnumerator InitializeLandingUiDeferred()
+        {
+            // Let UI Toolkit finish panel/UXML setup before binding (WebGL boot is sensitive here).
+            yield return null;
+
             UIDocument uiDocument = GetComponent<UIDocument>();
             if (uiDocument == null)
             {
                 Debug.LogError("LandingController: UIDocument is missing.");
-                return;
+                yield break;
             }
 
             VisualElement root = uiDocument.rootVisualElement;
             if (root == null)
             {
                 Debug.LogError("LandingController: rootVisualElement is null.");
-                return;
+                yield break;
             }
 
-            // Fallback: if UXML is not bound/imported correctly, build a minimal landing UI at runtime.
             EnsureLandingFallbackUi(root);
 
             VisualElement screenRoot = root.Q<VisualElement>("LandingRoot") ?? root;
             AppFlowWallpaper.Apply(screenRoot);
 
+            if (!isActiveAndEnabled)
+                yield break;
+
             startButton = root.Q<Button>(StartButtonName);
             if (startButton == null)
             {
                 Debug.LogError("LandingController: StartButton was not found in Landing UI.");
-                return;
+                yield break;
             }
 
             startButton.clicked += OnStartButtonClicked;

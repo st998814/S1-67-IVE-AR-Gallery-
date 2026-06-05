@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using RTG;
 
 /// <summary>
@@ -54,13 +55,22 @@ public static class RTGRuntimeBootstrap
 
     private static bool SceneNeedsRtgAutoBootstrap()
     {
-        if (FindController<ContentTransformController>())
+        Scene active = SceneManager.GetActiveScene();
+        if (!active.IsValid())
+            return false;
+
+        string sceneName = active.name;
+        if (string.Equals(sceneName, "AuthoringToolScene", System.StringComparison.Ordinal)
+            || string.Equals(sceneName, "TransformSandboxScene", System.StringComparison.Ordinal)
+            || string.Equals(sceneName, "SampleScene", System.StringComparison.Ordinal))
+        {
             return true;
-        if (FindController<TransformGizmoController>())
-            return true;
-        if (FindController<AuthoringTransformCoordinator>())
-            return true;
-        return false;
+        }
+
+        // Fallback for renamed scenes that still host transform tooling.
+        return FindController<ContentTransformController>()
+            || FindController<TransformGizmoController>()
+            || FindController<AuthoringTransformCoordinator>();
     }
 
     private static bool FindController<T>() where T : Object

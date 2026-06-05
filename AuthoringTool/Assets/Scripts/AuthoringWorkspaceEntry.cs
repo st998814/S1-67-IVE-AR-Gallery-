@@ -534,7 +534,7 @@ namespace ARGallery.AppFlow
 
             Debug.Log(
                 $"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from backend snapshot (index={index}, posture={posture}, transform preserved).");
-            TrySelectFirstRestoredContent(manager.GetActiveTarget());
+            StartCoroutine(DeferSelectFirstRestoredContent(manager.GetActiveTarget()));
         }
 
         private static string ResolveTargetDisplayNameForRestore(
@@ -617,19 +617,24 @@ namespace ARGallery.AppFlow
             return false;
         }
 
-        private static void TrySelectFirstRestoredContent(GameObject targetRoot)
+        private IEnumerator DeferSelectFirstRestoredContent(GameObject targetRoot)
         {
+            // Wait one frame so AuthoringTransformCoordinator.Start and spatial services finish wiring.
+            yield return null;
+
             if (targetRoot == null)
-                return;
+                yield break;
 
             Transform contentRoot = targetRoot.transform.Find("ContentRoot");
             if (contentRoot == null || contentRoot.childCount == 0)
-                return;
+                yield break;
 
             Transform firstContent = contentRoot.GetChild(0);
             AuthoringTransformCoordinator coordinator = FindFirstObjectByType<AuthoringTransformCoordinator>();
-            coordinator?.SelectContentTransform(firstContent, syncAuthoringUi: true);
-            FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
+            if (coordinator != null)
+                coordinator.RefreshAfterWorkspaceRestore(firstContent);
+            else
+                FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
         }
 
         private void ApplyWorkspacePreset(

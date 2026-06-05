@@ -347,7 +347,8 @@ public sealed class TransformGizmoController : MonoBehaviour
 
         PushCurrentSelectionToAllGizmos();
         ApplyGizmoModeVisualState();
-        ApplyPostTransformRules(_selected);
+        // Transform rules run only after gizmo drag (LateUpdate). Applying on selection caused
+        // clamp/enforce feedback loops during workspace restore on WebGL.
     }
 
     public void SetMode(GizmoMode mode)

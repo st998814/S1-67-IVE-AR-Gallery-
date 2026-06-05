@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using ARGallery.AppFlow;
 using ARGallery.Workspace;
@@ -32,6 +33,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     private int _selectedListIndex = -1;
     private int _authoringSyncedTargetIndex = int.MinValue;
     private bool _suppressAuthoringSyncFromSelection;
+    private bool _isRefreshingContentList;
     public event System.Action ContentListChanged;
     public event System.Action<Transform> ContentSelectionChanged;
 
@@ -47,8 +49,6 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
     private void Awake()
     {
-        RTGRuntimeBootstrap.EnsureRTGModules();
-
         if (targetSelectionManager == null)
             targetSelectionManager = FindFirstObjectByType<TargetSelectionManager>();
         if (objectSelectionManager == null)
@@ -107,6 +107,13 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
     {
         if (targetSelectionManager != null)
             _authoringSyncedTargetIndex = targetSelectionManager.ActiveTargetIndex;
+        StartCoroutine(DeferInitialTargetContextAndReselect());
+    }
+
+    private IEnumerator DeferInitialTargetContextAndReselect()
+    {
+        yield return null;
+        RTGRuntimeBootstrap.EnsureRTGModules();
         ApplyTargetContextAndReselect();
     }
 
@@ -150,7 +157,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
                 _selectedListIndex = 0;
 
             Transform pick = _contentObjects[_selectedListIndex];
-            _suppressAuthoringSyncFromSelection = false;
+            _suppressAuthoringSyncFromSelection = true;
             objectSelectionManager?.SetSelected(pick);
         }
         else
@@ -235,13 +242,61 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
     private void Update()
     {
-        RefreshContentList();
-
         if (DraggableObject.IsDraggingObjectInteractionActive)
             return;
 
         if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
             SelectNextContent();
+    }
+
+    /// <summary>
+    /// Refreshes target/content wiring after backend rebuild without re-entering selection handlers.
+    /// Call from <see cref="AuthoringWorkspaceEntry"/> once scene objects exist.
+    /// </summary>
+    public void RefreshAfterWorkspaceRestore(Transform preferredContent = null)
+    {
+        Transform contentRoot = GetActiveContentRoot();
+        if (objectSelectionManager != null)
+            objectSelectionManager.Configure(mainCamera, contentRoot);
+
+        GameObject activeTarget = targetSelectionManager != null ? targetSelectionManager.GetActiveTarget() : null;
+        Transform targetRootTransform = activeTarget != null ? activeTarget.transform : null;
+        if (frontSideConstraint != null)
+            frontSideConstraint.SetTargetContext(targetRootTransform, contentRoot);
+        if (placementBoundsService != null)
+        {
+            placementBoundsService.SetTargetContext(targetRootTransform, contentRoot);
+            placementBoundsService.SetPosture(ResolveActiveWorkspacePosture());
+        }
+
+        SpatialMappingCoordinator spatialMapping = FindFirstObjectByType<SpatialMappingCoordinator>();
+        if (spatialMapping != null)
+            spatialMapping.RefreshPlacementVolume();
+
+        if (targetRootTransform != null)
+            WorkspaceOrientationHelper.Apply(targetRootTransform, false, 0.35f, 0.01f);
+
+        RefreshContentList();
+
+        Transform pick = ResolveContentListEntry(preferredContent);
+        if (pick == null && _contentObjects.Count > 0)
+        {
+            _selectedListIndex = 0;
+            pick = _contentObjects[0];
+        }
+
+        if (pick != null)
+        {
+            _selectedListIndex = _contentObjects.IndexOf(pick);
+            _suppressAuthoringSyncFromSelection = true;
+            objectSelectionManager?.SetSelected(pick);
+        }
+        else
+        {
+            _selectedListIndex = -1;
+            _suppressAuthoringSyncFromSelection = true;
+            objectSelectionManager?.SetSelected(null);
+        }
     }
 
     private void SelectNextContent()
@@ -264,44 +319,86 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
 
     private void RefreshContentList()
     {
-        _contentObjects.Clear();
-
-        Transform contentRoot = GetActiveContentRoot();
-        if (contentRoot == null)
-        {
-            _selectedListIndex = -1;
-            bool wasNotEmpty = _lastContentInstanceIds.Count > 0;
-            _lastContentInstanceIds.Clear();
-            if (wasNotEmpty)
-                ContentListChanged?.Invoke();
+        if (_isRefreshingContentList)
             return;
-        }
 
-        foreach (Transform child in contentRoot)
+        _isRefreshingContentList = true;
+        try
         {
-            _contentObjects.Add(child);
-            DraggableObject.ConfigureForContentShell(child.GetComponent<DraggableObject>());
-        }
+            _contentObjects.Clear();
 
-        Transform sel = objectSelectionManager != null ? objectSelectionManager.Selected : null;
-        if (sel == null)
-        {
-            _selectedListIndex = -1;
-        }
-        else
-        {
-            int idx = _contentObjects.IndexOf(sel);
-            _selectedListIndex = idx;
-            if (idx < 0 && _contentObjects.Count > 0)
+            Transform contentRoot = GetActiveContentRoot();
+            if (contentRoot == null)
             {
-                _selectedListIndex = 0;
-                objectSelectionManager.SetSelected(_contentObjects[0]);
+                _selectedListIndex = -1;
+                bool wasNotEmpty = _lastContentInstanceIds.Count > 0;
+                _lastContentInstanceIds.Clear();
+                if (wasNotEmpty)
+                    ContentListChanged?.Invoke();
+                return;
             }
+
+            foreach (Transform child in contentRoot)
+            {
+                if (child == null || !child.gameObject.activeInHierarchy)
+                    continue;
+
+                _contentObjects.Add(child);
+                DraggableObject.ConfigureForContentShell(child.GetComponent<DraggableObject>());
+            }
+
+            Transform sel = objectSelectionManager != null ? objectSelectionManager.Selected : null;
+            if (sel == null)
+            {
+                _selectedListIndex = -1;
+            }
+            else
+            {
+                _selectedListIndex = ResolveListIndexForSelection(sel);
+            }
+
+            bool listChanged = HasContentListChanged();
+            if (listChanged)
+                ContentListChanged?.Invoke();
+        }
+        finally
+        {
+            _isRefreshingContentList = false;
+        }
+    }
+
+    private int ResolveListIndexForSelection(Transform selected)
+    {
+        if (selected == null)
+            return -1;
+
+        int idx = _contentObjects.IndexOf(selected);
+        if (idx >= 0)
+            return idx;
+
+        for (int i = 0; i < _contentObjects.Count; i++)
+        {
+            Transform entry = _contentObjects[i];
+            if (entry != null && selected.IsChildOf(entry))
+                return i;
         }
 
-        bool listChanged = HasContentListChanged();
-        if (listChanged)
-            ContentListChanged?.Invoke();
+        return -1;
+    }
+
+    private Transform ResolveContentListEntry(Transform content)
+    {
+        if (content == null)
+            return null;
+
+        int idx = ResolveListIndexForSelection(content);
+        if (idx >= 0 && idx < _contentObjects.Count)
+            return _contentObjects[idx];
+
+        if (_contentObjects.IndexOf(content) >= 0)
+            return content;
+
+        return null;
     }
 
     private bool HasContentListChanged()

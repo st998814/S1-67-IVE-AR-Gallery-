@@ -1,3 +1,4 @@
+using System.Collections;
 using ARGallery.AppFlow;
 using ARGallery.Workspace;
 using UnityEngine;
@@ -32,6 +33,7 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     private Transform _activeVolumeParent;
     private int _syncedTargetIndex = int.MinValue;
     private Transform _trackedSelectedContent;
+    private bool _isRefreshingPlacementVolume;
 
     private void Awake()
     {
@@ -99,6 +101,12 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     {
         if (targetSelectionManager != null)
             _syncedTargetIndex = targetSelectionManager.ActiveTargetIndex;
+        StartCoroutine(DeferInitialSpatialRefresh());
+    }
+
+    private IEnumerator DeferInitialSpatialRefresh()
+    {
+        yield return null;
         RefreshPlacementVolume();
         RefreshMappingIndicators();
     }
@@ -153,9 +161,22 @@ public sealed class SpatialMappingCoordinator : MonoBehaviour
     /// <summary>Rebuilds placement volume bounds for the active target (e.g. after posture preset changes).</summary>
     public void RefreshPlacementVolume()
     {
-        if (_placementVolume == null)
+        if (_placementVolume == null || _isRefreshingPlacementVolume)
             return;
 
+        _isRefreshingPlacementVolume = true;
+        try
+        {
+            RefreshPlacementVolumeCore();
+        }
+        finally
+        {
+            _isRefreshingPlacementVolume = false;
+        }
+    }
+
+    private void RefreshPlacementVolumeCore()
+    {
         Transform contentRoot = ResolveActiveContentRoot();
         if (contentRoot == null || placementBoundsService == null)
         {
