@@ -167,7 +167,7 @@ public sealed class AuthoringTransformCoordinator : MonoBehaviour
         }
     }
 
-    /// <summary>Same contract as legacy <see cref="ContentTransformController.SelectContentTransform"/>.</summary>
+    /// <summary>Selects a content child under the active target and optionally syncs authoring UI.</summary>
     public void SelectContentTransform(Transform contentChild, bool syncAuthoringUi = true)
     {
         if (contentChild == null || objectSelectionManager == null)

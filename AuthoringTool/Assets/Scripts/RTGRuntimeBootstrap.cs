@@ -61,15 +61,12 @@ public static class RTGRuntimeBootstrap
 
         string sceneName = active.name;
         if (string.Equals(sceneName, "AuthoringToolScene", System.StringComparison.Ordinal)
-            || string.Equals(sceneName, "TransformSandboxScene", System.StringComparison.Ordinal)
-            || string.Equals(sceneName, "SampleScene", System.StringComparison.Ordinal))
+            || string.Equals(sceneName, "TransformSandboxScene", System.StringComparison.Ordinal))
         {
             return true;
         }
 
-        // Fallback for renamed scenes that still host transform tooling.
-        return FindController<ContentTransformController>()
-            || FindController<TransformGizmoController>()
+        return FindController<TransformGizmoController>()
             || FindController<AuthoringTransformCoordinator>();
     }
 

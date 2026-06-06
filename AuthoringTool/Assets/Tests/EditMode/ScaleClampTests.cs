@@ -3,12 +3,13 @@ using UnityEngine;
 
 /// <summary>
 /// EditMode regression tests for scale clamping logic (T3.23).
-/// Mirrors the Mathf.Max(0.1f, scale) logic in ContentTransformController.
+/// EditMode regression tests for per-axis scale minimum clamping (T3.23).
+/// Authoring runtime uses uniform scale via <see cref="TargetLocalTransformService"/>; these tests guard the per-axis floor pattern.
 /// Run via: Unity Editor > Window > General > Test Runner > EditMode
 /// </summary>
 public class ScaleClampTests
 {
-    // Matches the minimum scale enforced in ContentTransformController.HandleScaleInput
+    // Per-axis minimum scale floor used in legacy keyboard nudge paths.
     private const float MinScale = 0.1f;
 
     private Vector3 ApplyScaleClamp(Vector3 scale)
