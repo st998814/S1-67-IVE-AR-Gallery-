@@ -30,15 +30,6 @@ namespace ARGallery.Workspace.Persistence
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
         private readonly ContentCreationCoordinator contentReleaseCoordinator = new ContentCreationCoordinator();
 
-        /// <summary>Legacy Layer 2 — disk snapshots are disabled. Use backend restore + <see cref="BeginRebuild"/>.</summary>
-        [Obsolete("Local snapshot.json rebuild is disabled. Open workspace via backend API instead.")]
-        public Coroutine BeginRebuildFromDisk(string workspaceId, Action<bool> onCompleted = null)
-        {
-            Debug.LogWarning($"WorkspaceSceneReconstructor: BeginRebuildFromDisk is disabled for '{workspaceId}'.");
-            onCompleted?.Invoke(false);
-            return null;
-        }
-
         public Coroutine BeginRebuild(WorkspaceSnapshot snapshot, Action<bool> onCompleted = null)
         {
             if (snapshot == null)
