@@ -12,20 +12,31 @@ public static class SemanticDistanceFormatter
     private const float NearZeroMetres = 0.005f;
 
     /// <summary>
-    /// Formats a signed offset along a semantic placement axis (e.g. "20 cm left").
+    /// Formats a signed offset along a semantic placement axis for wall posture (legacy overload).
     /// </summary>
     public static string FormatOffset(PlacementBoundsCalculator.SemanticAxis axis, float metres)
     {
+        return FormatOffset(SemanticAxisMapping.PlacementPosture.Wall, axis, metres);
+    }
+
+    /// <summary>
+    /// Formats a signed offset along a semantic placement axis (e.g. "20 cm left", "15 cm forward").
+    /// </summary>
+    public static string FormatOffset(
+        SemanticAxisMapping.PlacementPosture posture,
+        PlacementBoundsCalculator.SemanticAxis axis,
+        float metres)
+    {
         if (Mathf.Abs(metres) < NearZeroMetres)
-            return GetAtCenterPhrase(axis);
+            return GetAtCenterPhrase(posture, axis);
 
         string magnitude = FormatMagnitude(Mathf.Abs(metres));
-        string direction = GetDirectionPhrase(axis, metres);
+        string direction = GetDirectionPhrase(posture, axis, metres);
         return $"{magnitude} {direction}";
     }
 
     /// <summary>
-    /// Formats all three semantic offsets from a ContentRoot-local position.
+    /// Formats all three semantic offsets from a ContentRoot-local position (wall posture).
     /// </summary>
     public static void FormatOffsets(
         Vector3 localPosition,
@@ -33,9 +44,31 @@ public static class SemanticDistanceFormatter
         out string upDown,
         out string closerFurther)
     {
-        leftRight = FormatOffset(PlacementBoundsCalculator.SemanticAxis.LeftRight, localPosition.x);
-        upDown = FormatOffset(PlacementBoundsCalculator.SemanticAxis.UpDown, localPosition.y);
-        closerFurther = FormatOffset(PlacementBoundsCalculator.SemanticAxis.CloserFurther, localPosition.z);
+        FormatOffsets(SemanticAxisMapping.PlacementPosture.Wall, localPosition, out leftRight, out upDown, out closerFurther);
+    }
+
+    /// <summary>
+    /// Formats all three semantic UI slots from a ContentRoot-local position using posture-aware axis mapping.
+    /// </summary>
+    public static void FormatOffsets(
+        SemanticAxisMapping.PlacementPosture posture,
+        Vector3 localPosition,
+        out string leftRight,
+        out string upDown,
+        out string closerFurther)
+    {
+        leftRight = FormatOffset(
+            posture,
+            PlacementBoundsCalculator.SemanticAxis.LeftRight,
+            SemanticAxisMapping.GetComponentValue(posture, PlacementBoundsCalculator.SemanticAxis.LeftRight, localPosition));
+        upDown = FormatOffset(
+            posture,
+            PlacementBoundsCalculator.SemanticAxis.UpDown,
+            SemanticAxisMapping.GetComponentValue(posture, PlacementBoundsCalculator.SemanticAxis.UpDown, localPosition));
+        closerFurther = FormatOffset(
+            posture,
+            PlacementBoundsCalculator.SemanticAxis.CloserFurther,
+            SemanticAxisMapping.GetComponentValue(posture, PlacementBoundsCalculator.SemanticAxis.CloserFurther, localPosition));
     }
 
     /// <summary>
@@ -71,7 +104,23 @@ public static class SemanticDistanceFormatter
         return $"{roundedMetres:0.#} m";
     }
 
-    private static string GetDirectionPhrase(PlacementBoundsCalculator.SemanticAxis axis, float signedMetres)
+    private static string GetDirectionPhrase(
+        SemanticAxisMapping.PlacementPosture posture,
+        PlacementBoundsCalculator.SemanticAxis axis,
+        float signedMetres)
+    {
+        switch (posture)
+        {
+            case SemanticAxisMapping.PlacementPosture.Floor:
+                return GetFloorDirectionPhrase(axis, signedMetres);
+            case SemanticAxisMapping.PlacementPosture.Ceiling:
+                return GetCeilingDirectionPhrase(axis, signedMetres);
+            default:
+                return GetWallDirectionPhrase(axis, signedMetres);
+        }
+    }
+
+    private static string GetWallDirectionPhrase(PlacementBoundsCalculator.SemanticAxis axis, float signedMetres)
     {
         switch (axis)
         {
@@ -86,18 +135,68 @@ public static class SemanticDistanceFormatter
         }
     }
 
-    private static string GetAtCenterPhrase(PlacementBoundsCalculator.SemanticAxis axis)
+    private static string GetFloorDirectionPhrase(PlacementBoundsCalculator.SemanticAxis axis, float signedMetres)
     {
         switch (axis)
         {
             case PlacementBoundsCalculator.SemanticAxis.LeftRight:
-                return "Centered horizontally";
+                return signedMetres < 0f ? "left" : "right";
             case PlacementBoundsCalculator.SemanticAxis.UpDown:
-                return "At target height";
+                return signedMetres < 0f ? "back" : "forward";
             case PlacementBoundsCalculator.SemanticAxis.CloserFurther:
-                return "On target plane";
+                return signedMetres < 0f ? "lower" : "higher";
             default:
-                return "At center";
+                throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
+        }
+    }
+
+    private static string GetCeilingDirectionPhrase(PlacementBoundsCalculator.SemanticAxis axis, float signedMetres)
+    {
+        switch (axis)
+        {
+            case PlacementBoundsCalculator.SemanticAxis.LeftRight:
+                return signedMetres < 0f ? "left" : "right";
+            case PlacementBoundsCalculator.SemanticAxis.UpDown:
+                return signedMetres < 0f ? "back" : "forward";
+            case PlacementBoundsCalculator.SemanticAxis.CloserFurther:
+                return signedMetres < 0f ? "toward ceiling" : "toward floor";
+            default:
+                throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
+        }
+    }
+
+    private static string GetAtCenterPhrase(
+        SemanticAxisMapping.PlacementPosture posture,
+        PlacementBoundsCalculator.SemanticAxis axis)
+    {
+        switch (posture)
+        {
+            case SemanticAxisMapping.PlacementPosture.Floor:
+            case SemanticAxisMapping.PlacementPosture.Ceiling:
+                switch (axis)
+                {
+                    case PlacementBoundsCalculator.SemanticAxis.LeftRight:
+                        return "Centered horizontally";
+                    case PlacementBoundsCalculator.SemanticAxis.UpDown:
+                        return "Centered on target plane";
+                    case PlacementBoundsCalculator.SemanticAxis.CloserFurther:
+                        return "On marker surface";
+                    default:
+                        return "At center";
+                }
+
+            default:
+                switch (axis)
+                {
+                    case PlacementBoundsCalculator.SemanticAxis.LeftRight:
+                        return "Centered horizontally";
+                    case PlacementBoundsCalculator.SemanticAxis.UpDown:
+                        return "At target height";
+                    case PlacementBoundsCalculator.SemanticAxis.CloserFurther:
+                        return "On target plane";
+                    default:
+                        return "At center";
+                }
         }
     }
 }

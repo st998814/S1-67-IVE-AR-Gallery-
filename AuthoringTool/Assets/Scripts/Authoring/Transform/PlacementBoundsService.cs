@@ -22,8 +22,10 @@ public sealed class PlacementBoundsService : MonoBehaviour
 
     private PlacementBoundaryPreset _activeBoundaryPreset = PlacementBoundaryPreset.WallDefault;
     private bool _hasActiveBoundaryPreset;
+    private SemanticAxisMapping.PlacementPosture _activePosture = SemanticAxisMapping.PlacementPosture.Wall;
 
     public PlacementBoundaryPreset ActiveBoundaryPreset => _activeBoundaryPreset;
+    public SemanticAxisMapping.PlacementPosture ActivePosture => _activePosture;
     public float EdgeMargin => _activeBoundaryPreset.edgeMargin;
     public float MaxDepthFromTarget => _activeBoundaryPreset.depthMeters;
 
@@ -47,6 +49,7 @@ public sealed class PlacementBoundsService : MonoBehaviour
     /// </summary>
     public void SetPosture(WorkspacePosture posture)
     {
+        _activePosture = SemanticAxisMapping.FromWorkspacePosture((int)posture);
         WorkspacePreset workspacePreset = WorkspacePresetLibrary.GetPreset(posture);
         SetPlacementBoundaryPreset(workspacePreset.placementBoundary.boundary);
     }
@@ -77,6 +80,7 @@ public sealed class PlacementBoundsService : MonoBehaviour
     public void ClearPlacementBoundaryPreset()
     {
         _hasActiveBoundaryPreset = false;
+        _activePosture = SemanticAxisMapping.PlacementPosture.Wall;
         _activeBoundaryPreset = BuildFallbackBoundaryPreset();
     }
 
@@ -201,7 +205,7 @@ public sealed class PlacementBoundsService : MonoBehaviour
         if (!TryGetBoundsForContent(content, out PlacementBoundsCalculator.Snapshot bounds))
             return new PlacementBoundsCalculator.AxisRange(0f, 0f);
 
-        return bounds.GetRange(axis);
+        return SemanticAxisMapping.GetSemanticRange(bounds, _activePosture, axis);
     }
 
     public Vector3 ClampLocalPosition(Transform content, Vector3 localPosition)
@@ -220,8 +224,7 @@ public sealed class PlacementBoundsService : MonoBehaviour
         if (content == null)
             return Vector3.zero;
 
-        Vector3 localPosition = content.localPosition;
-        localPosition = PlacementBoundsCalculator.SetAxisComponent(localPosition, axis, value);
+        Vector3 localPosition = SemanticAxisMapping.SetComponentValue(_activePosture, axis, content.localPosition, value);
         localPosition = ClampLocalPosition(content, localPosition);
         return localPosition;
     }
