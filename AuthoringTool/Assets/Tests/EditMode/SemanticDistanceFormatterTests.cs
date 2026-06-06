@@ -54,6 +54,7 @@ public class SemanticDistanceFormatterTests
     public void FormatOffsets_FromLocalPosition_MapsAxes()
     {
         SemanticDistanceFormatter.FormatOffsets(
+            SemanticAxisMapping.PlacementPosture.Wall,
             new Vector3(-0.2f, 0.35f, -0.54f),
             out string leftRight,
             out string upDown,

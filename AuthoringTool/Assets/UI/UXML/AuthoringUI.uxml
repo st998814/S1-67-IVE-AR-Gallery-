@@ -40,15 +40,15 @@
                     <ui:VisualElement name="ContentPlacementOffsetSection">
                         <ui:Label text="Placement offset (read-only):" class="text-secondary" style="-unity-font-style: bold; margin-top: 4px; margin-bottom: 4px; font-size: 11px;"/>
                         <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 3px;">
-                            <ui:Label text="Left / Right" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosLeftRightRowLabel" text="Left / Right" class="text-secondary" style="width: 100px; font-size: 11px;"/>
                             <ui:Label name="PosLeftRightOffsetLabel" text="Centered horizontally" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
                         </ui:VisualElement>
                         <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 3px;">
-                            <ui:Label text="Up / Down" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosUpDownRowLabel" text="Up / Down" class="text-secondary" style="width: 100px; font-size: 11px;"/>
                             <ui:Label name="PosUpDownOffsetLabel" text="At target height" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
                         </ui:VisualElement>
                         <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 6px;">
-                            <ui:Label text="Closer / Further" class="text-secondary" style="width: 100px; font-size: 11px;"/>
+                            <ui:Label name="PosCloserFurtherRowLabel" text="Closer / Further" class="text-secondary" style="width: 100px; font-size: 11px;"/>
                             <ui:Label name="PosCloserFurtherOffsetLabel" text="On target plane" class="text-primary" style="font-size: 11px; flex-grow: 1;"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -88,17 +88,17 @@
             <ui:VisualElement name="MoveControlsGroup" class="manipulator-bottom-panel__group">
                 <ui:Label text="Move content" class="manipulator-bottom-panel__title"/>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
-                    <ui:Label text="Left / Right" class="manipulator-bottom-panel__label"/>
+                    <ui:Label name="MoveLeftRightRowLabel" text="Left / Right" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveLeftRightSlider" low-value="-0.5" high-value="0.5" value="0" class="manipulator-bottom-panel__slider"/>
                     <ui:Label name="MoveLeftRightValueLabel" text="Centered horizontally" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
-                    <ui:Label text="Up / Down" class="manipulator-bottom-panel__label"/>
+                    <ui:Label name="MoveUpDownRowLabel" text="Up / Down" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveUpDownSlider" low-value="-0.5" high-value="0.5" value="0" class="manipulator-bottom-panel__slider"/>
                     <ui:Label name="MoveUpDownValueLabel" text="At target height" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="manipulator-bottom-panel__row">
-                    <ui:Label text="Closer / Further" class="manipulator-bottom-panel__label"/>
+                    <ui:Label name="MoveCloserFurtherRowLabel" text="Closer / Further" class="manipulator-bottom-panel__label"/>
                     <ui:Slider name="MoveCloserFurtherSlider" low-value="-2" high-value="-0.5" value="-0.5" class="manipulator-bottom-panel__slider"/>
                     <ui:Label name="MoveCloserFurtherValueLabel" text="On target plane" class="manipulator-bottom-panel__value"/>
                 </ui:VisualElement>

@@ -456,7 +456,8 @@ namespace ARGallery.AppFlow
             EnsureAuthoredTargetForPersistence(manager.GetActiveTarget(), targetId, displayName, session, physicalWidthM);
 
             WorkspaceDomain.WorkspacePosture posture = ResolvePostureForRestoredTarget(snapshot, targetId, workspace);
-            ApplyWorkspacePreset(manager.GetActiveTarget(), posture, preserveTargetTransform: true);
+            bool preserveTargetTransform = ShouldPreserveTargetTransformFromSnapshot(snapshot, targetId, posture);
+            ApplyWorkspacePreset(manager.GetActiveTarget(), posture, preserveTargetTransform: preserveTargetTransform);
 
             bool hasSessionImageBytes = session != null && session.targetImageBytes != null && session.targetImageBytes.Length > 0;
             if (hasSessionImageBytes)
@@ -469,7 +470,7 @@ namespace ARGallery.AppFlow
                 AppFlowController.SetWorkspaceTargetId(targetId);
 
             Debug.Log(
-                $"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from backend snapshot (index={index}, posture={posture}, transform preserved).");
+                $"AuthoringWorkspaceEntry: Activated workspace target '{targetId}' from backend snapshot (index={index}, posture={posture}, preserveTransform={preserveTargetTransform}).");
             StartCoroutine(DeferSelectFirstRestoredContent(manager.GetActiveTarget()));
         }
 
@@ -498,7 +499,8 @@ namespace ARGallery.AppFlow
         }
 
         /// <summary>
-        /// Prefer saved target euler from the API snapshot; fall back to mock draft posture for offline demos.
+        /// Prefer non-wall euler from the API snapshot; otherwise use workspace draft posture
+        /// (target setup stores Floor/Ceiling before backend rows carry meaningful rotation).
         /// </summary>
         private static WorkspaceDomain.WorkspacePosture ResolvePostureForRestoredTarget(
             WorkspaceSnapshot snapshot,
@@ -506,7 +508,11 @@ namespace ARGallery.AppFlow
             WorkspaceDomain.WorkspaceDraftState workspace)
         {
             if (TryFindTargetSnapshot(snapshot, targetId, out TargetSnapshot ts) && ts.rotation != null)
-                return InferPostureFromTargetLocalEuler(ts.rotation.ToVector3());
+            {
+                Vector3 euler = ts.rotation.ToVector3();
+                if (!IsWallNeutralEuler(euler))
+                    return InferPostureFromTargetLocalEuler(euler);
+            }
 
             if (workspace?.target != null)
                 return workspace.target.posture;
@@ -515,16 +521,62 @@ namespace ARGallery.AppFlow
         }
 
         /// <summary>
+        /// Keep API-restored TRS when snapshot rotation already matches the resolved posture.
+        /// Apply preset rotation when snapshot is still at wall-neutral defaults (new target setup).
+        /// </summary>
+        private static bool ShouldPreserveTargetTransformFromSnapshot(
+            WorkspaceSnapshot snapshot,
+            string targetId,
+            WorkspaceDomain.WorkspacePosture resolvedPosture)
+        {
+            if (!TryFindTargetSnapshot(snapshot, targetId, out TargetSnapshot ts) || ts.rotation == null)
+                return false;
+
+            Vector3 euler = ts.rotation.ToVector3();
+            if (IsWallNeutralEuler(euler))
+                return false;
+
+            return InferPostureFromTargetLocalEuler(euler) == resolvedPosture;
+        }
+
+        /// <summary>
         /// Matches <see cref="WorkspacePresets.WorkspacePresetLibrary"/> target euler conventions (floor ≈ +90° X, ceiling ≈ -90° X).
         /// </summary>
         private static WorkspaceDomain.WorkspacePosture InferPostureFromTargetLocalEuler(Vector3 localEuler)
         {
-            float x = localEuler.x;
-            if (x >= 45f)
+            float pitch = NormalizePitchDegrees(localEuler.x);
+            if (pitch >= 45f)
                 return WorkspaceDomain.WorkspacePosture.Floor;
-            if (x <= -45f)
+            if (pitch <= -45f)
                 return WorkspaceDomain.WorkspacePosture.Ceiling;
             return WorkspaceDomain.WorkspacePosture.Wall;
+        }
+
+        private static bool IsWallNeutralEuler(Vector3 localEuler)
+        {
+            return Mathf.Abs(NormalizePitchDegrees(localEuler.x)) < 45f
+                && Mathf.Abs(NormalizeYawDegrees(localEuler.y)) < 45f
+                && Mathf.Abs(NormalizePitchDegrees(localEuler.z)) < 45f;
+        }
+
+        private static float NormalizePitchDegrees(float degrees)
+        {
+            float normalized = degrees % 360f;
+            if (normalized > 180f)
+                normalized -= 360f;
+            if (normalized < -180f)
+                normalized += 360f;
+            return normalized;
+        }
+
+        private static float NormalizeYawDegrees(float degrees)
+        {
+            float normalized = degrees % 360f;
+            if (normalized > 180f)
+                normalized -= 360f;
+            if (normalized < -180f)
+                normalized += 360f;
+            return normalized;
         }
 
         private static bool TryFindTargetSnapshot(WorkspaceSnapshot snapshot, string targetId, out TargetSnapshot match)

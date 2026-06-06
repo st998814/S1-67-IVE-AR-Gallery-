@@ -37,6 +37,9 @@ public class AuthoringUIController : MonoBehaviour
     private Label posLeftRightOffsetLabel;
     private Label posUpDownOffsetLabel;
     private Label posCloserFurtherOffsetLabel;
+    private Label posLeftRightRowLabel;
+    private Label posUpDownRowLabel;
+    private Label posCloserFurtherRowLabel;
     private Label targetPosXLabel;
     private Label targetPosYLabel;
     private Label targetPosZLabel;
@@ -216,6 +219,9 @@ public class AuthoringUIController : MonoBehaviour
         posLeftRightOffsetLabel = root.Q<Label>("PosLeftRightOffsetLabel");
         posUpDownOffsetLabel = root.Q<Label>("PosUpDownOffsetLabel");
         posCloserFurtherOffsetLabel = root.Q<Label>("PosCloserFurtherOffsetLabel");
+        posLeftRightRowLabel = root.Q<Label>("PosLeftRightRowLabel");
+        posUpDownRowLabel = root.Q<Label>("PosUpDownRowLabel");
+        posCloserFurtherRowLabel = root.Q<Label>("PosCloserFurtherRowLabel");
         targetPosXLabel = root.Q<Label>("TargetPosXLabel");
         targetPosYLabel = root.Q<Label>("TargetPosYLabel");
         targetPosZLabel = root.Q<Label>("TargetPosZLabel");
@@ -1423,7 +1429,9 @@ public class AuthoringUIController : MonoBehaviour
         return;
 
     Vector3 lp = target.localPosition;
-    SemanticDistanceFormatter.FormatOffsets(lp, out string leftRight, out string upDown, out string closerFurther);
+    SemanticAxisMapping.PlacementPosture posture = ResolvePlacementPosture();
+    ApplyPlacementOffsetRowLabels(posture);
+    SemanticDistanceFormatter.FormatOffsets(posture, lp, out string leftRight, out string upDown, out string closerFurther);
     SetLabelText(posLeftRightOffsetLabel, leftRight);
     SetLabelText(posUpDownOffsetLabel, upDown);
     SetLabelText(posCloserFurtherOffsetLabel, closerFurther);
@@ -2865,6 +2873,26 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         NotifyWorkspacePersistenceChanged();
     }
 
+    private SemanticAxisMapping.PlacementPosture ResolvePlacementPosture()
+    {
+        if (_placementBoundsService != null)
+            return _placementBoundsService.ActivePosture;
+
+        AuthoringWorkspaceEntry entry = FindFirstObjectByType<ARGallery.AppFlow.AuthoringWorkspaceEntry>();
+        if (entry != null)
+            return SemanticAxisMapping.FromWorkspacePosture((int)entry.AppliedPosture);
+
+        return SemanticAxisMapping.PlacementPosture.Wall;
+    }
+
+    private void ApplyPlacementOffsetRowLabels(SemanticAxisMapping.PlacementPosture posture)
+    {
+        SemanticAxisMapping.RowLabels labels = SemanticAxisMapping.GetRowLabels(posture);
+        SetLabelText(posLeftRightRowLabel, labels.leftRight);
+        SetLabelText(posUpDownRowLabel, labels.middle);
+        SetLabelText(posCloserFurtherRowLabel, labels.standoff);
+    }
+
     private void BindManipulatorBottomPanel(VisualElement root)
     {
         if (root == null)
@@ -2881,6 +2909,7 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
             () => authoringSpatialTarget,
             () => inspectorMode == InspectorMode.Content,
             () => transformGizmoController != null ? transformGizmoController.CurrentMode : TransformGizmoController.GizmoMode.Translate,
+            ResolvePlacementPosture,
             OnManipulatorPanelTransformEdited);
 
         _manipulatorPanel.RegisterModePill(modeMovePill, TransformGizmoController.GizmoMode.Translate, SetManipulatorMode);

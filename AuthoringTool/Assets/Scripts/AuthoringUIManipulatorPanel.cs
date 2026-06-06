@@ -14,6 +14,9 @@ public sealed class AuthoringUIManipulatorPanel
     private Slider _moveUpDownSlider;
     private Slider _moveCloserFurtherSlider;
     private Slider _uniformScaleSlider;
+    private Label _moveLeftRightRowLabel;
+    private Label _moveUpDownRowLabel;
+    private Label _moveCloserFurtherRowLabel;
     private Label _moveLeftRightValueLabel;
     private Label _moveUpDownValueLabel;
     private Label _moveCloserFurtherValueLabel;
@@ -25,6 +28,7 @@ public sealed class AuthoringUIManipulatorPanel
     private Func<Transform> _getSelectedContent;
     private Func<bool> _isContentInspectorActive;
     private Func<TransformGizmoController.GizmoMode> _getGizmoMode;
+    private Func<SemanticAxisMapping.PlacementPosture> _getPlacementPosture;
     private Action _onTransformEdited;
 
     private bool _suppressSliderCallbacks;
@@ -37,6 +41,7 @@ public sealed class AuthoringUIManipulatorPanel
         Func<Transform> getSelectedContent,
         Func<bool> isContentInspectorActive,
         Func<TransformGizmoController.GizmoMode> getGizmoMode,
+        Func<SemanticAxisMapping.PlacementPosture> getPlacementPosture,
         Action onTransformEdited)
     {
         _manipulator = manipulator;
@@ -45,6 +50,7 @@ public sealed class AuthoringUIManipulatorPanel
         _getSelectedContent = getSelectedContent;
         _isContentInspectorActive = isContentInspectorActive;
         _getGizmoMode = getGizmoMode;
+        _getPlacementPosture = getPlacementPosture;
         _onTransformEdited = onTransformEdited;
 
         _rootPanel = root.Q<VisualElement>("ManipulatorBottomPanel");
@@ -54,6 +60,9 @@ public sealed class AuthoringUIManipulatorPanel
         _moveUpDownSlider = root.Q<Slider>("MoveUpDownSlider");
         _moveCloserFurtherSlider = root.Q<Slider>("MoveCloserFurtherSlider");
         _uniformScaleSlider = root.Q<Slider>("UniformScaleSlider");
+        _moveLeftRightRowLabel = root.Q<Label>("MoveLeftRightRowLabel");
+        _moveUpDownRowLabel = root.Q<Label>("MoveUpDownRowLabel");
+        _moveCloserFurtherRowLabel = root.Q<Label>("MoveCloserFurtherRowLabel");
         _moveLeftRightValueLabel = root.Q<Label>("MoveLeftRightValueLabel");
         _moveUpDownValueLabel = root.Q<Label>("MoveUpDownValueLabel");
         _moveCloserFurtherValueLabel = root.Q<Label>("MoveCloserFurtherValueLabel");
@@ -165,6 +174,9 @@ public sealed class AuthoringUIManipulatorPanel
         if (content == null)
             return;
 
+        SemanticAxisMapping.PlacementPosture posture = ResolvePlacementPosture();
+        ApplyRowLabels(posture);
+
         _suppressSliderCallbacks = true;
         try
         {
@@ -177,16 +189,13 @@ public sealed class AuthoringUIManipulatorPanel
                 ApplyAxisRange(_moveCloserFurtherSlider, _placementBounds.GetAxisRange(content, PlacementBoundsCalculator.SemanticAxis.CloserFurther));
             }
 
-            if (_moveLeftRightSlider != null)
-                _moveLeftRightSlider.value = lp.x;
-            if (_moveUpDownSlider != null)
-                _moveUpDownSlider.value = lp.y;
-            if (_moveCloserFurtherSlider != null)
-                _moveCloserFurtherSlider.value = lp.z;
+            SetSliderValue(_moveLeftRightSlider, posture, PlacementBoundsCalculator.SemanticAxis.LeftRight, lp);
+            SetSliderValue(_moveUpDownSlider, posture, PlacementBoundsCalculator.SemanticAxis.UpDown, lp);
+            SetSliderValue(_moveCloserFurtherSlider, posture, PlacementBoundsCalculator.SemanticAxis.CloserFurther, lp);
 
-            UpdateSemanticValueLabel(_moveLeftRightValueLabel, PlacementBoundsCalculator.SemanticAxis.LeftRight, lp.x);
-            UpdateSemanticValueLabel(_moveUpDownValueLabel, PlacementBoundsCalculator.SemanticAxis.UpDown, lp.y);
-            UpdateSemanticValueLabel(_moveCloserFurtherValueLabel, PlacementBoundsCalculator.SemanticAxis.CloserFurther, lp.z);
+            UpdateSemanticValueLabel(_moveLeftRightValueLabel, posture, PlacementBoundsCalculator.SemanticAxis.LeftRight, lp);
+            UpdateSemanticValueLabel(_moveUpDownValueLabel, posture, PlacementBoundsCalculator.SemanticAxis.UpDown, lp);
+            UpdateSemanticValueLabel(_moveCloserFurtherValueLabel, posture, PlacementBoundsCalculator.SemanticAxis.CloserFurther, lp);
         }
         finally
         {
@@ -217,6 +226,40 @@ public sealed class AuthoringUIManipulatorPanel
         }
     }
 
+    private SemanticAxisMapping.PlacementPosture ResolvePlacementPosture()
+    {
+        if (_getPlacementPosture != null)
+            return _getPlacementPosture();
+
+        if (_placementBounds != null)
+            return _placementBounds.ActivePosture;
+
+        return SemanticAxisMapping.PlacementPosture.Wall;
+    }
+
+    private void ApplyRowLabels(SemanticAxisMapping.PlacementPosture posture)
+    {
+        SemanticAxisMapping.RowLabels labels = SemanticAxisMapping.GetRowLabels(posture);
+        if (_moveLeftRightRowLabel != null)
+            _moveLeftRightRowLabel.text = labels.leftRight;
+        if (_moveUpDownRowLabel != null)
+            _moveUpDownRowLabel.text = labels.middle;
+        if (_moveCloserFurtherRowLabel != null)
+            _moveCloserFurtherRowLabel.text = labels.standoff;
+    }
+
+    private static void SetSliderValue(
+        Slider slider,
+        SemanticAxisMapping.PlacementPosture posture,
+        PlacementBoundsCalculator.SemanticAxis axis,
+        Vector3 localPosition)
+    {
+        if (slider == null)
+            return;
+
+        slider.value = SemanticAxisMapping.GetComponentValue(posture, axis, localPosition);
+    }
+
     private static void ApplyAxisRange(Slider slider, PlacementBoundsCalculator.AxisRange range)
     {
         if (slider == null)
@@ -232,19 +275,20 @@ public sealed class AuthoringUIManipulatorPanel
         if (label == null || content == null)
             return;
 
-        int i = PlacementBoundsCalculator.GetLocalPositionComponentIndex(axis);
-        UpdateSemanticValueLabel(label, axis, content.localPosition[i]);
+        UpdateSemanticValueLabel(label, ResolvePlacementPosture(), axis, content.localPosition);
     }
 
     private static void UpdateSemanticValueLabel(
         Label label,
+        SemanticAxisMapping.PlacementPosture posture,
         PlacementBoundsCalculator.SemanticAxis axis,
-        float metres)
+        Vector3 localPosition)
     {
         if (label == null)
             return;
 
-        label.text = SemanticDistanceFormatter.FormatOffset(axis, metres);
+        float metres = SemanticAxisMapping.GetComponentValue(posture, axis, localPosition);
+        label.text = SemanticDistanceFormatter.FormatOffset(posture, axis, metres);
     }
 
     private static void UpdateScaleValueLabel(Label label, float scale)
