@@ -6,6 +6,7 @@ using ARGallery.Workspace.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
 using WorkspaceDomain = global::ARGallery.Workspace;
+using WorkspacePresets = global::ARGallery.Workspace.Presets;
 
 namespace ARGallery.AppFlow
 {
@@ -655,6 +656,7 @@ namespace ARGallery.AppFlow
 
             AppFlowController.SetWorkspaceName(workspaceName);
             WorkspaceDomain.WorkspacePosture selectedPosture = ParsePosture(postureValue);
+            Vector3 postureTargetEuler = WorkspacePresets.WorkspacePresetLibrary.GetPreset(selectedPosture).target.targetLocalEuler;
 
             if (targetIdInput != null)
                 targetIdInput.SetValueWithoutNotify(targetId);
@@ -677,7 +679,7 @@ namespace ARGallery.AppFlow
                 workspaceName = workspaceName,
                 width = physicalWidth,
                 localPosition = new ApiVector3Dto(0f, 0f, 0f),
-                localEuler = new ApiVector3Dto(0f, 0f, 0f),
+                localEuler = new ApiVector3Dto(postureTargetEuler.x, postureTargetEuler.y, postureTargetEuler.z),
                 localScale = new ApiVector3Dto(1f, 1f, 1f),
                 fileName = ResolveSelectedFileName(),
                 fileBytes = selectedTargetImageFile.data,
