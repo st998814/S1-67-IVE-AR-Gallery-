@@ -21,7 +21,7 @@ namespace ARGallery.AppFlow
         public string targetId = "";
         public byte[] targetImageBytes;
         public string targetImageFileName = "";
-        /// <summary>Workspace-relative path under persistentDataPath, e.g. assets/targets/&lt;guid&gt;.png</summary>
+        /// <summary>Legacy Layer 2 disk path (unused at runtime).</summary>
         public string targetImageRelativePath = "";
         /// <summary>Public URL for target image when local bytes/path are unavailable (WebGL fallback).</summary>
         public string targetImageUrl = "";

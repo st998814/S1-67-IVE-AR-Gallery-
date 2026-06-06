@@ -5,12 +5,11 @@ using WorkspaceServices = ARGallery.Workspace;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Deletes local persistence: workspace folder (including <c>snapshot.json</c> and assets), index row, and in-memory draft cache.
-    /// Call <c>DELETE /api/workspaces/&lt;id&gt;</c> first when using the backend so Postgres rows and upload files stay in sync.
+    /// Clears in-memory workspace draft cache and app session when a workspace is deleted.
+    /// Call <c>DELETE /api/workspaces/&lt;id&gt;</c> first so Postgres rows and upload files stay in sync.
     /// </summary>
     public static class WorkspaceDeletion
     {
-        /// <returns>False when disk delete fails; cache/session cleanup still attempted after successful disk delete.</returns>
         public static bool TryDeleteWorkspaceEverywhere(string workspaceId, out string errorMessage)
         {
             errorMessage = null;
@@ -21,13 +20,6 @@ namespace ARGallery.Workspace.Persistence
             }
 
             string id = workspaceId.Trim();
-
-            var snapshotRepo = new WorkspaceSnapshotRepository();
-            if (!snapshotRepo.TryDeleteWorkspace(id, out string diskError))
-            {
-                errorMessage = diskError;
-                return false;
-            }
 
             WorkspaceServices.WorkspaceDataServices.RemoveCachedWorkspaceDraft(id);
 

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Attached to spawned content under a target ContentRoot for snapshot serialization.
+    /// Attached to spawned content under a target ContentRoot. Upload payloads use in-memory bytes and/or <see cref="MediaUrl"/>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class AuthoredContentInstance : MonoBehaviour
@@ -18,6 +18,8 @@ namespace ARGallery.Workspace.Persistence
         public string Title = "";
         public string Description = "";
         public string TextBody = "";
+        [HideInInspector] public byte[] AssetBytes;
+        /// <summary>Legacy Layer 2 path; not written at runtime.</summary>
         public string AssetLocalPath = "";
         public string OriginalFileName = "";
         public string MediaUrl = "";

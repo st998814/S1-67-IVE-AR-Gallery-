@@ -18,7 +18,7 @@ public sealed class ObjectSelectionManager : MonoBehaviour
     [SerializeField] private float maxRayDistance = 500f;
     [SerializeField] private bool clearSelectionOnEmptyClick = true;
     [SerializeField] private bool blockWhenPointerOverUi = true;
-    [Tooltip("UI Toolkit: when set, blocks scene selection like ContentTransformController did (EventSystem alone is not enough).")]
+    [Tooltip("UI Toolkit: when set, blocks scene selection when pointer is over UI (EventSystem alone is not enough).")]
     [SerializeField] private AuthoringUIController authoringUiOverride;
 
     private Transform _selected;

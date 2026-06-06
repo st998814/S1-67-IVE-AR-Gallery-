@@ -14,7 +14,6 @@ using UnityEngine.InputSystem;
 
 public class AuthoringUIController : MonoBehaviour
 {
-    public DatabaseManager dbManager;
     public GameObject videoPrefab;
     public StyleSheet mobileStyleSheet;
 
@@ -90,11 +89,6 @@ public class AuthoringUIController : MonoBehaviour
     private Coroutine _errorToastCoroutine;
     private Coroutine _loadingHideRoutine;
     private float _loadingShownAt;
-    private GameObject _lastDeletedObject;
-    private AuthoredContentInstance _lastDeletedContentInstance;
-    private ContentDraftState _lastDeletedDraft;
-    private DraggableObject _lastDeletedDraggable;
-
     private VisualElement _syncStatusToast;
     private Label _syncStatusTitle;
     private Label _syncStatusMessage;
@@ -575,6 +569,36 @@ public class AuthoringUIController : MonoBehaviour
             contentDraftsByDraggable.Remove(draggable);
     }
 
+    private bool TryDeleteSelectedAuthoredContent()
+    {
+        if (authoringSpatialTarget == null)
+            return false;
+
+        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
+        if (ci == null)
+            return false;
+
+        Transform contentTransform = authoringSpatialTarget;
+        GameObject contentObject = contentTransform.gameObject;
+
+        AuthoredObjectRegistry.UnregisterContent(ci);
+        RemoveDraftForTransform(contentTransform);
+
+        authoringTransformCoordinator ??= ResolveAuthoringTransformCoordinator();
+        authoringTransformCoordinator?.ClearContentSelection(syncAuthoringUi: false);
+        ClearAuthoringSpatialSelection();
+
+        spawnerManager ??= BuildSpawnerManager();
+        if (spawnerManager == null || !spawnerManager.ReleaseSpawnedContent(contentObject))
+            Destroy(contentObject);
+
+        authoringTransformCoordinator?.RefreshActiveContentList();
+        FindFirstObjectByType<SpatialMappingCoordinator>()?.RefreshForCurrentSelection();
+        NotifyWorkspacePersistenceChanged();
+        UpdateAddContentButtonIcon();
+        return true;
+    }
+
     // --- TASK 6: 用于独立测试的 Update 方法 ---
     private void Update()
 {
@@ -593,69 +617,9 @@ public class AuthoringUIController : MonoBehaviour
         ShowError("Upload Failed! \n HTTP 500 Internal Server Error\n"+ System.DateTime.Now.ToString("HH:mm:ss"));
     }
 
-    // Delete 键：隐藏内容（可撤回）
-    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
-        && !Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
-    {
-        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
-        if (ci != null)
-        {
-            // 真正销毁上一个待删除的物体（如果有）
-            if (_lastDeletedObject != null) Destroy(_lastDeletedObject);
-
-            _lastDeletedContentInstance = ci;
-            _lastDeletedDraggable = activeDraggedObject;
-            _lastDeletedDraft = activeContentDraft;
-            _lastDeletedObject = authoringSpatialTarget.gameObject;
-
-            AuthoredObjectRegistry.UnregisterContent(ci);
-            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
-                contentDraftsByTransform.Remove(authoringSpatialTarget);
-            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
-                contentDraftsByDraggable.Remove(activeDraggedObject);
-
-            _lastDeletedObject.SetActive(false);
-            ClearAuthoringSpatialSelection();
-            NotifyWorkspacePersistenceChanged();
-        }
-    }
-
-    // Shift + Delete：立即彻底销毁（不可撤回）
-    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame
-        && Keyboard.current.shiftKey.isPressed && authoringSpatialTarget != null)
-    {
-        AuthoredContentInstance ci = authoringSpatialTarget.GetComponent<AuthoredContentInstance>();
-        if (ci != null)
-        {
-            if (_lastDeletedObject != null) { Destroy(_lastDeletedObject); _lastDeletedObject = null; }
-            AuthoredObjectRegistry.UnregisterContent(ci);
-            if (contentDraftsByTransform.ContainsKey(authoringSpatialTarget))
-                contentDraftsByTransform.Remove(authoringSpatialTarget);
-            if (activeDraggedObject != null && contentDraftsByDraggable.ContainsKey(activeDraggedObject))
-                contentDraftsByDraggable.Remove(activeDraggedObject);
-            GameObject toDestroy = authoringSpatialTarget.gameObject;
-            ClearAuthoringSpatialSelection();
-            Destroy(toDestroy);
-            NotifyWorkspacePersistenceChanged();
-        }
-    }
-
-    // Ctrl + Z：恢复最后一次删除
-    if (Keyboard.current != null && Keyboard.current.ctrlKey.isPressed
-        && Keyboard.current.zKey.wasPressedThisFrame && _lastDeletedObject != null)
-    {
-        _lastDeletedObject.SetActive(true);
-        AuthoredObjectRegistry.RegisterContent(_lastDeletedContentInstance);
-        if (_lastDeletedDraggable != null && _lastDeletedDraft != null)
-            contentDraftsByDraggable[_lastDeletedDraggable] = _lastDeletedDraft;
-        if (_lastDeletedContentInstance != null && _lastDeletedDraft != null)
-            contentDraftsByTransform[_lastDeletedContentInstance.transform] = _lastDeletedDraft;
-        _lastDeletedObject = null;
-        _lastDeletedContentInstance = null;
-        _lastDeletedDraft = null;
-        _lastDeletedDraggable = null;
-        NotifyWorkspacePersistenceChanged();
-    }
+    // Delete: release pooled shells or destroy; unregister from sync registry.
+    if (Keyboard.current != null && Keyboard.current.deleteKey.wasPressedThisFrame)
+        TryDeleteSelectedAuthoredContent();
 
     // Keep inspector coordinates synced when moving target/content via 3D interaction.
     SyncSpatialInspectorRealtime();
@@ -1611,9 +1575,9 @@ public class AuthoringUIController : MonoBehaviour
             return;
         }
 
-        if (authored != null && !string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        if (authored != null && authored.TargetReferenceBytes != null && authored.TargetReferenceBytes.Length > 0)
         {
-            targetReferenceStatusLabel.text = "Saved locally";
+            targetReferenceStatusLabel.text = "Ready to sync";
             targetReferenceStatusLabel.style.color = new StyleColor(new Color32(229, 231, 235, 255));
             return;
         }
@@ -1746,35 +1710,6 @@ public class AuthoringUIController : MonoBehaviour
     [Tooltip("相对墙面沿法线微移，减轻与 TargetVisual 灰框 Z-fighting")]
     [SerializeField] private float spawnForwardOffsetFromWall = 0.008f;
     [SerializeField] private WorkspaceRemoteSyncService remoteSyncService;
-
-    /// <param name="alignToTargetFrame">图片应对齐场景中 TargetVisual 海报框的位置与缩放；文字一般保持 ContentRoot 原点。</param>
-    private void ParentNewContentToActiveTarget(GameObject instance, bool alignToTargetFrame)
-    {
-        Transform contentRoot = TryGetActiveContentRoot();
-        if (contentRoot == null)
-        {
-            Debug.LogWarning("AuthoringUIController: 未找到当前 Target 下的 ContentRoot，物体将挂在场景根下。");
-            return;
-        }
-
-        instance.transform.SetParent(contentRoot, false);
-
-        Transform targetVisual = contentRoot.parent != null ? contentRoot.parent.Find("TargetVisual") : null;
-        if (alignToTargetFrame && targetVisual != null)
-        {
-            instance.transform.localPosition = targetVisual.localPosition;
-            instance.transform.localRotation = targetVisual.localRotation;
-            instance.transform.localScale = targetVisual.localScale;
-            if (spawnForwardOffsetFromWall > 0f)
-                instance.transform.position += instance.transform.forward * spawnForwardOffsetFromWall;
-        }
-        else
-        {
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
-            instance.transform.localScale = Vector3.one;
-        }
-    }
 
     /// <summary>Inspector slot, or <see cref="Resources"/> at <see cref="ModelContentContainerResourcesPath"/>.</summary>
     private GameObject GetModelContentContainerPrefab()
@@ -1959,6 +1894,12 @@ public class AuthoringUIController : MonoBehaviour
     private bool TryPersistTargetReferenceLocally(string targetId, byte[] bytes, string fileName, out string errorMessage)
     {
         errorMessage = null;
+        if (bytes == null || bytes.Length == 0)
+        {
+            errorMessage = "Reference image is empty.";
+            return false;
+        }
+
         if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
             || string.IsNullOrWhiteSpace(session.workspaceId))
         {
@@ -1966,19 +1907,18 @@ public class AuthoringUIController : MonoBehaviour
             return false;
         }
 
-        var assetRepo = new WorkspaceAssetRepository();
-        if (!assetRepo.TryImportTargetReferenceImage(session.workspaceId.Trim(), fileName, bytes, null, out string relativePath, out errorMessage))
-            return false;
-
         AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
-        if (authored != null)
+        if (authored == null)
         {
-            authored.TargetReferenceLocalPath = relativePath;
-            authored.TargetReferenceOriginalFileName = fileName ?? "";
-            authored.TargetReferenceRemoteDirty = true;
-            authored.RemoteDirty = true;
+            errorMessage = "Active target not found.";
+            return false;
         }
 
+        authored.TargetReferenceBytes = PersistenceByteUtility.CloneBytes(bytes);
+        authored.TargetReferenceLocalPath = "";
+        authored.TargetReferenceOriginalFileName = fileName ?? "";
+        authored.TargetReferenceRemoteDirty = true;
+        authored.RemoteDirty = true;
         return true;
     }
 
@@ -2010,29 +1950,12 @@ public class AuthoringUIController : MonoBehaviour
             return;
 
         AuthoredTargetInstance authored = ResolveAuthoredTargetById(targetId);
-        if (authored == null || string.IsNullOrWhiteSpace(authored.TargetReferenceLocalPath))
+        if (authored == null || authored.TargetReferenceBytes == null || authored.TargetReferenceBytes.Length == 0)
             return;
 
-        if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null)
-            return;
-
-        string full = WorkspacePersistencePaths.ResolveRelativeToWorkspaceRoot(
-            session.workspaceId.Trim(),
-            authored.TargetReferenceLocalPath);
-        if (string.IsNullOrWhiteSpace(full) || !System.IO.File.Exists(full))
-            return;
-
-        try
-        {
-            byte[] bytes = System.IO.File.ReadAllBytes(full);
-            SetOrReplaceTargetReferenceDraft(targetId, bytes, authored.TargetReferenceOriginalFileName);
-            if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
-                draft.isUnsaved = authored.TargetReferenceRemoteDirty;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning($"AuthoringUIController: could not load target reference preview: {ex.Message}");
-        }
+        SetOrReplaceTargetReferenceDraft(targetId, authored.TargetReferenceBytes, authored.TargetReferenceOriginalFileName);
+        if (targetReferencesByTargetId.TryGetValue(targetId, out TargetReferenceDraft draft) && draft != null)
+            draft.isUnsaved = authored.TargetReferenceRemoteDirty;
     }
 
     private void RequestWorkspaceSnapshotSave()
@@ -2511,27 +2434,54 @@ private void SpawnLocalContentFromFileSelection(FrostweepGames.Plugins.WebGLFile
         _syncToastHideRoutine = StartCoroutine(HideSyncStatusToastAfterDelay(isError ? 8f : 4f));
     }
 
+    private bool backToSwitcherInProgress;
+
     void OnBackToSwitcherButtonClicked()
     {
-        if (SceneTransitionService.IsTransitioning)
+        if (SceneTransitionService.IsTransitioning || backToSwitcherInProgress)
             return;
 
-        Debug.Log("[WorkspacePersistence] BackToSwitcher: flushing snapshot before ClearWorkspaceSession.");
-        bool hadSession = AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext sessionBefore)
-            && sessionBefore != null && !string.IsNullOrWhiteSpace(sessionBefore.workspaceId);
-        Debug.Log($"[WorkspacePersistence] BackToSwitcher: hadSession={hadSession} workspaceId={(hadSession ? sessionBefore.workspaceId : "(none)")}");
+        StartCoroutine(BackToSwitcherRoutine());
+    }
 
-        WorkspaceAutoSaveService autoSave = UnityEngine.Object.FindFirstObjectByType<WorkspaceAutoSaveService>();
-        if (autoSave == null)
-            Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceAutoSaveService not found in scene — snapshot will not flush.");
-        else
-            autoSave.FlushSnapshotToDisk();
+    private IEnumerator BackToSwitcherRoutine()
+    {
+        backToSwitcherInProgress = true;
+        if (backToSwitcherButton != null)
+            backToSwitcherButton.SetEnabled(false);
 
-        ResolveRemoteSyncService()?.SyncNow();
+        try
+        {
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session)
+                || session == null
+                || string.IsNullOrWhiteSpace(session.workspaceId))
+            {
+                Debug.Log("[WorkspacePersistence] BackToSwitcher: no session — clearing and loading switcher.");
+                AppFlowController.ClearWorkspaceSession();
+                AppFlowController.TransitionToWorkspaceSwitcher();
+                yield break;
+            }
 
-        AppFlowController.ClearWorkspaceSession();
-        Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
-        SceneTransitionService.TransitionToScene(AppFlowController.WorkspaceSwitcherSceneName);
+            string workspaceId = session.workspaceId.Trim();
+            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
+            Debug.Log($"[WorkspacePersistence] BackToSwitcher: syncing workspace '{workspaceId}' before navigation.");
+
+            WorkspaceRemoteSyncService remoteSync = ResolveRemoteSyncService();
+            if (remoteSync != null)
+                yield return remoteSync.SyncWorkspaceAndWait(workspaceId, workspaceName);
+            else
+                Debug.LogWarning("[WorkspacePersistence] BackToSwitcher: WorkspaceRemoteSyncService not found — skipping cloud sync.");
+
+            AppFlowController.ClearWorkspaceSession();
+            Debug.Log("[WorkspacePersistence] BackToSwitcher: ClearWorkspaceSession done → loading switcher.");
+            AppFlowController.TransitionToWorkspaceSwitcher();
+        }
+        finally
+        {
+            backToSwitcherInProgress = false;
+            if (backToSwitcherButton != null)
+                backToSwitcherButton.SetEnabled(true);
+        }
     }
 
     private IEnumerator SaveAllDraftsRoutine()

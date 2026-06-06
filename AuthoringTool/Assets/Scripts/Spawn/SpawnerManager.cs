@@ -310,8 +310,22 @@ namespace ARGallery.Spawning
 
         public SpawnTargetResult CreateTarget(SpawnTargetRequest request)
         {
-            var result = targetWorkflowService.CreateAndRegisterLocal(runner, request.targetName, request.targetId, request.displayLabel, request.physicalWidthMeters);
-            return new SpawnTargetResult { success = result.success, targetId = result.targetId, targetObject = result.targetObject, message = result.message };
+            TargetWorkflowService.LocalCreateResult result = targetWorkflowService.CreateAndRegisterLocal(
+                runner,
+                request.targetName,
+                request.targetId,
+                request.displayLabel,
+                request.physicalWidthMeters);
+
+            return new SpawnTargetResult
+            {
+                success = result.success,
+                isDuplicate = result.isDuplicate,
+                duplicateIndex = result.duplicateIndex,
+                targetId = result.targetId,
+                targetObject = result.targetObject,
+                message = result.message
+            };
         }
 
         public bool ReleaseSpawnedContent(GameObject instance)

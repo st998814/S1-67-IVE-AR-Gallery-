@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// EditMode regression tests for content placement offset formula (T3.23).
-/// Mirrors the default position logic in ContentPlacementManager.AddContentToActiveTarget.
+/// Regression tests for the legacy dev cube placement offset formula (offsetX = count * 0.5).
 ///   offsetX = existingCount * 0.5f
 ///   position = (offsetX, 0.8f, -0.6f)
 ///   scale    = (0.5f, 0.5f, 0.5f)

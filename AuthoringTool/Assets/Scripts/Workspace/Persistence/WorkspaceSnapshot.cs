@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Root snapshot persisted as workspaces/&lt;workspaceId&gt;/snapshot.json (JSON only; binaries live under assets/).
+    /// In-memory workspace snapshot built from backend GET or registry state (Layer 3 sync).
     /// Uses arrays because Unity JsonUtility does not serialize List&lt;T&gt; at the root or as object fields reliably.
     /// </summary>
     [Serializable]
@@ -82,22 +82,5 @@ namespace ARGallery.Workspace.Persistence
         public bool remoteDirty;
         /// <summary>ISO-8601 UTC of last successful remote sync for this content snapshot row.</summary>
         public string lastRemoteSyncedAtUtc = "";
-    }
-
-    /// <summary>Wrapper for workspace-index.json (JsonUtility requires named root object).</summary>
-    [Serializable]
-    public class WorkspaceIndexFile
-    {
-        public string schemaVersion = "v1";
-        public WorkspaceIndexEntry[] entries = Array.Empty<WorkspaceIndexEntry>();
-    }
-
-    [Serializable]
-    public class WorkspaceIndexEntry
-    {
-        public string workspaceId = "";
-        public string workspaceName = "";
-        public string updatedAtUtc = "";
-        public string thumbnailKey = "";
     }
 }

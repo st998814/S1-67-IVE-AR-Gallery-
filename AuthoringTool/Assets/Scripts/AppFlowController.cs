@@ -1,11 +1,11 @@
+using System;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace ARGallery.AppFlow
 {
     /// <summary>
-    /// Minimal app-level scene flow coordinator for:
-    /// Landing -> WorkspaceSwitcher -> AuthoringToolScene.
+    /// App-level scene flow and workspace session (in-memory, cloned on read).
+    /// Scene changes go through <see cref="SceneTransitionService"/> for fade + debounce guards.
     /// </summary>
     public static class AppFlowController
     {
@@ -16,10 +16,10 @@ namespace ARGallery.AppFlow
 
         private static WorkspaceSessionContext currentWorkspace;
 
-        public static WorkspaceSessionContext CurrentWorkspace
-        {
-            get => currentWorkspace?.Clone();
-        }
+        public static bool HasWorkspaceSession => currentWorkspace != null;
+
+        /// <summary>Clone of the live session; safe to inspect — do not mutate (changes are ignored).</summary>
+        public static WorkspaceSessionContext CurrentWorkspace => currentWorkspace?.Clone();
 
         public static void ClearWorkspaceSession()
         {
@@ -37,6 +37,7 @@ namespace ARGallery.AppFlow
             currentWorkspace = context.Clone();
         }
 
+        /// <summary>Returns a clone of the live session. Mutating the out value does not update app state.</summary>
         public static bool TryGetWorkspaceSession(out WorkspaceSessionContext context)
         {
             if (currentWorkspace == null)
@@ -49,28 +50,55 @@ namespace ARGallery.AppFlow
             return true;
         }
 
-        public static void GoToLanding()
+        /// <summary>Mutates the live session only. Returns false when no session is active.</summary>
+        public static bool TryUpdateWorkspaceSession(Action<WorkspaceSessionContext> mutator)
         {
-            SceneManager.LoadScene(LandingSceneName);
+            if (currentWorkspace == null || mutator == null)
+                return false;
+
+            mutator(currentWorkspace);
+            return true;
         }
 
-        public static void GoToWorkspaceSwitcher()
+        public static bool TransitionToLanding()
         {
-            SceneManager.LoadScene(WorkspaceSwitcherSceneName);
+            return SceneTransitionService.TransitionToScene(LandingSceneName);
         }
 
-        public static void EnterAuthoringWithWorkspace(WorkspaceSessionContext context)
+        public static bool TransitionToWorkspaceSwitcher()
+        {
+            return SceneTransitionService.TransitionToScene(WorkspaceSwitcherSceneName);
+        }
+
+        public static bool TransitionToTargetInstantiation()
+        {
+            return SceneTransitionService.TransitionToScene(TargetInstantiationSceneName);
+        }
+
+        public static bool TransitionToAuthoring()
+        {
+            return SceneTransitionService.TransitionToScene(AuthoringSceneName);
+        }
+
+        /// <summary>Sets session then transitions to authoring (fade). Returns false if transition was rejected.</summary>
+        public static bool EnterAuthoringWithWorkspace(WorkspaceSessionContext context)
         {
             SetWorkspaceSession(context);
-            SceneManager.LoadScene(AuthoringSceneName);
+            return TransitionToAuthoring();
         }
+
+        [Obsolete("Use TransitionToLanding() for fade + transition guard.")]
+        public static bool GoToLanding() => TransitionToLanding();
+
+        [Obsolete("Use TransitionToWorkspaceSwitcher() for fade + transition guard.")]
+        public static bool GoToWorkspaceSwitcher() => TransitionToWorkspaceSwitcher();
 
         public static WorkspaceSessionContext BuildNewWorkspaceSession(string workspaceName)
         {
             string normalizedName = string.IsNullOrWhiteSpace(workspaceName)
                 ? "New Workspace"
                 : workspaceName.Trim();
-            string generatedId = System.Guid.NewGuid().ToString("N");
+            string generatedId = Guid.NewGuid().ToString("N");
 
             return new WorkspaceSessionContext
             {
@@ -87,8 +115,24 @@ namespace ARGallery.AppFlow
             if (currentWorkspace == null)
                 return;
 
-            currentWorkspace.targetId = string.IsNullOrWhiteSpace(targetId) ? currentWorkspace.targetId : targetId.Trim();
+            if (!string.IsNullOrWhiteSpace(targetId))
+                currentWorkspace.targetId = targetId.Trim();
             currentWorkspace.setupState = WorkspaceSetupState.Ready;
+            currentWorkspace.isNewWorkspace = false;
+        }
+
+        public static void SetWorkspaceTargetId(string targetId)
+        {
+            if (currentWorkspace == null || string.IsNullOrWhiteSpace(targetId))
+                return;
+            currentWorkspace.targetId = targetId.Trim();
+        }
+
+        public static void SetWorkspaceTargetImageUrl(string targetImageUrl)
+        {
+            if (currentWorkspace == null)
+                return;
+            currentWorkspace.targetImageUrl = string.IsNullOrWhiteSpace(targetImageUrl) ? "" : targetImageUrl.Trim();
         }
 
         public static void SetWorkspaceTargetImage(byte[] imageBytes, string fileName = "")
@@ -99,12 +143,13 @@ namespace ARGallery.AppFlow
             currentWorkspace.targetImageFileName = fileName ?? "";
         }
 
-        /// <summary>Sets copied-on-disk target image path (see WorkspaceAssetRepository). Forward slashes.</summary>
+        /// <summary>Legacy Layer 2 — local disk paths are no longer used (WebGL / L3-only).</summary>
+        [Obsolete("Local target image paths are disabled. Use SetWorkspaceTargetImage(bytes) or target URLs after upload.")]
         public static void SetWorkspaceTargetImageLocalPath(string relativePathWithForwardSlashes)
         {
             if (currentWorkspace == null)
                 return;
-            currentWorkspace.targetImageRelativePath = relativePathWithForwardSlashes ?? "";
+            currentWorkspace.targetImageRelativePath = "";
         }
 
         public static void SetWorkspaceVuforiaTargetId(string vuforiaCloudTargetId)

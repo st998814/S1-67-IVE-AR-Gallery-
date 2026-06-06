@@ -685,8 +685,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1480848359}
   - component: {fileID: 1480848358}
-  - component: {fileID: 1480848360}
-  - component: {fileID: 1480848362}
   m_Layer: 0
   m_Name: TargetSelectionManager
   m_TagString: Untagged
@@ -725,32 +723,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1480848360
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1480848357}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 28587f29ecc83409dbfc28fe568ee803, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ContentPlacementManager
-  targetSelectionManager: {fileID: 1480848358}
---- !u!114 &1480848362
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1480848357}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e661be10d527c46f190d095f34c71464, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlacementDataBinder
-  imageTargetRoot: {fileID: 507022752}
 --- !u!1 &1900000001
 GameObject:
   m_ObjectHideFlags: 0
@@ -760,7 +732,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1900000002}
-  - component: {fileID: 1900000003}
   - component: {fileID: 1900000004}
   m_Layer: 0
   m_Name: NetworkManager
@@ -784,19 +755,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1900000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1900000001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 311579385f6b9b14896902479d106443, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DatabaseManager
-  apiUrl: http://127.0.0.1:5050/api/content
 --- !u!114 &1900000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -886,7 +844,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 02f0aa4d0f76bfd4cb68a2ece2db2af3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthoringUIController
-  dbManager: {fileID: 1900000003}
   videoPrefab: {fileID: 5789709158885535786, guid: 43d0f67163787fc49849885478e03636, type: 3}
   targetSelectionManager: {fileID: 1480848358}
   authoringTransformCoordinator: {fileID: 188100007}

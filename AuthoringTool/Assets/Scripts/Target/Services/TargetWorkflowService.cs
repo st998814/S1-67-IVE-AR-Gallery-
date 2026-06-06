@@ -226,6 +226,11 @@ public class TargetWorkflowService
             label.gameObject.SetActive(false);
 
         TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetObject, texture);
+
+        var authored = targetObject.GetComponent<AuthoredTargetInstance>();
+        if (authored != null)
+            authored.TargetImageBytes = PersistenceByteUtility.CloneBytes(imageBytes);
+
         return true;
     }
 

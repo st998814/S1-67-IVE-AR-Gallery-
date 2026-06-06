@@ -15,14 +15,8 @@ EditorBuildSettings:
     path: Assets/Scenes/AuthoringToolScene.unity
     guid: a364707fbd66c443b82bd940ac7277cf
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
     path: Assets/Scenes/TargetInstantiationScene.unity
     guid: c8506298fef9f4a2d9bcdc67ff6e9516
-  - enabled: 1
-    path: Assets/Scenes/ARViewerScene.unity
-    guid: 9e850748791504741adea0d1318a734d
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: c6bd7c4cd547d6448bc6e0ce8fb5a5d3, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

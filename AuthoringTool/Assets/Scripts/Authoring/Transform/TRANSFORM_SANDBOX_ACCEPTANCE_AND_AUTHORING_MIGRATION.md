@@ -1,6 +1,6 @@
 # TransformSandboxScene acceptance — AuthoringToolScene migration
 
-This document records **static verification** of `TransformSandboxScene` for the target-centric gizmo pipeline (DEV‑177 style), **manual acceptance tests** to run in the Unity Editor, and a **migration checklist** for `AuthoringToolScene`.
+This document records **static verification** of `TransformSandboxScene` for the target-centric gizmo pipeline (DEV‑177 style), **manual acceptance tests** to run in the Unity Editor, and the **AuthoringToolScene migration status**.
 
 ---
 
@@ -52,36 +52,26 @@ Run these once after opening the scene and saving assets.
 
 ---
 
-## Part C — Migration checklist (`AuthoringToolScene`)
+## Part C — AuthoringToolScene migration status
 
-Authoring today uses **`ContentTransformController`** + **`TargetSelectionManager`** + **`ImageTargetRoot`**. Sandbox uses **`ObjectSelectionManager`** + **`TransformGizmoController`** + **`TargetRoot`** naming. Migrate in phases.
+**Status: complete.** `AuthoringToolScene` uses **`AuthoringTransformCoordinator`** + **`TransformGizmoController`** + **`ObjectSelectionManager`** (not legacy `ContentTransformController`).
 
-### Scene wiring
+| Item | Status |
+|------|--------|
+| Transform pipeline on scene (`TransformGizmoController`, `AuthoringTransformCoordinator`, `ObjectSelectionManager`) | **Done** |
+| `TargetSelectionManager` + `ImageTargetRoot` hierarchy for runtime targets | **Done** (active target drives `ObjectSelectionManager.contentRoot`) |
+| Semantic inspector sliders via `ContentTransformManipulator` | **Done** |
+| `RuntimeCameraController` input gating | **Done** |
+| Workspace autosave hooks from transform changes | **Done** (via coordinator + registry) |
 
-- [ ] Add (or duplicate from sandbox) a **`TransformSystems`**-style GameObject with: `ObjectSelectionManager`, `TransformGizmoController`, `TargetLocalTransformService`, `FrontSideConstraint`.
-- [ ] Optionally add **`TransformInteractionCompositionRoot`** and assign: **`targetRoot`** (see below), **`contentRoot`**, **`mainCamera`**, **`targetPlaneAnchor`** (quad/wall transform if different from pivot), plus component refs — reduces duplicate Inspector wiring.
-- [ ] Map **`ImageTargetRoot`** → **`targetRoot`** for `TargetMovementController`, `FrontSideConstraint`, and plane drag. Update **`FrontSideConstraint`** / **`GameObject.Find("TargetRoot")`** usage: either rename a runtime helper transform for sandbox parity or assign **`targetRoot`** / **`contentRoot`** explicitly in Inspector (recommended for authoring).
-- [ ] Ensure **`ContentRoot`** exists under each visible authoring target and matches **`ObjectSelectionManager.contentRoot`** when that target is active (multi-target: align with `TargetSelectionManager.ActiveTargetChanged` — may require a small bridge script or reconfigure selection when the active target index changes).
-- [ ] Wire **`TargetMovementController`**: `targetRoot`, `contentRoot`, `raycastCamera`, `gizmoController`, **`planeAnchor`** (wall quad), `targetMask`.
-- [ ] Keep **`RuntimeCameraController`** on the authoring camera (same blocking rules as sandbox).
-
-### Legacy controller
-
-- [ ] **`ContentTransformController`**: disable or remove after **`TransformGizmoController`** + **`ObjectSelectionManager`** cover selection, gizmo modes, and **`AuthoringUIController.OnContentSelectedInScene`** / spatial sync. Port any calls like **`SelectContentTransform`**, **`RefreshContentList`**, upload hooks to the new selection API or thin adapter.
-- [ ] Confirm only one system owns RTG “work” gizmo instances to avoid duplicate gizmos (legacy creates a universal gizmo in code).
-
-### UI / product
-
-- [ ] **`AuthoringUIController`**: verify transform fields still sync when selection changes (was driven by `ContentTransformController`).
-- [ ] Presets / workspace: **`WorkspacePresetLibrary`** affects camera + target rotation — after migration, verify target-plane drag and **`FrontSideConstraint`** match preset posture (wall vs floor).
-
-### Validation
+### Ongoing validation
 
 - [ ] Repeat **Part B** checks in **`AuthoringToolScene`** with real UI (focus fields, panels).
-- [ ] Regression: tracker targets, spawn/upload flows, switching AR targets from dropdown.
+- [ ] Regression: spawn/upload flows, workspace switcher round-trip, backend restore.
 
 ---
 
 ## Revision history
 
 - **2026‑05‑04** — Static audit; sandbox `TargetMovementController` wired `contentRoot` + `planeAnchor`; acceptance + migration lists authored.
+- **2026‑06‑04** — Migration marked complete; legacy `ContentTransformController` references removed from docs.

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Attached to an authored image-target root so it can be round-tripped through <see cref="WorkspaceSnapshot"/>.
+    /// Attached to an authored image-target root. Media for sync is held in memory (bytes) and/or public URLs — not on disk.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class AuthoredTargetInstance : MonoBehaviour
@@ -14,11 +14,13 @@ namespace ARGallery.Workspace.Persistence
         public string ServerTargetId = "";
         public string VuforiaTargetId = "";
         public string TargetName = "";
-        /// <summary>Public URL after sync; used when local bytes/path are unavailable (e.g. WebGL).</summary>
+        /// <summary>Public URL after sync or from backend restore.</summary>
         public string TargetImageUrl = "";
-        /// <summary>Relative path under workspace folder, e.g. assets/targets/&lt;id&gt;.png</summary>
+        [HideInInspector] public byte[] TargetImageBytes;
+        /// <summary>Legacy Layer 2 path; not written at runtime.</summary>
         public string TargetImageLocalPath = "";
-        /// <summary>Relative path under workspace folder for optional placement reference photo.</summary>
+        [HideInInspector] public byte[] TargetReferenceBytes;
+        /// <summary>Legacy Layer 2 path; not written at runtime.</summary>
         public string TargetReferenceLocalPath = "";
         /// <summary>Public URL after last successful reference upload (Layer 3).</summary>
         public string TargetReferenceImageUrl = "";

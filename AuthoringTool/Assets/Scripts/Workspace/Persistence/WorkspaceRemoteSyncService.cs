@@ -17,7 +17,8 @@ namespace ARGallery.Workspace.Persistence
     }
 
     /// <summary>
-    /// Layer 3: remote sync after successful autosave snapshots (<see cref="WorkspaceAutoSaveService.SnapshotSaved"/>).
+    /// Layer 3: remote sync from in-scene <see cref="AuthoredObjectRegistry"/> (no local snapshot.json writes).
+    /// Debounced via <see cref="WorkspaceAutoSaveService.DebouncedWorkspaceChanged"/>.
     /// Uses single-flight execution with queued reruns when changes land during an active pass.
     /// </summary>
     public sealed class WorkspaceRemoteSyncService : MonoBehaviour
@@ -31,8 +32,6 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private float apiTimeoutSeconds = 25f;
 
         private WorkspaceAutoSaveService _autoSave;
-        private readonly WorkspaceSnapshotRepository _snapshotRepo = new WorkspaceSnapshotRepository();
-        private readonly WorkspaceAssetRepository _assetRepo = new WorkspaceAssetRepository();
         private readonly TargetWorkflowService _targetWorkflow = new TargetWorkflowService();
         private readonly ContentWorkflowService _contentWorkflow = new ContentWorkflowService();
 
@@ -44,6 +43,10 @@ namespace ARGallery.Workspace.Persistence
         private string _lastFailReason;
         private bool _lastStepOk;
 
+        /// <summary>Workspace ids for the active <see cref="RunRemoteSyncPass"/> (explicit or from session).</summary>
+        private string _activePassWorkspaceId;
+        private string _activePassWorkspaceName;
+
         private void RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind kind, string message)
         {
             RemoteSyncToastChanged?.Invoke(kind, message ?? "");
@@ -53,15 +56,15 @@ namespace ARGallery.Workspace.Persistence
         {
             _autoSave = FindFirstObjectByType<WorkspaceAutoSaveService>();
             if (_autoSave != null)
-                _autoSave.SnapshotSaved += OnSnapshotSaved;
+                _autoSave.DebouncedWorkspaceChanged += OnDebouncedWorkspaceChanged;
             else
-                Debug.LogWarning($"{LogPrefix}WorkspaceAutoSaveService not found — auto remote sync disabled until present.");
+                Debug.LogWarning($"{LogPrefix}WorkspaceAutoSaveService not found — debounced remote sync disabled until present.");
         }
 
         private void OnDisable()
         {
             if (_autoSave != null)
-                _autoSave.SnapshotSaved -= OnSnapshotSaved;
+                _autoSave.DebouncedWorkspaceChanged -= OnDebouncedWorkspaceChanged;
 
             if (_syncCoroutine != null)
             {
@@ -70,7 +73,7 @@ namespace ARGallery.Workspace.Persistence
             }
         }
 
-        private void OnSnapshotSaved(WorkspaceSnapshot _)
+        private void OnDebouncedWorkspaceChanged()
         {
             if (_syncInProgress)
             {
@@ -82,14 +85,10 @@ namespace ARGallery.Workspace.Persistence
         }
 
         /// <summary>
-        /// Forces a local snapshot write without raising <see cref="WorkspaceAutoSaveService.SnapshotSaved"/>,
-        /// then runs one remote sync pass (or queues if a pass is already running).
+        /// Runs one remote sync pass immediately (or queues if a pass is already running). No local snapshot write.
         /// </summary>
         public void SyncNow()
         {
-            if (_autoSave != null)
-                _autoSave.FlushSnapshotToDisk(suppressSnapshotSaved: true);
-
             if (_syncInProgress)
             {
                 _pendingSyncRequested = true;
@@ -117,10 +116,11 @@ namespace ARGallery.Workspace.Persistence
             bool runAgain = false;
             try
             {
-                yield return StartCoroutine(RunRemoteSyncPass());
+                yield return StartCoroutine(RunRemoteSyncPass(null, null));
             }
             finally
             {
+                ClearActivePassWorkspaceContext();
                 _syncInProgress = false;
                 _syncCoroutine = null;
                 if (_pendingSyncRequested)
@@ -134,7 +134,58 @@ namespace ARGallery.Workspace.Persistence
                 _syncCoroutine = StartCoroutine(SyncCoroutineWrapper());
         }
 
-        private IEnumerator RunRemoteSyncPass()
+        /// <summary>
+        /// Runs one remote sync pass for <paramref name="workspaceId"/> without requiring app session after capture.
+        /// Does not flush local snapshots. Waits if another sync pass is already running.
+        /// </summary>
+        public IEnumerator SyncWorkspaceAndWait(string workspaceId, string workspaceName)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                yield break;
+
+            while (_syncInProgress)
+                yield return null;
+
+            _syncInProgress = true;
+            try
+            {
+                yield return StartCoroutine(RunRemoteSyncPass(workspaceId, workspaceName));
+            }
+            finally
+            {
+                ClearActivePassWorkspaceContext();
+                _syncInProgress = false;
+            }
+        }
+
+        private void ClearActivePassWorkspaceContext()
+        {
+            _activePassWorkspaceId = null;
+            _activePassWorkspaceName = null;
+        }
+
+        private bool TryResolveWorkspaceContext(string workspaceId, string workspaceName, out string resolvedId, out string resolvedName)
+        {
+            resolvedId = string.IsNullOrWhiteSpace(workspaceId) ? "" : workspaceId.Trim();
+            resolvedName = string.IsNullOrWhiteSpace(workspaceName) ? resolvedId : workspaceName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(resolvedId))
+                return true;
+
+            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
+                || string.IsNullOrWhiteSpace(session.workspaceId))
+            {
+                resolvedId = "";
+                resolvedName = "";
+                return false;
+            }
+
+            resolvedId = session.workspaceId.Trim();
+            resolvedName = string.IsNullOrWhiteSpace(session.workspaceName) ? resolvedId : session.workspaceName.Trim();
+            return true;
+        }
+
+        private IEnumerator RunRemoteSyncPass(string workspaceId, string workspaceName)
         {
             IApiClient api = ResolveApiClient();
             if (api == null)
@@ -143,13 +194,15 @@ namespace ARGallery.Workspace.Persistence
                 yield break;
             }
 
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
-                || string.IsNullOrWhiteSpace(session.workspaceId))
+            if (!TryResolveWorkspaceContext(workspaceId, workspaceName, out string resolvedWorkspaceId, out string resolvedWorkspaceName))
             {
                 Debug.LogWarning($"{LogPrefix}Sync skipped: no workspace session.");
                 RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Skipped, "Cloud sync skipped: no workspace session.");
                 yield break;
             }
+
+            _activePassWorkspaceId = resolvedWorkspaceId;
+            _activePassWorkspaceName = resolvedWorkspaceName;
 
             AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
             if (registry == null)
@@ -158,14 +211,14 @@ namespace ARGallery.Workspace.Persistence
                 yield break;
             }
 
-            string workspaceId = session.workspaceId.Trim();
-            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
+            string workspaceIdForPass = resolvedWorkspaceId;
+            string workspaceNameForPass = resolvedWorkspaceName;
 
             foreach (AuthoredTargetInstance target in registry.GetTargetsOrdered())
             {
                 if (target == null)
                     continue;
-                yield return StartCoroutine(SyncTargetToBackend(api, workspaceId, workspaceName, target));
+                yield return StartCoroutine(SyncTargetToBackend(api, workspaceIdForPass, workspaceNameForPass, target));
                 if (!_lastStepOk)
                 {
                     string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
@@ -178,7 +231,7 @@ namespace ARGallery.Workspace.Persistence
             {
                 if (content == null)
                     continue;
-                yield return StartCoroutine(SyncContentToBackend(api, workspaceId, content));
+                yield return StartCoroutine(SyncContentToBackend(api, workspaceIdForPass, content));
                 if (!_lastStepOk)
                 {
                     string detail = string.IsNullOrWhiteSpace(_lastFailReason) ? "" : $"\n{_lastFailReason}";
@@ -187,7 +240,7 @@ namespace ARGallery.Workspace.Persistence
                 }
             }
 
-            PersistRemoteStateSuccess(workspaceId, workspaceName, registry);
+            PersistRemoteStateSuccess(workspaceIdForPass, workspaceNameForPass, registry);
         }
 
         private IEnumerator SyncTargetToBackend(IApiClient api, string workspaceId, string workspaceName, AuthoredTargetInstance target)
@@ -202,35 +255,22 @@ namespace ARGallery.Workspace.Persistence
             if (targetRowNeedsSync)
             {
                 string imageUrl = string.IsNullOrWhiteSpace(target.TargetImageUrl) ? "" : target.TargetImageUrl.Trim();
-                if (!string.IsNullOrWhiteSpace(target.TargetImageLocalPath))
+                byte[] targetImageBytes = PersistenceByteUtility.CloneBytes(target.TargetImageBytes);
+                if (PersistenceByteUtility.HasBytes(targetImageBytes))
                 {
-                    string full = _assetRepo.ResolveFullPath(workspaceId, target.TargetImageLocalPath);
-                    if (File.Exists(full))
+                    string uploadName = string.IsNullOrWhiteSpace(target.OriginalFileName)
+                        ? StableTargetDiskFileName(targetId, "target.jpg")
+                        : target.OriginalFileName.Trim();
+                    string stableUploadName = StableTargetDiskFileName(targetId, uploadName);
+                    yield return StartCoroutine(UploadBytesAndWait(api, targetImageBytes, stableUploadName, GuessMimeTypeFromName(stableUploadName), "target", targetId));
+                    if (string.IsNullOrWhiteSpace(_lastUploadUrl))
                     {
-                        byte[] bytes;
-                        try
-                        {
-                            bytes = File.ReadAllBytes(full);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"{LogPrefix}Target image read failed: {ex.Message}");
-                            yield break;
-                        }
-
-                        string uploadName = string.IsNullOrWhiteSpace(target.OriginalFileName)
-                            ? Path.GetFileName(full)
-                            : target.OriginalFileName.Trim();
-                        string stableUploadName = StableTargetDiskFileName(targetId, uploadName);
-                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, stableUploadName, GuessMimeTypeFromName(stableUploadName), "target", targetId));
-                        if (string.IsNullOrWhiteSpace(_lastUploadUrl))
-                        {
-                            Debug.LogWarning($"{LogPrefix}Target image upload failed for '{targetId}'.");
-                            yield break;
-                        }
-
-                        imageUrl = _lastUploadUrl.Trim();
+                        Debug.LogWarning($"{LogPrefix}Target image upload failed for '{targetId}'.");
+                        yield break;
                     }
+
+                    imageUrl = _lastUploadUrl.Trim();
+                    target.TargetImageBytes = null;
                 }
 
                 bool apiOk = false;
@@ -279,7 +319,8 @@ namespace ARGallery.Workspace.Persistence
         private IEnumerator SyncTargetReferenceToBackend(IApiClient api, string workspaceId, AuthoredTargetInstance target)
         {
             _lastStepOk = false;
-            if (target == null || string.IsNullOrWhiteSpace(target.TargetReferenceLocalPath))
+            byte[] bytes = PersistenceByteUtility.CloneBytes(target?.TargetReferenceBytes);
+            if (target == null || !PersistenceByteUtility.HasBytes(bytes))
             {
                 _lastStepOk = true;
                 yield break;
@@ -292,28 +333,10 @@ namespace ARGallery.Workspace.Persistence
             }
 
             string targetId = string.IsNullOrWhiteSpace(target.LocalTargetId) ? target.ServerTargetId : target.LocalTargetId;
-            string full = _assetRepo.ResolveFullPath(workspaceId, target.TargetReferenceLocalPath);
-            if (!File.Exists(full))
-            {
-                Debug.LogWarning($"{LogPrefix}Target reference file missing for '{targetId}' ({target.TargetReferenceLocalPath}).");
-                yield break;
-            }
-
-            byte[] bytes;
-            try
-            {
-                bytes = File.ReadAllBytes(full);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"{LogPrefix}Target reference read failed: {ex.Message}");
-                yield break;
-            }
-
             string uploadName = StableTargetDiskFileName(
                 targetId,
                 string.IsNullOrWhiteSpace(target.TargetReferenceOriginalFileName)
-                    ? Path.GetFileName(full)
+                    ? "target-reference.jpg"
                     : target.TargetReferenceOriginalFileName);
 
             bool apiOk = false;
@@ -343,7 +366,11 @@ namespace ARGallery.Workspace.Persistence
                 apiOk = false;
 
             if (apiOk)
+            {
                 target.TargetReferenceRemoteDirty = false;
+                target.TargetReferenceBytes = null;
+                target.TargetReferenceLocalPath = "";
+            }
 
             _lastStepOk = apiOk;
         }
@@ -387,52 +414,32 @@ namespace ARGallery.Workspace.Persistence
             }
             else if (normalized == "image" || normalized == "video" || normalized == "model")
             {
-                if (!string.IsNullOrWhiteSpace(c.MediaUrl) && (c.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                                                              || c.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                byte[] contentBytes = PersistenceByteUtility.CloneBytes(c.AssetBytes);
+                if (PersistenceByteUtility.HasBytes(contentBytes))
+                {
+                    string uploadName = string.IsNullOrWhiteSpace(c.OriginalFileName)
+                        ? $"{c.ServerContentId}.bin"
+                        : c.OriginalFileName.Trim();
+                    yield return StartCoroutine(UploadBytesAndWait(api, contentBytes, uploadName, GuessMimeTypeFromName(uploadName), "content", null, c.ServerContentId));
+                    if (string.IsNullOrWhiteSpace(_lastUploadUrl))
+                    {
+                        Debug.LogWarning($"{LogPrefix}Content upload failed for '{c.LocalContentId}'.");
+                        c.UploadPending = true;
+                        yield break;
+                    }
+
+                    mediaUrl = _lastUploadUrl.Trim();
+                    c.AssetBytes = null;
+                    c.AssetLocalPath = "";
+                }
+                else if (!string.IsNullOrWhiteSpace(c.MediaUrl) && (c.MediaUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                                                     || c.MediaUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
                 {
                     mediaUrl = c.MediaUrl.Trim();
                 }
-                else if (!string.IsNullOrWhiteSpace(c.AssetLocalPath))
-                {
-                    string full = _assetRepo.ResolveFullPath(workspaceId, c.AssetLocalPath);
-                    if (File.Exists(full))
-                    {
-                        byte[] bytes;
-                        try
-                        {
-                            bytes = File.ReadAllBytes(full);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"{LogPrefix}Content asset read failed: {ex.Message}");
-                            c.UploadPending = true;
-                            yield break;
-                        }
-
-                        string uploadName = string.IsNullOrWhiteSpace(c.OriginalFileName)
-                            ? Path.GetFileName(full)
-                            : c.OriginalFileName.Trim();
-                        yield return StartCoroutine(UploadBytesAndWait(api, bytes, uploadName, GuessMimeTypeFromName(uploadName), "content", null, c.ServerContentId));
-                        if (string.IsNullOrWhiteSpace(_lastUploadUrl))
-                        {
-                            Debug.LogWarning($"{LogPrefix}Content upload failed for '{c.LocalContentId}'.");
-                            c.UploadPending = true;
-                            yield break;
-                        }
-
-                        mediaUrl = _lastUploadUrl.Trim();
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"{LogPrefix}Best-effort skip: no file for '{normalized}' content '{c.LocalContentId}'.");
-                        c.UploadPending = true;
-                        _lastStepOk = true;
-                        yield break;
-                    }
-                }
                 else
                 {
-                    Debug.LogWarning($"{LogPrefix}Best-effort skip: no media URL or asset path for '{c.LocalContentId}'.");
+                    Debug.LogWarning($"{LogPrefix}Best-effort skip: no in-memory bytes or http(s) media URL for '{c.LocalContentId}'.");
                     c.UploadPending = true;
                     _lastStepOk = true;
                     yield break;
@@ -541,26 +548,7 @@ namespace ARGallery.Workspace.Persistence
 
         private void PersistRemoteStateSuccess(string workspaceId, string workspaceName, AuthoredObjectRegistry registry)
         {
-            WorkspaceSnapshot existing = null;
-            _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
-            WorkspaceSnapshot snap = WorkspaceStateSerializer.BuildSnapshot(workspaceId, workspaceName, registry, existing);
-            snap.remoteDirty = false;
-            snap.lastRemoteSyncError = "";
-            snap.lastRemoteSyncedAtUtc = DateTime.UtcNow.ToString("o");
-            snap.remoteSyncStatus = RemoteSyncStatus.Synced;
-
-            string snapshotPath = WorkspacePersistencePaths.GetSnapshotPath(workspaceId);
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
-            {
-                Debug.LogWarning($"{LogPrefix}Post-sync snapshot save failed: {err}");
-            }
-            else
-            {
-                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
-                // One line after upload (avoids duplicate TrySaveSnapshot OK in the same frame as completion).
-                Debug.Log($"[WorkspacePersistence] Remote sync completed successfully for workspace '{workspaceId}' | path={snapshotPath}");
-            }
-
+            Debug.Log($"{LogPrefix}Remote sync completed successfully for workspace '{workspaceId}'.");
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Synced, "Workspace synchronized with the server.");
         }
 
@@ -569,29 +557,6 @@ namespace ARGallery.Workspace.Persistence
             string m = string.IsNullOrWhiteSpace(message) ? "Remote sync failed." : message.Trim();
             Debug.LogWarning($"{LogPrefix}{m}");
             RaiseRemoteSyncToast(WorkspaceRemoteSyncToastKind.Failed, m);
-
-            if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext session) || session == null
-                || string.IsNullOrWhiteSpace(session.workspaceId))
-                return;
-
-            AuthoredObjectRegistry registry = AuthoredObjectRegistry.Instance;
-            if (registry == null)
-                return;
-
-            string workspaceId = session.workspaceId.Trim();
-            string workspaceName = string.IsNullOrWhiteSpace(session.workspaceName) ? workspaceId : session.workspaceName.Trim();
-
-            WorkspaceSnapshot existing = null;
-            _snapshotRepo.TryLoadSnapshot(workspaceId, out existing);
-            WorkspaceSnapshot snap = WorkspaceStateSerializer.BuildSnapshot(workspaceId, workspaceName, registry, existing);
-            snap.remoteDirty = true;
-            snap.lastRemoteSyncError = m;
-            snap.remoteSyncStatus = RemoteSyncStatus.Failed;
-
-            if (!_snapshotRepo.TrySaveSnapshot(snap, out string err, logSuccess: false))
-                Debug.LogWarning($"{LogPrefix}Failed-state snapshot save error: {err}");
-            else
-                _assetRepo.PruneUnreferencedContentAssets(workspaceId, snap.contents);
         }
 
         private IApiClient ResolveApiClient()

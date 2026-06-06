@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.IO;
 using ARGallery.AppFlow;
 using ARGallery.Content;
 using ARGallery.Spawning;
@@ -10,8 +9,8 @@ using UnityEngine.Video;
 namespace ARGallery.Workspace.Persistence
 {
     /// <summary>
-    /// Loads a <see cref="WorkspaceSnapshot"/> and recreates targets + content using local assets under persistentDataPath.
-    /// Does not call backend APIs.
+    /// Recreates targets + content from an in-memory <see cref="WorkspaceSnapshot"/> (typically built from backend GET).
+    /// Uses public media URLs — no snapshot.json or persistentDataPath asset reads.
     /// </summary>
     public sealed class WorkspaceSceneReconstructor : MonoBehaviour
     {
@@ -24,25 +23,12 @@ namespace ARGallery.Workspace.Persistence
         [SerializeField] private GameObject textPrefabOverride;
         [SerializeField] private GameObject videoPrefabOverride;
         [SerializeField] private GameObject modelContainerPrefabOverride;
-        [SerializeField] private string backendApiBaseUrl = "http://127.0.0.1:5050";
+        [SerializeField]
+        [Tooltip("Optional backend base URL override for relative media paths. Empty uses ContentMediaUrlUtility.DefaultBackendBaseUrl.")]
+        private string backendApiBaseUrl = "";
 
         private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
         private readonly ContentCreationCoordinator contentReleaseCoordinator = new ContentCreationCoordinator();
-        private readonly WorkspaceAssetRepository assetRepository = new WorkspaceAssetRepository();
-
-        /// <summary>Loads snapshot.json for <paramref name="workspaceId"/> then rebuilds asynchronously.</summary>
-        public Coroutine BeginRebuildFromDisk(string workspaceId, Action<bool> onCompleted = null)
-        {
-            var repo = new WorkspaceSnapshotRepository();
-            if (!repo.TryLoadSnapshot(workspaceId, out WorkspaceSnapshot snapshot))
-            {
-                Debug.LogWarning($"WorkspaceSceneReconstructor: no snapshot for workspace '{workspaceId}'.");
-                onCompleted?.Invoke(false);
-                return null;
-            }
-
-            return StartCoroutine(RebuildCoroutine(snapshot, onCompleted));
-        }
 
         public Coroutine BeginRebuild(WorkspaceSnapshot snapshot, Action<bool> onCompleted = null)
         {
@@ -171,27 +157,22 @@ namespace ARGallery.Workspace.Persistence
             authored.VuforiaTargetId = ts.vuforiaTargetId ?? "";
             authored.TargetName = ts.targetName ?? "";
             authored.TargetImageUrl = ts.targetImageUrl ?? "";
-            authored.TargetImageLocalPath = ts.targetImageLocalPath ?? "";
-            authored.TargetReferenceLocalPath = ts.targetReferenceLocalPath ?? "";
+            authored.TargetImageLocalPath = "";
+            authored.TargetReferenceLocalPath = "";
             authored.TargetReferenceImageUrl = ts.targetReferenceImageUrl ?? "";
             authored.OriginalFileName = ts.originalFileName ?? "";
             authored.TargetReferenceOriginalFileName = ts.targetReferenceOriginalFileName ?? "";
             authored.PhysicalWidthM = ts.physicalWidthM > 1e-5f ? ts.physicalWidthM : 0.2f;
             authored.RemoteDirty = ts.remoteDirty;
-            authored.TargetReferenceRemoteDirty = !string.IsNullOrWhiteSpace(ts.targetReferenceLocalPath)
-                && string.IsNullOrWhiteSpace(ts.targetReferenceImageUrl);
+            authored.TargetReferenceRemoteDirty = false;
             authored.LastRemoteSyncedAtUtc = ts.lastRemoteSyncedAtUtc ?? "";
 
-            byte[] imgBytes = TryReadAssetBytes(workspaceId, ts.targetImageLocalPath);
-            if (imgBytes != null && imgBytes.Length > 0)
-                targetWorkflowService.ApplyTargetImageBytes(targetGo, imgBytes);
-            else if (!string.IsNullOrWhiteSpace(ts.targetImageUrl))
+            if (!string.IsNullOrWhiteSpace(ts.targetImageUrl))
                 targetWorkflowService.ApplyTargetImageFromUrl(this, targetGo, ts.targetImageUrl.Trim());
             else
-                Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image bytes for '{canonicalId}' (path '{ts.targetImageLocalPath}').");
+                Debug.LogWarning($"WorkspaceSceneReconstructor: missing target image URL for '{canonicalId}'.");
 
-            if (imgBytes == null || imgBytes.Length == 0)
-                TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetGo, null);
+            TargetVisualPhysicalLayout.ApplyFromTargetRoot(targetGo, null);
 
             return true;
         }
@@ -238,23 +219,15 @@ namespace ARGallery.Workspace.Persistence
                     ? cs.textBody
                     : cs.title ?? "";
             }
+            else if (!string.IsNullOrWhiteSpace(resolvedMediaUrl))
+            {
+                request.mediaUrl = resolvedMediaUrl;
+            }
             else
             {
-                byte[] bytes = TryReadAssetBytes(workspaceId, cs.assetLocalPath);
-                if (bytes != null && bytes.Length > 0)
-                {
-                    request.localFileBytes = bytes;
-                }
-                else if (!string.IsNullOrWhiteSpace(resolvedMediaUrl))
-                {
-                    request.mediaUrl = resolvedMediaUrl;
-                }
-                else
-                {
-                    Debug.LogWarning($"WorkspaceSceneReconstructor: missing asset for content '{cs.localContentId}' — spawning placeholder.");
-                    TrySpawnMissingPlaceholder(cs);
-                    return true;
-                }
+                Debug.LogWarning($"WorkspaceSceneReconstructor: missing media URL for content '{cs.localContentId}' — spawning placeholder.");
+                TrySpawnMissingPlaceholder(cs);
+                return true;
             }
 
             SpawnContentResult result = spawner.CreateContent(request);
@@ -266,14 +239,8 @@ namespace ARGallery.Workspace.Persistence
             }
 
             GameObject go = result.spawnedObject;
-            if (spawnType == SpawnContentType.Video)
-            {
-                string full = assetRepository.ResolveFullPath(workspaceId, cs.assetLocalPath);
-                if (!string.IsNullOrWhiteSpace(full) && File.Exists(full))
-                    ApplyVideoFileUrl(go, full);
-                else if (!string.IsNullOrWhiteSpace(cs.mediaUrl))
-                    ApplyVideoStreamUrl(go, cs.mediaUrl.Trim());
-            }
+            if (spawnType == SpawnContentType.Video && !string.IsNullOrWhiteSpace(cs.mediaUrl))
+                ApplyVideoStreamUrl(go, ResolveMediaUrl(cs.mediaUrl));
 
             AttachAuthoredContent(go, cs);
             return true;
@@ -324,10 +291,9 @@ namespace ARGallery.Workspace.Persistence
 
         private string ResolveMediaUrl(string mediaUrl)
         {
-            string baseUrl = ContentMediaUrlUtility.ResolveBackendBaseUrl();
-            if (!string.IsNullOrWhiteSpace(backendApiBaseUrl))
-                baseUrl = backendApiBaseUrl.Trim();
-            return ContentMediaUrlUtility.ResolveAbsoluteUrl(mediaUrl, baseUrl);
+            return ContentMediaUrlUtility.ResolveAbsoluteUrl(
+                mediaUrl,
+                ContentMediaUrlUtility.ResolveBackendBaseUrl(backendApiBaseUrl));
         }
 
         private static void ApplyFallbackLitMaterial(GameObject go)
@@ -365,7 +331,8 @@ namespace ARGallery.Workspace.Persistence
             ac.Title = cs.title ?? "";
             ac.Description = cs.description ?? "";
             ac.TextBody = cs.textBody ?? "";
-            ac.AssetLocalPath = cs.assetLocalPath ?? "";
+            ac.AssetLocalPath = "";
+            ac.AssetBytes = null;
             ac.OriginalFileName = cs.originalFileName ?? "";
             ac.MediaUrl = cs.mediaUrl ?? "";
             ac.AssetFormat = cs.assetFormat ?? "";
@@ -374,21 +341,6 @@ namespace ARGallery.Workspace.Persistence
             ac.PersistPending = cs.persistPending;
             ac.RemoteDirty = cs.remoteDirty;
             ac.LastRemoteSyncedAtUtc = cs.lastRemoteSyncedAtUtc ?? "";
-        }
-
-        private static void ApplyVideoFileUrl(GameObject go, string absolutePath)
-        {
-            if (string.IsNullOrWhiteSpace(absolutePath) || !File.Exists(absolutePath))
-                return;
-
-            VideoPlayer vp = go.GetComponentInChildren<VideoPlayer>(true);
-            if (vp == null)
-                return;
-
-            vp.source = VideoSource.Url;
-            vp.url = new Uri(absolutePath).AbsoluteUri;
-            vp.playOnAwake = true;
-            vp.Play();
         }
 
         private static void ApplyVideoStreamUrl(GameObject go, string url)
@@ -404,26 +356,6 @@ namespace ARGallery.Workspace.Persistence
             vp.url = url.Trim();
             vp.playOnAwake = true;
             vp.Play();
-        }
-
-        private byte[] TryReadAssetBytes(string workspaceId, string relativePath)
-        {
-            if (string.IsNullOrWhiteSpace(relativePath))
-                return null;
-
-            string full = assetRepository.ResolveFullPath(workspaceId, relativePath);
-            if (string.IsNullOrEmpty(full) || !File.Exists(full))
-                return null;
-
-            try
-            {
-                return File.ReadAllBytes(full);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"WorkspaceSceneReconstructor: read failed for '{full}': {ex.Message}");
-                return null;
-            }
         }
 
         private static string CanonicalTargetId(TargetSnapshot ts)
