@@ -78,6 +78,7 @@ namespace MobileViewer.Content
         private Renderer videoRenderer;
         private VideoPlayer videoPlayer;
         private AudioSource videoAudioSource;
+        private RenderTexture videoRenderTexture;
         private Coroutine videoPrepareCoroutine;
         private string activeVideoUrl;
 
@@ -352,10 +353,7 @@ namespace MobileViewer.Content
             }
 
             videoObject.SetActive(true);
-            videoPlayer.targetTexture = null;
-            videoPlayer.renderMode = VideoRenderMode.MaterialOverride;
-            videoPlayer.targetMaterialRenderer = videoRenderer;
-            videoPlayer.targetMaterialProperty = "_MainTex";
+            ConfigureVideoPlayerRenderTarget();
             videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             videoPlayer.SetTargetAudioSource(0, videoAudioSource);
             if (videoAudioSource != null)
@@ -373,11 +371,13 @@ namespace MobileViewer.Content
 
                 videoPlayer.errorReceived -= OnVideoPlayerError;
                 videoPlayer.errorReceived += OnVideoPlayerError;
+                videoPlayer.prepareCompleted -= OnVideoPrepared;
+                videoPlayer.prepareCompleted += OnVideoPrepared;
                 videoPlayer.Stop();
                 videoPlayer.source = VideoSource.Url;
                 videoPlayer.url = playbackUrl;
                 videoPlayer.isLooping = true;
-                videoPlayer.playOnAwake = true;
+                videoPlayer.playOnAwake = false;
                 activeVideoUrl = playbackUrl;
                 videoPrepareCoroutine = StartCoroutine(PrepareAndPlayVideoRoutine(playbackUrl, contentData, targetTransform));
             }
@@ -395,6 +395,26 @@ namespace MobileViewer.Content
                 currentTargetTransform,
                 ContentRenderFailureReason.MediaPlaybackFailed,
                 string.IsNullOrWhiteSpace(message) ? "VideoPlayer reported an error." : message);
+        }
+
+        private void OnVideoPrepared(VideoPlayer source)
+        {
+            if (source != videoPlayer || videoObject == null)
+            {
+                return;
+            }
+
+            var width = (int)source.width;
+            var height = (int)source.height;
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            EnsureVideoRenderTarget(width, height);
+            source.targetTexture = videoRenderTexture;
+            ApplyVideoTextureToRenderer(videoRenderTexture);
+            ApplyVideoAspectToQuad(width, height);
         }
 
         private IEnumerator PrepareAndPlayVideoRoutine(string playbackUrl, ContentData contentData, Transform targetTransform)
@@ -812,8 +832,10 @@ namespace MobileViewer.Content
             if (videoPlayer != null)
             {
                 videoPlayer.errorReceived -= OnVideoPlayerError;
+                videoPlayer.prepareCompleted -= OnVideoPrepared;
                 videoPlayer.Stop();
                 videoPlayer.url = string.Empty;
+                videoPlayer.targetTexture = null;
             }
 
             if (videoObject != null)
@@ -851,9 +873,91 @@ namespace MobileViewer.Content
             }
 
             videoPlayer = videoObject.AddComponent<VideoPlayer>();
+            videoPlayer.playOnAwake = false;
+            videoPlayer.isLooping = true;
+            videoPlayer.skipOnDrop = true;
+
             videoAudioSource = videoObject.AddComponent<AudioSource>();
             videoAudioSource.playOnAwake = false;
             videoAudioSource.mute = true;
+
+            EnsureVideoRenderTarget(512, 512);
+            ConfigureVideoPlayerRenderTarget();
+        }
+
+        private void ConfigureVideoPlayerRenderTarget()
+        {
+            if (videoPlayer == null)
+            {
+                return;
+            }
+
+            EnsureVideoRenderTarget(
+                videoRenderTexture != null ? videoRenderTexture.width : 512,
+                videoRenderTexture != null ? videoRenderTexture.height : 512);
+
+            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            videoPlayer.targetTexture = videoRenderTexture;
+            ApplyVideoTextureToRenderer(videoRenderTexture);
+        }
+
+        private void EnsureVideoRenderTarget(int width, int height)
+        {
+            width = Mathf.Max(16, width);
+            height = Mathf.Max(16, height);
+
+            if (videoRenderTexture != null
+                && videoRenderTexture.width == width
+                && videoRenderTexture.height == height)
+            {
+                return;
+            }
+
+            if (videoRenderTexture != null)
+            {
+                videoRenderTexture.Release();
+                Destroy(videoRenderTexture);
+                videoRenderTexture = null;
+            }
+
+            videoRenderTexture = new RenderTexture(width, height, 0);
+            ApplyVideoTextureToRenderer(videoRenderTexture);
+        }
+
+        private void ApplyVideoTextureToRenderer(Texture texture)
+        {
+            if (videoRenderer == null || texture == null)
+            {
+                return;
+            }
+
+            var material = videoRenderer.material;
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTexture("_BaseMap", texture);
+            }
+            else
+            {
+                material.mainTexture = texture;
+            }
+        }
+
+        private void ApplyVideoAspectToQuad(int videoWidth, int videoHeight)
+        {
+            if (videoObject == null || videoWidth <= 0 || videoHeight <= 0)
+            {
+                return;
+            }
+
+            var aspect = videoWidth / (float)videoHeight;
+            var baseScale = videoObject.transform.localScale;
+            var width = baseScale.x * Mathf.Clamp(aspect, 0.5f, 2.0f);
+            videoObject.transform.localScale = new Vector3(width, baseScale.y, baseScale.z);
         }
 
         private void RenderMockObject(ContentData contentData, Transform targetTransform, Color? tintOverride = null)
