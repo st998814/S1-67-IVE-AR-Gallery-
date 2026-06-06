@@ -27,7 +27,7 @@ All authoritative content **local** TRS updates in the authoring stack go throug
 - **Gizmo rotate** — post-processed in `ApplyGizmoResult` after RTG drag (translate/scale gizmos are not shown; see §3).
 - **Events** — `ContentTransformChanged` / `ContentTransformChangedDetailed` for UI sync, draft dirty flags, and workspace autosave hooks via **`AuthoringTransformCoordinator`**.
 
-Legacy **`ContentTransformController`** keyboard nudges are **not** used on **`AuthoringToolScene`**; the coordinator path owns selection + gizmo + manipulator.
+On **`AuthoringToolScene`**, **`AuthoringTransformCoordinator`** owns selection, gizmo, and **`ContentTransformManipulator`** as the single write path.
 
 ### 2. Placement bounds (TargetVisual XY + front-side Z)
 

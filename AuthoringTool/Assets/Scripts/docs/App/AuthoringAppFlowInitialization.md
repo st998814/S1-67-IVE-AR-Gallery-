@@ -80,7 +80,7 @@ Workspace meaning for this stage is normalized to:
 
 | File | Description |
 |------|-------------|
-| **ProjectSettings/EditorBuildSettings.asset** | Registers and orders scenes as `LandingScene` -> `WorkspaceSwitcherScene` -> `AuthoringToolScene` (with `SampleScene` disabled for this flow). |
+| **ProjectSettings/EditorBuildSettings.asset** | Registers production scenes: `LandingScene` → `WorkspaceSwitcherScene` → `AuthoringToolScene` → `TargetInstantiationScene`. Legacy `SampleScene` and `ARViewerScene` removed (Phase A legacy cleanup). |
 
 ### 7. Minimal visual-system uplift for app screens — `Assets/UI/`
 

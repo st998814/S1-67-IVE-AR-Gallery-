@@ -12,7 +12,7 @@ At any time, a single **interaction owner** applies so camera navigation and obj
 - **States** — `None`, `Camera`, `DraggingObject` (see `DraggableObject.InteractionOwner`).
 - **Camera** — `RuntimeCameraController` acquires ownership while right-mouse look is active; releases on look end, disable, or blocked input.
 - **Drag** — `DraggableObject` acquires drag ownership when a valid left-click drag starts; drag cannot start while camera owns input.
-- **Consumers** — camera blocks when drag is active; `ContentTransformController` skips its update loop while drag is active so keyboard nudges do not fight LMB drag.
+- **Consumers** — camera blocks when drag is active; **`AuthoringTransformCoordinator`** skips keyboard nudges while LMB drag is active so semantic sliders and drag do not fight.
 
 Related: scene navigation details remain documented in [RuntimeSceneCameraControl.md](RuntimeSceneCameraControl.md).
 
@@ -55,7 +55,7 @@ Paths are under `Assets/Scripts/` unless noted.
 |------|-------------|
 | **DraggableObject.cs** | Static interaction owner (`None` / `Camera` / `DraggingObject`); `TryAcquireCameraInteraction` / `ReleaseCameraInteraction`; drag acquire/release on LMB; separate `ResolveDragTransform` vs `ResolveScaleTransform`; `ConfigureScaleBinding` for scroll-scale parent vs self. |
 | **RuntimeCameraController.cs** | Acquires/releases camera interaction with RMB look; blocks all camera input while drag interaction is active; retains UI and RTG gating. |
-| **ContentTransformController.cs** | Early-exits `Update` while `DraggableObject.IsDraggingObjectInteractionActive` to avoid keyboard transform conflicts during drag. |
+| **AuthoringTransformCoordinator.cs** | Skips keyboard transform nudges while `DraggableObject.IsDraggingObjectInteractionActive` to avoid conflicts during LMB drag. |
 
 ### 2. Target factory wiring — `Target/Managers/`
 
@@ -68,7 +68,7 @@ Paths are under `Assets/Scripts/` unless noted.
 | Mechanism | Description |
 |-----------|-------------|
 | **Scroll while dragging** | If `allowScrollScale` on the content’s `DraggableObject`, wheel adjusts uniform scale on `ResolveScaleTransform()` (typically the content shell, not the AR target). |
-| **Keyboard** | `ContentTransformController` — `C` / `V` on selected content when not in RTG drag and not in LMB drag ownership. |
+| **Keyboard** | **`AuthoringTransformCoordinator`** — semantic move/scale via inspector sliders; optional keyboard nudges when not in RTG drag and not in LMB drag ownership. |
 | **UI** | `AuthoringUIController` scale field syncs to the bound authoring spatial target (selected content when applicable). |
 
 ---

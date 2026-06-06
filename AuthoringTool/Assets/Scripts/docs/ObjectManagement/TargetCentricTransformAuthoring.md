@@ -7,7 +7,7 @@
 
 ### 1. Reusable scene-level transform pipeline
 
-Introduce a small, composable set of components for **content** manipulation (gizmo) and **target** manipulation (plane drag) that can be wired in a sandbox or full authoring scene without `ContentTransformController`.
+Introduce a small, composable set of components for **content** manipulation (gizmo) and **target** manipulation (plane drag), wired in **`TransformSandboxScene`** and **`AuthoringToolScene`** via **`AuthoringTransformCoordinator`**.
 
 - **Selection** — `ObjectSelectionManager` raycasts for content under `ContentRoot`, single selection, optional clear on empty click, skips when the RTG gizmo is hovered.
 - **Gizmo** — `TransformGizmoController` owns multiple RTG gizmos (translate, rotate, scale, universal), keyboard modes **1–4**, target-local post rules, and `FrontSideConstraint` integration.
@@ -35,12 +35,12 @@ Introduce a small, composable set of components for **content** manipulation (gi
 
 ### 5. RTG runtime bootstrap
 
-- **`RTGRuntimeBootstrap`** creates the `RTGApp` module graph when either `ContentTransformController` **or** `TransformGizmoController` is present, so sandbox scenes do not need a manual RTG menu init.
+- **`RTGRuntimeBootstrap`** creates the `RTGApp` module graph when **`TransformGizmoController`** or **`AuthoringTransformCoordinator`** is present, so transform scenes do not need a manual RTG menu init.
 
 ### 6. Sandbox-first delivery
 
 - Primary validation scene: **`TransformSandboxScene`** (`TransformSystems` + `TargetRoot` / `TargetPlane` / `ContentRoot` hierarchy).
-- **AuthoringToolScene** remains on **`ContentTransformController`** until migrated; see companion notes in `../Authoring/Transform/TRANSFORM_SANDBOX_ACCEPTANCE_AND_AUTHORING_MIGRATION.md`.
+- **`AuthoringToolScene`** uses the same pipeline via **`AuthoringTransformCoordinator`** + **`TransformGizmoController`** + **`ObjectSelectionManager`**; see companion notes in `../Authoring/Transform/TRANSFORM_SANDBOX_ACCEPTANCE_AND_AUTHORING_MIGRATION.md`.
 
 ---
 
@@ -64,7 +64,7 @@ Paths are under `Assets/Scripts/` unless noted.
 | File | Description |
 |------|-------------|
 | **Camera/RuntimeCameraController.cs** | Scene interaction blocking order (RTG → target drag → draggable rules); late execution order for consistent gizmo state. |
-| **RTGRuntimeBootstrap.cs** | Extends bootstrap trigger to include `TransformGizmoController` (in addition to `ContentTransformController`). |
+| **RTGRuntimeBootstrap.cs** | Auto-inits RTG when `TransformGizmoController` or `AuthoringTransformCoordinator` is present. |
 
 ### 3. Documentation and acceptance
 
@@ -86,11 +86,11 @@ Paths are under `Assets/Scripts/` unless noted.
 
 ## Result
 
-- Authors can manipulate **content** with a **3D gizmo** (modes 1–4) and **move the whole target** on its **wall plane** without coupling to legacy `ContentTransformController` in the sandbox path.
+- Authors can manipulate **content** with a **3D gizmo** (modes 1–4) and **move the whole target** on its **wall plane** through the composable transform pipeline in both sandbox and authoring scenes.
 - **Front-side** depth behavior is enforced in target-local space with an explicit axis choice for different target facing conventions.
 - **Camera** navigation does not fight **gizmo** or **target-plane** manipulation; ordering and RTG queries are aligned for stable gating.
 - The pipeline is **reusable** via Inspector wiring or **`TransformInteractionCompositionRoot`**.
-- **Persistence** (`LocalWorkspaceStore` / draft TRS) and **full AuthoringToolScene** cutover are **follow-up work**; transform-changed hooks are exposed for later wiring.
+- **Persistence** hooks via **`AuthoringTransformCoordinator`** feed workspace autosave; semantic inspector sliders on **`AuthoringToolScene`** use **`ContentTransformManipulator`** as the single write path.
 
 ---
 
