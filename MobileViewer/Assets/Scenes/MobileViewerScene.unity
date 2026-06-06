@@ -322,14 +322,11 @@ MonoBehaviour:
   showImageContent: 1
   treatImageLocalScaleAsMeters: 1
   imagePlaneScale: 0.3
-  imageLocalOffset: {x: 0, y: 0.08, z: 0}
-  imageForwardOffset: 0.01
-  authoredPositionScale: 1
-  authoredPositionScalePerAxis: {x: 1, y: 1, z: 1}
-  keepImageOnTargetPlane: 1
   useTargetPhysicalWidthScaling: 1
-  clampImageOffsetNearTarget: 1
-  imageOffsetClampPerAxis: {x: 0.25, y: 0.25, z: 0.25}
+  authoredFallbackLocalPosition: {x: 0, y: 0, z: -0.05}
+  minimumFrontStandoffMeters: 0.05
+  clampAuthoredOffset: 0
+  authoredOffsetClampPerAxis: {x: 2, y: 2, z: 2}
   applyPostureRotationCorrection: 1
   wallRotationCorrectionEuler: {x: 90, y: 0, z: 0}
   floorRotationCorrectionEuler: {x: 0, y: 0, z: 0}

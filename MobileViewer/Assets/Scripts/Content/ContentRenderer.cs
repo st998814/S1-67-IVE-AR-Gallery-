@@ -34,14 +34,15 @@ namespace MobileViewer.Content
         [Tooltip("When true, localScale from the API is the quad width/height in target local meters (matches AuthoringTool + physical target). When false, legacy: scale × imagePlaneScale × targetPhysicalWidthM.")]
         [SerializeField] private bool treatImageLocalScaleAsMeters = true;
         [SerializeField] private float imagePlaneScale = 0.3f; // fallback when backend localScale is missing
-        [SerializeField] private Vector3 imageLocalOffset = new(0f, 0.08f, 0f); // fallback when backend localPosition is missing
-        [SerializeField] private float imageForwardOffset = 0.01f;
-        [SerializeField] private float authoredPositionScale = 1f;
-        [SerializeField] private Vector3 authoredPositionScalePerAxis = Vector3.one;
-        [SerializeField] private bool keepImageOnTargetPlane = true;
         [SerializeField] private bool useTargetPhysicalWidthScaling = true;
-        [SerializeField] private bool clampImageOffsetNearTarget = true;
-        [SerializeField] private Vector3 imageOffsetClampPerAxis = new(0.25f, 0.25f, 0.25f);
+
+        [Header("Authored placement (all content types)")]
+        [Tooltip("Fallback in AuthoringTool ContentRoot space when API localPosition is missing. Negative Z = in front of target.")]
+        [SerializeField] private Vector3 authoredFallbackLocalPosition = new(0f, 0f, -0.05f);
+        [Tooltip("Matches AuthoringTool FrontSideConstraint minimum standoff for in-front content.")]
+        [SerializeField] private float minimumFrontStandoffMeters = 0.05f;
+        [SerializeField] private bool clampAuthoredOffset;
+        [SerializeField] private Vector3 authoredOffsetClampPerAxis = new(2f, 2f, 2f);
 
         [Header("Posture Rotation Correction")]
         [SerializeField] private bool applyPostureRotationCorrection = true;
@@ -449,14 +450,9 @@ namespace MobileViewer.Content
             if (targetTransform != null)
             {
                 surfaceTransform.SetParent(targetTransform, false);
-                surfaceTransform.localPosition = ResolveImageLocalPosition(contentData);
+                surfaceTransform.localPosition = ResolveAuthoredLocalPosition(contentData);
                 surfaceTransform.localRotation = ResolveRuntimeLocalRotation(contentData);
                 surfaceTransform.localScale = ResolveImageLocalScale(contentData);
-
-                if (imageForwardOffset > 0f)
-                {
-                    surfaceTransform.localPosition += Vector3.forward * imageForwardOffset;
-                }
 
                 return true;
             }
@@ -757,7 +753,7 @@ namespace MobileViewer.Content
             if (targetTransform != null)
             {
                 contentTransform.SetParent(targetTransform, false);
-                contentTransform.localPosition = contentData.localPosition;
+                contentTransform.localPosition = ResolveAuthoredLocalPosition(contentData);
                 contentTransform.localRotation = ResolveRuntimeLocalRotation(contentData);
                 contentTransform.localScale = ResolveModelLocalScale(contentData);
                 return true;
@@ -886,7 +882,7 @@ namespace MobileViewer.Content
             if (targetTransform != null)
             {
                 previewObject.transform.SetParent(targetTransform, false);
-                previewObject.transform.localPosition = contentData.localPosition;
+                previewObject.transform.localPosition = ResolveAuthoredLocalPosition(contentData);
                 previewObject.transform.localRotation = ResolveRuntimeLocalRotation(contentData);
                 var resolvedScale = contentData.localScale;
                 if (resolvedScale == Vector3.zero)
@@ -1055,36 +1051,75 @@ namespace MobileViewer.Content
             imageLoadCoroutine = null;
         }
 
-        private Vector3 ResolveImageLocalPosition(ContentData contentData)
+        private static bool IsAuthoredPositionMissing(Vector3 position)
         {
-            var position = contentData.localPosition;
-            if (position == Vector3.zero)
+            return position.sqrMagnitude < 1e-8f;
+        }
+
+        private static string NormalizeTargetPosture(string posture)
+        {
+            return string.IsNullOrWhiteSpace(posture) ? "wall" : posture.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Maps AuthoringTool ContentRoot-local metres into Vuforia target-local space.
+        /// Authoring semantics: X = left/right, Y = up/down on target, negative Z = in front of target.
+        /// </summary>
+        private Vector3 ResolveAuthoredLocalPosition(ContentData contentData)
+        {
+            var authored = contentData != null ? contentData.localPosition : Vector3.zero;
+            if (IsAuthoredPositionMissing(authored))
             {
-                position = imageLocalOffset;
-                return position;
+                authored = authoredFallbackLocalPosition;
             }
 
-            // Authoring and runtime use different scene scales; normalize authored offsets for mobile runtime.
-            var widthScale = useTargetPhysicalWidthScaling && contentData.targetPhysicalWidthM > 0f
-                ? contentData.targetPhysicalWidthM
-                : 1f;
-            position.x *= authoredPositionScale * authoredPositionScalePerAxis.x * widthScale;
-            position.y *= authoredPositionScale * authoredPositionScalePerAxis.y * widthScale;
-            position.z *= authoredPositionScale * authoredPositionScalePerAxis.z * widthScale;
+            var posture = NormalizeTargetPosture(contentData?.targetPosture);
+            var runtime = MapAuthoredToRuntimePosition(posture, authored);
+            ApplyMinimumFrontStandoff(posture, authored, ref runtime);
 
-            if (keepImageOnTargetPlane)
+            if (clampAuthoredOffset)
             {
-                position.z = imageLocalOffset.z;
+                runtime.x = Mathf.Clamp(runtime.x, -authoredOffsetClampPerAxis.x, authoredOffsetClampPerAxis.x);
+                runtime.y = Mathf.Clamp(runtime.y, -authoredOffsetClampPerAxis.y, authoredOffsetClampPerAxis.y);
+                runtime.z = Mathf.Clamp(runtime.z, -authoredOffsetClampPerAxis.z, authoredOffsetClampPerAxis.z);
             }
 
-            if (clampImageOffsetNearTarget)
+            return runtime;
+        }
+
+        private static Vector3 MapAuthoredToRuntimePosition(string posture, Vector3 authored)
+        {
+            // Wall + 90° X content correction: quad lies in the XZ plane, so depth is local Y and height is local Z.
+            if (posture == "wall")
             {
-                position.x = Mathf.Clamp(position.x, -imageOffsetClampPerAxis.x, imageOffsetClampPerAxis.x);
-                position.y = Mathf.Clamp(position.y, -imageOffsetClampPerAxis.y, imageOffsetClampPerAxis.y);
-                position.z = Mathf.Clamp(position.z, -imageOffsetClampPerAxis.z, imageOffsetClampPerAxis.z);
+                return new Vector3(authored.x, -authored.z, authored.y);
             }
 
-            return position;
+            // Floor/ceiling: depth remains along Vuforia local +Z.
+            return new Vector3(authored.x, authored.y, -authored.z);
+        }
+
+        private void ApplyMinimumFrontStandoff(string posture, Vector3 authored, ref Vector3 runtime)
+        {
+            if (authored.z > 0f || minimumFrontStandoffMeters <= 0f)
+            {
+                return;
+            }
+
+            if (posture == "wall")
+            {
+                if (runtime.y >= 0f && runtime.y < minimumFrontStandoffMeters)
+                {
+                    runtime.y = minimumFrontStandoffMeters;
+                }
+
+                return;
+            }
+
+            if (runtime.z >= 0f && runtime.z < minimumFrontStandoffMeters)
+            {
+                runtime.z = minimumFrontStandoffMeters;
+            }
         }
 
         private Vector3 ResolveImageLocalScale(ContentData contentData)
