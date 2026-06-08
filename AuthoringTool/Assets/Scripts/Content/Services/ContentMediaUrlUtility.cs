@@ -8,8 +8,7 @@ namespace ARGallery.Content
     /// </summary>
     public static class ContentMediaUrlUtility
     {
-        // Use localhost (not 127.0.0.1): Docker Desktop on macOS often binds port 5050 on IPv6 ::1 only.
-        public const string DefaultBackendBaseUrl = "http://localhost:5050";
+        public const string DefaultBackendBaseUrl = "http://127.0.0.1:5050";
 
         public static string ResolveAbsoluteUrl(string mediaUrl, string backendBaseUrl = null)
         {
