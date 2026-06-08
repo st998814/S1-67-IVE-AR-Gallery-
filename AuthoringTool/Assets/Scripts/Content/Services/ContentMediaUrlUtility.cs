@@ -8,7 +8,7 @@ namespace ARGallery.Content
     /// </summary>
     public static class ContentMediaUrlUtility
     {
-        public const string DefaultBackendBaseUrl = "http://127.0.0.1:5050";
+        public const string DefaultBackendBaseUrl = "http://172.20.10.2:5050";
 
         public static string ResolveAbsoluteUrl(string mediaUrl, string backendBaseUrl = null)
         {

@@ -767,7 +767,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f1830859de2b49bd8144f526cd7be4b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HttpApiClient
-  baseUrl: http://127.0.0.1:5050
+  baseUrl: http://172.20.10.2:5050
   uploadEndpoint: /api/upload
   targetEndpoint: /api/targets
   contentEndpoint: /api/content

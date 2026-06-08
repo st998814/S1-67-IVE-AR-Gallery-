@@ -9,7 +9,7 @@ namespace MobileViewer.Content
     public class HttpContentService : MonoBehaviour, IContentService
     {
         [Header("HTTP")]
-        [SerializeField] private string baseApiUrl = "http://127.0.0.1:5050"; // No trailing slash
+        [SerializeField] private string baseApiUrl = "http://172.20.10.2:5050"; // No trailing slash
         [SerializeField] private string contentPath = "/api/mobileviewer/content/by-target/"; // Must match docs/api/mobileviewer/MobileViewerContentRuntime.md
         [SerializeField] private string apiKeyHeaderName;
         [SerializeField] private string apiKeyValue;

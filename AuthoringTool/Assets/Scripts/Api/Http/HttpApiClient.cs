@@ -10,7 +10,7 @@ using UnityEngine.Networking;
 public class HttpApiClient : MonoBehaviour, IApiClient
 {
     [Header("Backend")]
-    [SerializeField] private string baseUrl = "http://127.0.0.1:5050";
+    [SerializeField] private string baseUrl = "http://172.20.10.2:5050";
     [SerializeField] private string uploadEndpoint = "/api/upload";
     [SerializeField] private string targetEndpoint = "/api/targets";
     [SerializeField] private string cloudTargetEndpoint = "/api/targets/cloud";
@@ -252,7 +252,7 @@ public class HttpApiClient : MonoBehaviour, IApiClient
 
     private string BuildUrl(string endpoint)
     {
-        string basePart = string.IsNullOrWhiteSpace(baseUrl) ? "http://127.0.0.1:5050" : baseUrl.TrimEnd('/');
+        string basePart = string.IsNullOrWhiteSpace(baseUrl) ? "http://172.20.10.2:5050" : baseUrl.TrimEnd('/');
         string endPart = string.IsNullOrWhiteSpace(endpoint) ? "/api/upload" : endpoint.Trim();
         if (!endPart.StartsWith("/"))
             endPart = "/" + endPart;

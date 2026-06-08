@@ -429,7 +429,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf5a40ff797e4b00bded33d1524a810, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileViewer.Content.HttpContentService
-  baseApiUrl: http://192.168.20.12:5050
+  baseApiUrl: http://172.20.10.2:5050
   contentPath: /api/mobileviewer/content/by-target/
   apiKeyHeaderName: 
   apiKeyValue: 
