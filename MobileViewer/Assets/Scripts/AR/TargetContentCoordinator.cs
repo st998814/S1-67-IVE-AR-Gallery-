@@ -7,6 +7,10 @@ using UnityEngine;
 
 namespace MobileViewer.AR
 {
+    /// <summary>
+    /// Coordinates Vuforia target tracking with content loading and rendering.
+    /// Handles target detection, tracking events, cancellation, and content display updates.
+    /// </summary>
     public class TargetContentCoordinator : MonoBehaviour
     {
         [SerializeField] private VuforiaCloudTargetController vuforiaController;
@@ -82,6 +86,10 @@ namespace MobileViewer.AR
             statusUI?.SetScanning();
         }
 
+        /// <summary>
+        /// Loads content for a tracked target and renders it once the content service returns metadata.
+        /// Cancels previous requests when a new target is found.
+        /// </summary>
         private async Task ResolveAndRenderAsync(string targetName, Transform targetTransform)
         {
             if (contentService == null)

@@ -9,6 +9,10 @@ using MobileViewer.UI;
 
 namespace MobileViewer.Content
 {
+    /// <summary>
+    /// Renders content for detected AR targets, including image, video, model, and mock preview fallback.
+    /// Handles runtime placement, content loading, rendering failure feedback, and scene object creation.
+    /// </summary>
     public class ContentRenderer : MonoBehaviour
     {
         [Header("Panel References")]
@@ -130,6 +134,10 @@ namespace MobileViewer.Content
             StopModelLoad();
         }
 
+        /// <summary>
+        /// Render the given content data at the tracked target transform.
+        /// Chooses the renderer path based on contentType and manages failure fallbacks.
+        /// </summary>
         public void Render(ContentData contentData, Transform targetTransform)
         {
             if (contentData == null)

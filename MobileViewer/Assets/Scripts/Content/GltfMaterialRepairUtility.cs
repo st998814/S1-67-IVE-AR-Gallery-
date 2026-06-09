@@ -5,6 +5,7 @@ namespace MobileViewer.Content
 {
     /// <summary>
     /// Replaces glTFast materials whose shaders were stripped from mobile player builds (pink meshes).
+    /// Provides runtime fallback material remapping for imported 3D content.
     /// </summary>
     public static class GltfMaterialRepairUtility
     {

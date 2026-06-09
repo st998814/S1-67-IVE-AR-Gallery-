@@ -1,5 +1,9 @@
 namespace MobileViewer.Content
 {
+    /// <summary>
+    /// Reasons why content rendering may fail in the mobile viewer.
+    /// Used to drive UI feedback and fallback behavior.
+    /// </summary>
     public enum ContentRenderFailureReason
     {
         None,

@@ -9,7 +9,8 @@ using UnityEngine.Networking;
 namespace MobileViewer.Content
 {
     /// <summary>
-    /// Downloads a remote .glb via glTFast and instantiates under a target-local attach transform.
+    /// Downloads a remote .glb via glTFast and instantiates it under a target-local attach transform.
+    /// This service wraps UnityWebRequest plus glTFast import logic for mobile runtime model loading.
     /// </summary>
     public static class MobileGlbLoadService
     {

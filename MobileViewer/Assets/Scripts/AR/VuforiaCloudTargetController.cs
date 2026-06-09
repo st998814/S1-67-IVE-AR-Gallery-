@@ -6,6 +6,10 @@ using Vuforia;
 
 namespace MobileViewer.AR
 {
+    /// <summary>
+    /// Wraps Vuforia cloud recognition events and exposes detected target lifecycle callbacks.
+    /// Handles observer attachment, tracking state changes, and status reporting.
+    /// </summary>
     public class VuforiaCloudTargetController : MonoBehaviour
     {
         [SerializeField] private CloudRecoBehaviour cloudRecoBehaviour;
@@ -69,6 +73,10 @@ namespace MobileViewer.AR
                 : "Cloud reco connected");
         }
 
+        /// <summary>
+        /// Called when the cloud recognition service returns a new target result.
+        /// Extracts the target name and attaches a tracking observer.
+        /// </summary>
         private void OnNewSearchResult(CloudRecoBehaviour.CloudRecoSearchResult searchResult)
         {
             var targetName = ExtractTargetName(searchResult);
@@ -189,6 +197,9 @@ namespace MobileViewer.AR
             return field.GetValue(source) as string;
         }
 
+        /// <summary>
+        /// Subscribes to cloud recognition lifecycle callbacks on the assigned CloudRecoBehaviour.
+        /// </summary>
         private void RegisterHandlers()
         {
             if (cloudRecoBehaviour == null || handlersRegistered)

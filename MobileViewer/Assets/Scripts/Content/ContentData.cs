@@ -2,6 +2,10 @@ using UnityEngine;
 
 namespace MobileViewer.Content
 {
+    /// <summary>
+    /// Runtime metadata for AR content attached to a detected target.
+    /// This class is populated by content services and consumed by the renderer.
+    /// </summary>
     [System.Serializable]
     public class ContentData
     {

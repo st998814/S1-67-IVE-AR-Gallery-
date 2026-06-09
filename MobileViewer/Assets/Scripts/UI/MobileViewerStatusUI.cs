@@ -6,6 +6,10 @@ using UnityEngine.UI;
 
 namespace MobileViewer.UI
 {
+    /// <summary>
+    /// Displays transient status toasts and fallback GUI messages for the mobile viewer.
+    /// Handles queueing, animation, and tone-based visual styling for runtime feedback.
+    /// </summary>
     public class MobileViewerStatusUI : MonoBehaviour
     {
         private enum AlertTone
@@ -43,6 +47,9 @@ namespace MobileViewer.UI
         private Vector2 shownPosition;
         private Vector2 hiddenPosition;
 
+        /// <summary>
+        /// Initialize toast positioning and make sure references are available.
+        /// </summary>
         private void Awake()
         {
             EnsureToastReferences();

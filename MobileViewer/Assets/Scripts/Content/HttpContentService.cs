@@ -6,6 +6,10 @@ using UnityEngine.Networking;
 
 namespace MobileViewer.Content
 {
+    /// <summary>
+    /// HTTP-based content provider for the mobile viewer.
+    /// Queries a backend endpoint for target-specific content metadata and maps it into runtime ContentData.
+    /// </summary>
     public class HttpContentService : MonoBehaviour, IContentService
     {
         [Header("HTTP")]
@@ -44,6 +48,10 @@ namespace MobileViewer.Content
             public string displayLabel;
         }
 
+        /// <summary>
+        /// Fetches content metadata for the given target name from the configured backend.
+        /// Returns null for no matching content or a fallback content payload for errors.
+        /// </summary>
         public async Task<ContentData> GetContentForTargetAsync(string targetName, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(targetName))
@@ -136,6 +144,10 @@ namespace MobileViewer.Content
             }
         }
 
+        /// <summary>
+        /// Converts the DTO returned by the backend into the runtime ContentData model.
+        /// Applies default fallback values for missing or malformed fields.
+        /// </summary>
         private static ContentData MapToContentData(ContentDto dto, string fallbackTargetName)
         {
             var data = new ContentData

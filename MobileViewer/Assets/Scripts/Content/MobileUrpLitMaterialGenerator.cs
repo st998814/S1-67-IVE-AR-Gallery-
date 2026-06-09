@@ -9,6 +9,7 @@ namespace MobileViewer.Content
 {
     /// <summary>
     /// Mobile-safe glTFast material generator using URP Lit (glTF shader graphs are stripped on device builds).
+    /// Creates fallback URP materials for glTF models when the original glTF shaders are unavailable.
     /// </summary>
     public sealed class MobileUrpLitMaterialGenerator : IMaterialGenerator
     {

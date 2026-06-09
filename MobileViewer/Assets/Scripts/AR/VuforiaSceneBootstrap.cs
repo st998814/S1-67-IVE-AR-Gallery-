@@ -3,6 +3,10 @@ using Vuforia;
 
 namespace MobileViewer.AR
 {
+    /// <summary>
+    /// Boots Vuforia cloud recognition in the scene and creates the CloudReco behaviour.
+    /// Ensures the AR camera is configured before starting target recognition.
+    /// </summary>
     public class VuforiaSceneBootstrap : MonoBehaviour
     {
         [Header("Cloud Recognition Credentials")]
