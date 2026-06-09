@@ -14,6 +14,10 @@ using UnityEngine.InputSystem;
 
 public class AuthoringUIController : MonoBehaviour
 {
+    // Main controller for the AR authoring UI overlay.
+    // Binds UI elements from the UIDocument, handles user interactions,
+    // and synchronizes authoring state with target selection, spawning,
+    // and gizmo-based content manipulation.
     public GameObject videoPrefab;
     public StyleSheet mobileStyleSheet;
 
@@ -22,6 +26,7 @@ public class AuthoringUIController : MonoBehaviour
     [SerializeField] private TransformGizmoController transformGizmoController;
 
     // --- NEW: Prefab Templates (Drag these in the Inspector) ---
+    // Prefab references used for spawning picture, text and model content during authoring.
     public GameObject picturePrefab;
     public GameObject textPrefab;
     [Tooltip("Optional override. If empty, loads from Resources: Prefabs/ModelContentContainer.")]
@@ -30,6 +35,7 @@ public class AuthoringUIController : MonoBehaviour
     private const string ModelContentContainerResourcesPath = "Prefabs/ModelContentContainer";
     
     // --- UI Fields ---
+    // Bindable references for the authoring panel and inspector controls.
     private TextField contentTypeInput;
     private FloatField scaleInput;
     private VisualElement contentPlacementOffsetSection;
@@ -54,6 +60,8 @@ public class AuthoringUIController : MonoBehaviour
 
     /// <summary>为 true 时忽略下拉回调，避免与 <see cref="TargetSelectionManager.ActiveTargetChanged"/> 互相触发。</summary>
     private bool suppressTargetDropdownCallbacks;
+
+    // Used to prevent value-change loops between the target dropdown and TargetSelectionManager events.
     
     // --- NEW: Text Spawning Fields ---
     private TextField spawningTextInput;
@@ -90,6 +98,8 @@ public class AuthoringUIController : MonoBehaviour
     private VisualElement _errorToast;
     private Label _errorLabel;
     private Coroutine _errorToastCoroutine;
+
+    // UI toast and progress state for async operations such as uploads and saves.
     private Coroutine _loadingHideRoutine;
     private float _loadingShownAt;
     private VisualElement _syncStatusToast;
@@ -110,9 +120,12 @@ public class AuthoringUIController : MonoBehaviour
     private ContentDraftState activeContentDraft;
     private UIDocument uiDocument;
 
+    // Draft state cache for authored content: tracks pending uploads, persistence state, and selection mapping.
+
     /// <summary>为 true 时忽略 FloatField 回调，避免从脚本写 UI 时反向改 Transform。</summary>
     private bool suppressSpatialUiCallbacks;
 
+    // Prevents UI field callbacks from triggering recursive transform updates when the fields are set programmatically.
     [SerializeField] private MonoBehaviour apiClientBehaviour;
     [SerializeField] private float createTargetTimeoutSeconds = 20f;
     [SerializeField] private float uploadTimeoutSeconds = 20f;
@@ -120,6 +133,8 @@ public class AuthoringUIController : MonoBehaviour
     private bool isSaveInProgress;
     private IApiClient apiClient;
     private readonly TargetWorkflowService targetWorkflowService = new TargetWorkflowService();
+
+    // Services and runtime helpers used for target creation, upload orchestration and content spawning.
     private readonly UploadWorkflowService uploadWorkflowService = new UploadWorkflowService();
     private ISpawnerManager spawnerManager;
     private string pendingTargetImageUrl = "";
@@ -156,6 +171,10 @@ public class AuthoringUIController : MonoBehaviour
         TargetReference
     }
 
+    /// <summary>
+    /// Returns whether the current workspace session is ready for authoring.
+    /// If showBlockedMessage is true, displays an error when authoring actions are blocked.
+    /// </summary>
     private bool IsWorkspaceReadyForAuthoring(bool showBlockedMessage)
     {
         if (!AppFlowController.TryGetWorkspaceSession(out WorkspaceSessionContext workspace) || workspace == null)
@@ -207,6 +226,7 @@ public class AuthoringUIController : MonoBehaviour
         public string lastError;
     }
 
+    // Unity lifecycle callback: bind UI controls and attach event listeners when this panel becomes active.
     void OnEnable()
     {
         uiDocument = GetComponent<UIDocument>();
