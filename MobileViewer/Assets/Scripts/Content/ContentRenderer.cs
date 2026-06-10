@@ -51,7 +51,8 @@ namespace MobileViewer.Content
         [Header("Posture Rotation Correction")]
         [SerializeField] private bool applyPostureRotationCorrection = true;
         [SerializeField] private Vector3 wallRotationCorrectionEuler = new(90f, 0f, 0f);
-        [SerializeField] private Vector3 floorRotationCorrectionEuler = Vector3.zero;
+        [Tooltip("Matches wall quad correction: authored surface content uses the same plane basis on floor targets.")]
+        [SerializeField] private Vector3 floorRotationCorrectionEuler = new(90f, 0f, 0f);
         [SerializeField] private Vector3 ceilingRotationCorrectionEuler = new(-90f, 0f, 0f);
 
         [Header("Video Content")]
@@ -81,11 +82,8 @@ namespace MobileViewer.Content
 
         private GameObject videoObject;
         private Renderer videoRenderer;
-        private GameObject videoBackObject;
-        private Renderer videoBackRenderer;
         private VideoPlayer videoPlayer;
         private AudioSource videoAudioSource;
-        private RenderTexture videoRenderTexture;
         private Coroutine videoPrepareCoroutine;
         private string activeVideoUrl;
 
@@ -228,11 +226,6 @@ namespace MobileViewer.Content
                 videoObject.SetActive(false);
             }
 
-            if (videoBackObject != null)
-            {
-                videoBackObject.SetActive(false);
-            }
-
             if (IsLegacyMockContentType(normalizedType))
             {
                 RenderMockObject(contentData, targetTransform);
@@ -369,11 +362,6 @@ namespace MobileViewer.Content
             }
 
             videoObject.SetActive(true);
-            if (videoBackObject != null)
-            {
-                videoBackObject.SetActive(true);
-            }
-
             ConfigureVideoPlayerRenderTarget();
             videoPlayer.waitForFirstFrame = true;
             videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
@@ -493,7 +481,7 @@ namespace MobileViewer.Content
             if (!TryBindVideoPlaybackSurface(videoPlayer, out var width, out var height))
             {
                 Debug.LogWarning(
-                    $"[ContentRenderer] Video dimensions unavailable after prepare; binding fallback RT ({videoPlayer.width}x{videoPlayer.height}).");
+                    $"[ContentRenderer] Video dimensions unavailable after prepare; continuing with material override ({videoPlayer.width}x{videoPlayer.height}).");
                 ConfigureVideoPlayerRenderTarget();
             }
             else
@@ -885,16 +873,12 @@ namespace MobileViewer.Content
                 videoPlayer.Stop();
                 videoPlayer.url = string.Empty;
                 videoPlayer.targetTexture = null;
+                videoPlayer.targetMaterialRenderer = null;
             }
 
             if (videoObject != null)
             {
                 videoObject.SetActive(false);
-            }
-
-            if (videoBackObject != null)
-            {
-                videoBackObject.SetActive(false);
             }
 
             activeVideoUrl = null;
@@ -922,25 +906,6 @@ namespace MobileViewer.Content
                 videoRenderer.material = CreateVideoSurfaceMaterial();
             }
 
-            videoBackObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            videoBackObject.name = "RuntimeVideoPlane_Back";
-            videoBackObject.transform.SetParent(videoObject.transform, false);
-            videoBackObject.transform.localPosition = Vector3.zero;
-            videoBackObject.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-            videoBackObject.transform.localScale = Vector3.one;
-
-            var backCollider = videoBackObject.GetComponent<Collider>();
-            if (backCollider != null)
-            {
-                Destroy(backCollider);
-            }
-
-            videoBackRenderer = videoBackObject.GetComponent<Renderer>();
-            if (videoBackRenderer != null && videoRenderer != null)
-            {
-                videoBackRenderer.material = videoRenderer.material;
-            }
-
             videoPlayer = videoObject.AddComponent<VideoPlayer>();
             videoPlayer.playOnAwake = false;
             videoPlayer.isLooping = true;
@@ -951,33 +916,76 @@ namespace MobileViewer.Content
             videoAudioSource.playOnAwake = false;
             videoAudioSource.mute = true;
 
-            EnsureVideoRenderTarget(512, 512);
             ConfigureVideoPlayerRenderTarget();
         }
 
         private static Material CreateVideoSurfaceMaterial()
         {
             var template = Resources.Load<Material>("VideoRuntimeUnlit");
+            Material material;
             if (template != null)
             {
-                return new Material(template);
+                material = new Material(template);
             }
-
-            var shader = Shader.Find("Universal Render Pipeline/Unlit")
-                ?? Shader.Find("Unlit/Texture")
-                ?? Shader.Find("Standard");
-            if (shader == null)
+            else
             {
-                return null;
+                var shader = Shader.Find("Universal Render Pipeline/Unlit")
+                    ?? Shader.Find("Unlit/Texture")
+                    ?? Shader.Find("Standard");
+                if (shader == null)
+                {
+                    return null;
+                }
+
+                material = new Material(shader);
             }
 
-            var material = new Material(shader);
             if (material.HasProperty("_BaseColor"))
             {
                 material.SetColor("_BaseColor", Color.white);
             }
 
+            EnableDoubleSidedVideoMaterial(material);
+            ResetVideoTextureTransform(material);
             return material;
+        }
+
+        private static void EnableDoubleSidedVideoMaterial(Material material)
+        {
+            if (material != null && material.HasProperty("_Cull"))
+            {
+                material.SetFloat("_Cull", 0f);
+            }
+        }
+
+        private static void ResetVideoTextureTransform(Material material)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTextureScale("_BaseMap", Vector2.one);
+                material.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+        }
+
+        private static string ResolveVideoMaterialPropertyName(Material material)
+        {
+            if (material != null && material.HasProperty("_BaseMap"))
+            {
+                return "_BaseMap";
+            }
+
+            return "_MainTex";
         }
 
         private bool TryBindVideoPlaybackSurface(VideoPlayer source, out int width, out int height)
@@ -997,88 +1005,31 @@ namespace MobileViewer.Content
                 return false;
             }
 
-            EnsureVideoRenderTarget(width, height);
-            source.targetTexture = videoRenderTexture;
-            ApplyVideoTextureToRenderer(videoRenderTexture);
+            ConfigureVideoPlayerRenderTarget();
             ApplyVideoAspectToQuad(width, height);
             return true;
         }
 
         private void ConfigureVideoPlayerRenderTarget()
         {
-            if (videoPlayer == null)
+            if (videoPlayer == null || videoRenderer == null)
             {
                 return;
             }
 
-            EnsureVideoRenderTarget(
-                videoRenderTexture != null ? videoRenderTexture.width : 512,
-                videoRenderTexture != null ? videoRenderTexture.height : 512);
-
-            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            videoPlayer.targetTexture = videoRenderTexture;
-            ApplyVideoTextureToRenderer(videoRenderTexture);
-        }
-
-        private void EnsureVideoRenderTarget(int width, int height)
-        {
-            width = Mathf.Max(16, width);
-            height = Mathf.Max(16, height);
-
-            if (videoRenderTexture != null
-                && videoRenderTexture.width == width
-                && videoRenderTexture.height == height)
-            {
-                return;
-            }
-
-            if (videoRenderTexture != null)
-            {
-                videoRenderTexture.Release();
-                Destroy(videoRenderTexture);
-                videoRenderTexture = null;
-            }
-
-            videoRenderTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32)
-            {
-                name = "RuntimeVideoTexture"
-            };
-            videoRenderTexture.Create();
-            ApplyVideoTextureToRenderer(videoRenderTexture);
-        }
-
-        private void ApplyVideoTextureToRenderer(Texture texture)
-        {
-            ApplyVideoTextureToRenderer(videoRenderer, texture);
-            ApplyVideoTextureToRenderer(videoBackRenderer, texture);
-        }
-
-        private static void ApplyVideoTextureToRenderer(Renderer renderer, Texture texture)
-        {
-            if (renderer == null || texture == null)
-            {
-                return;
-            }
-
-            var material = renderer.material;
+            var material = videoRenderer.material;
             if (material == null)
             {
                 return;
             }
 
-            if (material.HasProperty("_BaseMap"))
-            {
-                material.SetTexture("_BaseMap", texture);
-            }
+            EnableDoubleSidedVideoMaterial(material);
+            ResetVideoTextureTransform(material);
 
-            if (material.HasProperty("_MainTex"))
-            {
-                material.SetTexture("_MainTex", texture);
-            }
-            else
-            {
-                material.mainTexture = texture;
-            }
+            videoPlayer.renderMode = VideoRenderMode.MaterialOverride;
+            videoPlayer.targetTexture = null;
+            videoPlayer.targetMaterialRenderer = videoRenderer;
+            videoPlayer.targetMaterialProperty = ResolveVideoMaterialPropertyName(material);
         }
 
         private void ApplyVideoAspectToQuad(int videoWidth, int videoHeight)
@@ -1231,6 +1182,38 @@ namespace MobileViewer.Content
             }
         }
 
+        private static void ApplyImageTextureToRenderer(Renderer renderer, Texture texture)
+        {
+            if (renderer == null || texture == null)
+            {
+                return;
+            }
+
+            var material = renderer.material;
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTexture("_BaseMap", texture);
+                material.SetTextureScale("_BaseMap", Vector2.one);
+                material.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTexture("_MainTex", texture);
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+            else
+            {
+                material.mainTexture = texture;
+            }
+        }
+
         private IEnumerator LoadImageTexture(string imageUrl)
         {
             activeImageUrl = imageUrl;
@@ -1273,11 +1256,8 @@ namespace MobileViewer.Content
                 yield break;
             }
 
-            imageRenderer.material.mainTexture = texture;
-            if (imageBackRenderer != null)
-            {
-                imageBackRenderer.material.mainTexture = texture;
-            }
+            ApplyImageTextureToRenderer(imageRenderer, texture);
+            ApplyImageTextureToRenderer(imageBackRenderer, texture);
             if (texture.height > 0)
             {
                 var aspect = (float)texture.width / texture.height;

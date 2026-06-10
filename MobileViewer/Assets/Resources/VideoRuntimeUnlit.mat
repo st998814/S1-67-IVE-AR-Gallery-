@@ -49,7 +49,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _AlphaClip: 0
-    - _Cull: 2
+    - _Cull: 0
     - _Surface: 0
     - _ZWrite: 1
     m_Colors:

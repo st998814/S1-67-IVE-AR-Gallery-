@@ -170,11 +170,12 @@ class ContentService:
 
     @staticmethod
     def _target_posture(target_euler_x):
+        """Match AuthoringTool WorkspacePresetLibrary / InferPostureFromTargetLocalEuler (+90° X = floor)."""
         posture = "wall"
         if target_euler_x is not None:
             x = float(target_euler_x)
-            if x <= -45.0:
+            if x >= 45.0:
                 posture = "floor"
-            elif x >= 45.0:
+            elif x <= -45.0:
                 posture = "ceiling"
         return posture
