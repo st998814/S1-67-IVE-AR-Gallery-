@@ -329,7 +329,7 @@ MonoBehaviour:
   authoredOffsetClampPerAxis: {x: 2, y: 2, z: 2}
   applyPostureRotationCorrection: 1
   wallRotationCorrectionEuler: {x: 90, y: 0, z: 0}
-  floorRotationCorrectionEuler: {x: 0, y: 0, z: 0}
+  floorRotationCorrectionEuler: {x: 90, y: 0, z: 0}
   ceilingRotationCorrectionEuler: {x: -90, y: 0, z: 0}
   showVideoContent: 1
   videoPrepareTimeoutSeconds: 12

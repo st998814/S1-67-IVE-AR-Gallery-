@@ -781,3 +781,21 @@ def test_delete_content_not_found(client):
 
     assert res.status_code == 404
     assert res.get_json()["errorCode"] == "NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("target_euler_x", "expected_posture"),
+    [
+        (0.0, "wall"),
+        (30.0, "wall"),
+        (90.0, "floor"),
+        (45.0, "floor"),
+        (-90.0, "ceiling"),
+        (-45.0, "ceiling"),
+        (None, "wall"),
+    ],
+)
+def test_target_posture_matches_authoring_tool_convention(target_euler_x, expected_posture):
+    from services.content_service import ContentService
+
+    assert ContentService._target_posture(target_euler_x) == expected_posture

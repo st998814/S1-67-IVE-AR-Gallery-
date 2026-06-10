@@ -18,8 +18,8 @@ The authoring scene now initializes from workspace posture rather than surface r
 Preset target orientation is applied to the active workspace target root:
 
 - **Wall** -> `0,0,0` (vertical)
-- **Floor** -> `-90,0,0` on X (horizontal, facing up)
-- **Ceiling** -> `90,0,0` on X (horizontal, facing down)
+- **Floor** -> `90,0,0` on X (horizontal, facing up)
+- **Ceiling** -> `-90,0,0` on X (horizontal, facing down)
 
 This keeps authored content target-local while preserving existing `ContentRoot` parenting rules.
 

@@ -51,12 +51,14 @@ namespace MobileViewer.Content
         [Header("Posture Rotation Correction")]
         [SerializeField] private bool applyPostureRotationCorrection = true;
         [SerializeField] private Vector3 wallRotationCorrectionEuler = new(90f, 0f, 0f);
-        [SerializeField] private Vector3 floorRotationCorrectionEuler = Vector3.zero;
+        [Tooltip("Matches wall quad correction: authored surface content uses the same plane basis on floor targets.")]
+        [SerializeField] private Vector3 floorRotationCorrectionEuler = new(90f, 0f, 0f);
         [SerializeField] private Vector3 ceilingRotationCorrectionEuler = new(-90f, 0f, 0f);
 
         [Header("Video Content")]
         [SerializeField] private bool showVideoContent = true;
         [SerializeField] private float videoPrepareTimeoutSeconds = 12f;
+        [SerializeField] private float videoDimensionTimeoutSeconds = 3f;
 
         [Header("Model Content")]
         [SerializeField] private bool showModelContent = true;
@@ -82,7 +84,6 @@ namespace MobileViewer.Content
         private Renderer videoRenderer;
         private VideoPlayer videoPlayer;
         private AudioSource videoAudioSource;
-        private RenderTexture videoRenderTexture;
         private Coroutine videoPrepareCoroutine;
         private string activeVideoUrl;
 
@@ -362,6 +363,7 @@ namespace MobileViewer.Content
 
             videoObject.SetActive(true);
             ConfigureVideoPlayerRenderTarget();
+            videoPlayer.waitForFirstFrame = true;
             videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             videoPlayer.SetTargetAudioSource(0, videoAudioSource);
             if (videoAudioSource != null)
@@ -397,6 +399,7 @@ namespace MobileViewer.Content
 
         private void OnVideoPlayerError(VideoPlayer source, string message)
         {
+            Debug.LogError($"[ContentRenderer] VideoPlayer error: {message} url={activeVideoUrl}");
             StopVideoPlayback();
             RenderFailureFallback(
                 currentContentData,
@@ -412,17 +415,14 @@ namespace MobileViewer.Content
                 return;
             }
 
-            var width = (int)source.width;
-            var height = (int)source.height;
-            if (width <= 0 || height <= 0)
+            if (TryBindVideoPlaybackSurface(source, out var width, out var height))
             {
+                Debug.Log($"[ContentRenderer] Video prepared {width}x{height} url={activeVideoUrl}");
                 return;
             }
 
-            EnsureVideoRenderTarget(width, height);
-            source.targetTexture = videoRenderTexture;
-            ApplyVideoTextureToRenderer(videoRenderTexture);
-            ApplyVideoAspectToQuad(width, height);
+            Debug.LogWarning(
+                $"[ContentRenderer] Video prepared but dimensions not ready yet ({source.width}x{source.height}).");
         }
 
         private IEnumerator PrepareAndPlayVideoRoutine(string playbackUrl, ContentData contentData, Transform targetTransform)
@@ -433,7 +433,10 @@ namespace MobileViewer.Content
                 yield break;
             }
 
+            videoPlayer.waitForFirstFrame = true;
             videoPlayer.Prepare();
+            Debug.Log($"[ContentRenderer] Preparing video url={playbackUrl}");
+
             var timeout = Mathf.Max(1f, videoPrepareTimeoutSeconds);
             var elapsed = 0f;
             while (!videoPlayer.isPrepared && elapsed < timeout)
@@ -458,6 +461,32 @@ namespace MobileViewer.Content
                     $"Video prepare timed out ({videoPrepareTimeoutSeconds:0}s).");
                 videoPrepareCoroutine = null;
                 yield break;
+            }
+
+            var dimensionTimeout = Mathf.Max(0.5f, videoDimensionTimeoutSeconds);
+            var dimensionElapsed = 0f;
+            while (!TryBindVideoPlaybackSurface(videoPlayer, out _, out _)
+                && dimensionElapsed < dimensionTimeout)
+            {
+                if (!string.Equals(activeVideoUrl, playbackUrl, StringComparison.Ordinal))
+                {
+                    videoPrepareCoroutine = null;
+                    yield break;
+                }
+
+                dimensionElapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            if (!TryBindVideoPlaybackSurface(videoPlayer, out var width, out var height))
+            {
+                Debug.LogWarning(
+                    $"[ContentRenderer] Video dimensions unavailable after prepare; continuing with material override ({videoPlayer.width}x{videoPlayer.height}).");
+                ConfigureVideoPlayerRenderTarget();
+            }
+            else
+            {
+                Debug.Log($"[ContentRenderer] Video surface bound {width}x{height}");
             }
 
             if (!videoPlayer.isPlaying)
@@ -844,6 +873,7 @@ namespace MobileViewer.Content
                 videoPlayer.Stop();
                 videoPlayer.url = string.Empty;
                 videoPlayer.targetTexture = null;
+                videoPlayer.targetMaterialRenderer = null;
             }
 
             if (videoObject != null)
@@ -873,68 +903,116 @@ namespace MobileViewer.Content
             videoRenderer = videoObject.GetComponent<Renderer>();
             if (videoRenderer != null)
             {
-                var shader = Shader.Find("Unlit/Texture") ?? Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Standard");
-                if (shader != null)
-                {
-                    videoRenderer.material = new Material(shader);
-                }
+                videoRenderer.material = CreateVideoSurfaceMaterial();
             }
 
             videoPlayer = videoObject.AddComponent<VideoPlayer>();
             videoPlayer.playOnAwake = false;
             videoPlayer.isLooping = true;
             videoPlayer.skipOnDrop = true;
+            videoPlayer.waitForFirstFrame = true;
 
             videoAudioSource = videoObject.AddComponent<AudioSource>();
             videoAudioSource.playOnAwake = false;
             videoAudioSource.mute = true;
 
-            EnsureVideoRenderTarget(512, 512);
             ConfigureVideoPlayerRenderTarget();
+        }
+
+        private static Material CreateVideoSurfaceMaterial()
+        {
+            var template = Resources.Load<Material>("VideoRuntimeUnlit");
+            Material material;
+            if (template != null)
+            {
+                material = new Material(template);
+            }
+            else
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Unlit")
+                    ?? Shader.Find("Unlit/Texture")
+                    ?? Shader.Find("Standard");
+                if (shader == null)
+                {
+                    return null;
+                }
+
+                material = new Material(shader);
+            }
+
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", Color.white);
+            }
+
+            EnableDoubleSidedVideoMaterial(material);
+            ResetVideoTextureTransform(material);
+            return material;
+        }
+
+        private static void EnableDoubleSidedVideoMaterial(Material material)
+        {
+            if (material != null && material.HasProperty("_Cull"))
+            {
+                material.SetFloat("_Cull", 0f);
+            }
+        }
+
+        private static void ResetVideoTextureTransform(Material material)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTextureScale("_BaseMap", Vector2.one);
+                material.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+        }
+
+        private static string ResolveVideoMaterialPropertyName(Material material)
+        {
+            if (material != null && material.HasProperty("_BaseMap"))
+            {
+                return "_BaseMap";
+            }
+
+            return "_MainTex";
+        }
+
+        private bool TryBindVideoPlaybackSurface(VideoPlayer source, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+
+            if (source == null || videoObject == null)
+            {
+                return false;
+            }
+
+            width = Mathf.Max(0, (int)source.width);
+            height = Mathf.Max(0, (int)source.height);
+            if (width <= 0 || height <= 0)
+            {
+                return false;
+            }
+
+            ConfigureVideoPlayerRenderTarget();
+            ApplyVideoAspectToQuad(width, height);
+            return true;
         }
 
         private void ConfigureVideoPlayerRenderTarget()
         {
-            if (videoPlayer == null)
-            {
-                return;
-            }
-
-            EnsureVideoRenderTarget(
-                videoRenderTexture != null ? videoRenderTexture.width : 512,
-                videoRenderTexture != null ? videoRenderTexture.height : 512);
-
-            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            videoPlayer.targetTexture = videoRenderTexture;
-            ApplyVideoTextureToRenderer(videoRenderTexture);
-        }
-
-        private void EnsureVideoRenderTarget(int width, int height)
-        {
-            width = Mathf.Max(16, width);
-            height = Mathf.Max(16, height);
-
-            if (videoRenderTexture != null
-                && videoRenderTexture.width == width
-                && videoRenderTexture.height == height)
-            {
-                return;
-            }
-
-            if (videoRenderTexture != null)
-            {
-                videoRenderTexture.Release();
-                Destroy(videoRenderTexture);
-                videoRenderTexture = null;
-            }
-
-            videoRenderTexture = new RenderTexture(width, height, 0);
-            ApplyVideoTextureToRenderer(videoRenderTexture);
-        }
-
-        private void ApplyVideoTextureToRenderer(Texture texture)
-        {
-            if (videoRenderer == null || texture == null)
+            if (videoPlayer == null || videoRenderer == null)
             {
                 return;
             }
@@ -945,14 +1023,13 @@ namespace MobileViewer.Content
                 return;
             }
 
-            if (material.HasProperty("_BaseMap"))
-            {
-                material.SetTexture("_BaseMap", texture);
-            }
-            else
-            {
-                material.mainTexture = texture;
-            }
+            EnableDoubleSidedVideoMaterial(material);
+            ResetVideoTextureTransform(material);
+
+            videoPlayer.renderMode = VideoRenderMode.MaterialOverride;
+            videoPlayer.targetTexture = null;
+            videoPlayer.targetMaterialRenderer = videoRenderer;
+            videoPlayer.targetMaterialProperty = ResolveVideoMaterialPropertyName(material);
         }
 
         private void ApplyVideoAspectToQuad(int videoWidth, int videoHeight)
@@ -1105,6 +1182,38 @@ namespace MobileViewer.Content
             }
         }
 
+        private static void ApplyImageTextureToRenderer(Renderer renderer, Texture texture)
+        {
+            if (renderer == null || texture == null)
+            {
+                return;
+            }
+
+            var material = renderer.material;
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTexture("_BaseMap", texture);
+                material.SetTextureScale("_BaseMap", Vector2.one);
+                material.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTexture("_MainTex", texture);
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+            else
+            {
+                material.mainTexture = texture;
+            }
+        }
+
         private IEnumerator LoadImageTexture(string imageUrl)
         {
             activeImageUrl = imageUrl;
@@ -1147,11 +1256,8 @@ namespace MobileViewer.Content
                 yield break;
             }
 
-            imageRenderer.material.mainTexture = texture;
-            if (imageBackRenderer != null)
-            {
-                imageBackRenderer.material.mainTexture = texture;
-            }
+            ApplyImageTextureToRenderer(imageRenderer, texture);
+            ApplyImageTextureToRenderer(imageBackRenderer, texture);
             if (texture.height > 0)
             {
                 var aspect = (float)texture.width / texture.height;
